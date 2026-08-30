@@ -628,17 +628,17 @@ export function makePlaceholder(title: string, note?: string) {
 
 **아래를 전부 통과해야 M2-A 완료다.** 하나라도 미루면 M2-B에서 몇 배로 돌아온다.
 
-| # | 항목 | 확인 방법 |
-|---|---|---|
-| 1 | `npx expo-doctor` 통과 | |
-| 2 | 스타일링 라이브러리가 **실기기에서** 실제로 적용됨 | §1-B 4개 항목 |
-| 3 | `src/types/api.d.ts` 생성·커밋됨 | `MovieDetailResponse` 등이 들어 있는지 |
-| 4 | 생성 타입에 `viewerId` 같은 쿼리 파라미터가 **없음** | 있으면 백엔드 회귀 (상위 스펙 §4) |
-| 5 | **앱 실행 시 로그인 화면이 깜빡이지 않음** | 토큰 있는 상태로 재실행 |
-| 6 | 토큰 삭제 후 재실행 시 로그인 화면으로 진입 | |
-| 7 | 탭 5개 · 모든 하위 화면 이동·복귀 | 안드로이드 **하드웨어 뒤로가기**로도 |
-| 8 | **동시 401에서 `reissue`가 1회만 호출됨** | 아래 참고 |
-| 9 | 화면 코드에 색상 리터럴·`<Text>`·경로 문자열이 없음 | grep |
+| # | 항목 | 확인 방법 | 결과 (2026-08-31) |
+|---|---|---|---|
+| 1 | `npx expo-doctor` 통과 | | ✅ 21/22 (Hermes V1 회귀 권고 1건은 SDK 57 메이저 업그레이드라 M2-A 범위 밖으로 보류) |
+| 2 | 스타일링 라이브러리가 **실기기에서** 실제로 적용됨 | §1-B 4개 항목 | ✅ §12-A — 시안 배경·회색 글자·흰 글자·둥근 모서리 전부 육안 확인 |
+| 3 | `src/types/api.d.ts` 생성·커밋됨 | `MovieDetailResponse` 등이 들어 있는지 | ✅ 생성 확인(2633줄, `MovieDetailResponse` 등 포함) · ⏳ 커밋은 사용자가 직접 관리 |
+| 4 | 생성 타입에 `viewerId` 같은 쿼리 파라미터가 **없음** | 있으면 백엔드 회귀 (상위 스펙 §4) | ✅ `grep viewerId src/types/api.d.ts` 결과 없음 |
+| 5 | **앱 실행 시 로그인 화면이 깜빡이지 않음** | 토큰 있는 상태로 재실행 | ✅ §12 B-2 — DebugProbe가 Login/Home에 동일 컴포넌트라 헤더만 늦게 붙는 시각적 착시가 있었으나 Login 자체는 마운트되지 않음을 코드로 확인 |
+| 6 | 토큰 삭제 후 재실행 시 로그인 화면으로 진입 | | ✅ §12 B-1 |
+| 7 | 탭 5개 · 모든 하위 화면 이동·복귀 | 안드로이드 **하드웨어 뒤로가기**로도 | ✅ §12 C-1~C-5 전부 (탭 히스토리 유지는 DebugProbe에 임시 추가한 C-3 테스트 버튼으로 확인) |
+| 8 | **동시 401에서 `reissue`가 1회만 호출됨** | 아래 참고 | ✅ `[reissue]` 1회 + 4/4 성공 + 로그인 유지 전부 확인 (TTL 원복은 별도 진행 중) |
+| 9 | 화면 코드에 색상 리터럴·`<Text>`·경로 문자열이 없음 | grep | ✅ `src/screens`·`src/navigation`에 hex 리터럴·`<Text`·`'/api/`  0건 |
 
 ### 8번 검증법 — 반드시 해볼 것
 
@@ -787,25 +787,125 @@ export interface WriteReviewRequest { rating: number; content: string; }   // mo
 | 4 | **`.env`에 `EXPO_PUBLIC_API_BASE_URL=http://<LAN IP>:8080`** | ⚠️ `localhost`는 **폰 자신**을 가리킨다 |
 | 5 | **Windows 방화벽 8080 인바운드 허용** | 폰 브라우저로 `http://<LAN IP>:8080/api/movies` 열어 JSON이 오는지 |
 | 6 | `npm run gen:api` 실행 → `src/types/api.d.ts` 생성·커밋 | 백엔드가 떠 있는 지금이 적기 |
-| 7 | 생성 타입으로 `src/types/index.ts` 교체 | §11 참고 |
+| 7 | 생성 타입으로 `src/types/index.ts` 교체 | **§12-0-a 참고** |
 | 8 | `npx expo start` → Expo Go로 QR 스캔 | |
 
 > 5번에서 JSON이 안 오면 **앱 문제가 아니다.** 방화벽·Wi-Fi부터 해결한다.
 > Android에서 앱만 통신이 안 되면 **cleartext HTTP 차단**을 의심한다(Expo Go는 개발 중 허용).
+
+#### 12-0-a. 7번 상세 — 손으로 쓴 타입을 생성 타입으로 교체
+
+**무엇을 하는 것인가.** 지금 `src/types/index.ts`에는 `TokenResponse` · `UserResponse` 같은
+DTO가 **직접 타이핑돼** 있다. `api.d.ts`가 없어서 채워둔 임시본이다. 6번이 성공하면 그
+정의들을 지우고 **생성 파일을 가리키는 별칭으로 바꾼다.**
+
+```ts
+// src/types/index.ts — 교체 후
+import type { components } from './api';
+type S = components['schemas'];
+
+export type TokenResponse  = S['TokenResponse'];
+export type UserResponse   = S['UserResponse'];
+export type LoginRequest   = S['LoginRequest'];
+export type SignUpRequest  = S['SignUpLocalRequest'];   // ← 좌우 이름이 다르다 (아래 ①)
+export type MovieDetail    = S['MovieDetailResponse'];
+export type MovieSummary   = S['MovieSummaryResponse'];
+export type PrivacySetting = S['PrivacySetting'];
+// … 화면이 실제로 쓰는 것만 필요할 때 추가한다
+```
+
+**왜 하는가.** 이래야 백엔드 DTO가 바뀌었을 때 `npm run gen:api` 한 번으로 **앱 전체에
+컴파일 에러가 떠서 어긋난 지점이 즉시 드러난다.** 손으로 쓴 타입은 이걸 못 하고 조용히
+어긋난다 — 상위 스펙 v1이 정확히 그렇게 실패했다(M2-frontend-spec §0).
+
+**교체 시 걸리는 것 2가지**
+
+**① 이름이 다른 것이 있다.** 임시본의 `SignUpRequest`는 백엔드 클래스명이
+`SignUpLocalRequest`다. 생성 타입에는 **백엔드 이름 그대로** 들어오므로, 별칭 좌변(앱에서
+쓰는 이름)은 유지하고 우변만 실제 스키마 키에 맞춘다. `api.d.ts`를 열어
+`components['schemas']` 목록에서 확인한다.
+
+**② ⚠️ `PageResponse<T>` 제네릭은 생성분에서 가져올 수 없다.**
+
+Springdoc은 제네릭을 **타입별 개별 스키마로 펼친다.** 백엔드 5-7 B 스모크 체크에서
+`PageResponseUserMovieListItemResponse` · `PageResponseCollectionResponse` 등 **8종이 각각
+독립 스키마**로 잡히는 것이 확인됐고, `PageResponse<T>`라는 제네릭 자체는 존재하지 않는다.
+
+```ts
+// (A) 권장 — 래퍼만 손으로 유지하고 항목 타입만 생성분에서 가져온다
+export interface PageResponse<T> {
+  content: T[]; page: number; size: number;
+  totalElements: number; totalPages: number; first: boolean; last: boolean;
+}
+export type UserMovieItem = S['UserMovieListItemResponse'];
+// 사용: PageResponse<UserMovieItem>
+
+// (B) 대안 — 생성된 구체 스키마를 그대로 쓴다
+export type UserMoviePage = S['PageResponseUserMovieListItemResponse'];
+```
+
+**(A)를 택한다.** 훅에서 `useInfiniteQuery<PageResponse<T>>` 같은 제네릭을 쓸 수 있고,
+래퍼 필드 7개는 백엔드가 `PageResponse` record로 고정해 둬서 바뀔 일이 사실상 없다.
+**이것은 "손으로 쓴 타입 금지" 규칙의 의도된 유일한 예외**이므로, 해당 블록 위에 그 이유를
+주석으로 남긴다. 예외를 적어두지 않으면 다음 사람이 "왜 이것만 손으로 썼지?" 하고 지운다.
+
+**완료 확인** (2026-08-31)
+
+- [x] `src/types/index.ts`에 `interface` 본문이 **`PageResponse<T>` 하나만** 남았다
+- [x] `npx tsc --noEmit` 통과
+- [x] `api.d.ts`에 `viewerId` 같은 쿼리 파라미터가 **없다** (§9 체크리스트 4)
+- [ ] `src/types/api.d.ts`를 커밋했다 (생성물이지만 백엔드 없이도 빌드되어야 한다) — 사용자가 git 직접 관리, 커밋 여부 미확인
 
 ### 12-1. 디버그 프로브 화면 — A·B·D의 공통 전제
 
 **M2-A에는 화면이 없어서 아무것도 눌러볼 수 없다.** 임시 화면 하나를 만들면 아래 검증
 셋이 전부 가능해진다. `__DEV__` 가드를 걸고 **커밋하지 않는다**(또는 검증 후 되돌린다).
 
-`HomeStack`의 `Home` 자리에 임시로 끼우고, 아래 4개를 둔다.
+#### ⚠️ 프로브는 **두 곳에 같이 등록**한다
 
-| 요소 | 용도 |
+`RootNavigator`가 `status`로 분기하므로, **비로그인 상태에서는 `MainTabNavigator`에 닿을 수
+없다.** 프로브를 `HomeStack`의 `Home`에만 두면 로그인 버튼을 누를 방법이 없어 아무것도
+시작하지 못한다. 반대로 `Login`에만 두면 로그인 성공 직후 화면이 바뀌어 `동시요청 ×4`
+버튼이 사라진다.
+
+**컴포넌트 하나를 만들어 두 라우트에 등록한다.**
+
+```tsx
+// AuthNavigator
+<Stack.Screen name="Login" component={__DEV__ ? DebugProbe : makePlaceholder('로그인')} />
+// HomeStack
+<Stack.Screen name="Home"  component={__DEV__ ? DebugProbe : makePlaceholder('홈')} />
+```
+
+이러면 흐름이 이어진다:
+`앱 실행 → (anonymous) Login 프로브 → 로그인 → status 전환 → Main 탭 → Home 프로브 → D 검증`
+
+#### 프로브 구성
+
+| 요소 | 내용 |
 |---|---|
-| 스타일 프로브 블록 | `bg-primary` · `text-muted-foreground` · `text-primary-foreground` · `rounded-lg` · `bg-card border border-border` |
-| `로그인` 버튼 | 하드코딩 계정으로 `POST /api/auth/login` → `authStore.setTokens()` + `setUser()` |
-| `동시요청 ×4` 버튼 | `Promise.all([api.get(EP.users.me) ×4])` |
-| `로그아웃` 버튼 | `authStore.logout()` |
+| **현재 상태 표시** | `status` · `accessToken` 앞 8자 · `accessTokenExpiresAt`까지 남은 초 |
+| **스타일 프로브 블록** | `bg-primary` · `text-primary-foreground` · `text-muted-foreground` · `rounded-lg` · `bg-card border border-border` |
+| **`계정 준비 + 로그인`** | 아래 4단계 |
+| **`동시요청 ×4`** | `Promise.all([api.get(EP.users.me) ×4])` → 결과·에러를 화면에 표시 |
+| **`user 키 오염`** | `SecureStore.setItemAsync('cinemory.user', '{{{')` — B-3용 |
+| **`로그아웃`** | `authStore.logout()` |
+
+**`계정 준비 + 로그인` 버튼의 동작**
+
+```
+1. POST /api/auth/signup { email, rawPassword, nickname }   ← 이미 있으면 실패해도 무시
+2. POST /api/auth/login  { email, password } → TokenResponse
+3. authStore.setTokens(res)
+4. GET /api/users/me → authStore.setUser(res)
+```
+
+> ⚠️ **3번과 4번이 둘 다 필요하다.** `POST /api/auth/login`은 `TokenResponse`만 주고
+> **사용자 정보를 주지 않는다.** `setUser()`까지 해야 `cinemory.user` 키가 생기고,
+> 그게 있어야 B-3(오염된 JSON) 검증이 성립한다.
+>
+> 계정 정보는 `.env.local`에 두고 코드에 하드코딩하지 않는다
+> (`EXPO_PUBLIC_DEV_EMAIL` · `EXPO_PUBLIC_DEV_PASSWORD`).
 
 추가로 `refreshOnce()` 안에 `console.log('[reissue]', Date.now())`를 **임시로** 넣는다 —
 D 검증의 계측 지점이다.
@@ -883,12 +983,12 @@ D 검증의 계측 지점이다.
 **검증용으로 바꾼 것을 되돌리지 않으면 나중에 원인 불명 증상이 된다.**
 이 프로젝트에서 이미 두 번 발생했다(런북 `nonce-ttl`, 그리고 아래 1번).
 
-- [ ] 백엔드 `jwt.access-token-ttl` → **`PT30M`**
-- [ ] 백엔드 로그 레벨 원복
-- [ ] 프로브 화면 제거 (또는 `__DEV__` 가드 확인 후 커밋 제외)
-- [ ] `refreshOnce()`의 임시 `console.log` 제거
-- [ ] SecureStore 오염 데이터 정리 (`로그아웃` 버튼)
-- [ ] 결과를 §9 체크리스트에 기록
+- [ ] 백엔드 `jwt.access-token-ttl` → **`PT30M`** — D 최종 확인 완료, 사용자가 되돌리는 중
+- [x] 백엔드 로그 레벨 원복 — 이번 세션에서는 교차 확인용 DEBUG 로그를 켜지 않아 해당 없음
+- [x] 프로브 화면 제거 (또는 `__DEV__` 가드 확인 후 커밋 제외) — `src/screens/_debugProbe.tsx` 삭제, `AuthNavigator`/`HomeStack`의 참조도 원래 플레이스홀더로 되돌림
+- [x] `refreshOnce()`의 임시 `console.log` 제거
+- [x] SecureStore 오염 데이터 정리 (`로그아웃` 버튼) — B-3 이후 B-1(로그아웃→재실행) 검증 과정에서 이미 정리됨
+- [x] 결과를 §9 체크리스트에 기록
 
 ---
 
@@ -896,7 +996,11 @@ D 검증의 계측 지점이다.
 
 | 날짜 | 내용 |
 |---|---|
+| 2026-08-31 | **D 최종 확인(4/4 성공·로그인 유지) 완료 — M2-A 실기기 검증(§12 A·B·C·D) 전부 통과.** §9 체크리스트 8번을 ✅로 갱신했다. 이어서 §E 되돌리기 체크리스트 중 코드에 남아 있던 2건을 정리했다 — `src/screens/_debugProbe.tsx` 삭제, `AuthNavigator`/`HomeStack`의 `Login`/`Home`을 원래 플레이스홀더(`makePlaceholder`)로 되돌림, `client.ts`의 임시 `console.log('[reissue]', ...)` 제거. `tsc --noEmit` 통과 확인. **`access-token-ttl` → `PT30M` 원복은 백엔드 쪽 작업이라 사용자가 별도로 진행 중**이고, `api.d.ts` 커밋 여부만 사용자가 git을 직접 관리하므로 미확인으로 남아 있다 — 이 둘만 끝나면 M2-A 완료 |
+| 2026-08-31 | **실기기 검증(§12 A·B·C·D) 수행 및 §9/§12-0/E 체크리스트에 결과 반영.** A(스타일 육안 확인) 통과 — `bg-primary` 시안 배경·`text-muted-foreground` 회색·`text-primary-foreground` 흰 글자·`rounded-lg`/`rounded-md` 모서리 전부 확인. B-1·B-2·B-3 전부 통과 — 특히 B-2에서 Login과 Home에 **동일한 DebugProbe 컴포넌트**를 걸어 둔 탓에 네이티브 헤더가 콘텐츠보다 한 프레임 늦게 붙는 현상이 있었는데, `App.tsx`가 `status==='loading'`일 때 `return null`이라 `status`가 정해지기 전엔 아무 네비게이터도 마운트되지 않는 구조상 실제로 `Login`이 그려질 경로가 없음을 코드로 확인해 **버그가 아니라 두 라우트에 같은 프로브를 쓴 데서 오는 시각적 착시**로 판정했다. C 검증 중 **C-3(탭 간 스택 깊이 유지)은 모든 화면이 플레이스홀더라 실제로 눌러서 깊이 들어갈 방법이 없었다** — DebugProbe에 `status==='authenticated'`일 때만 보이는 임시 버튼(`navigation.navigate('MovieDetail', { movieId: 1 })`)을 추가해 Home 탭에서 깊이 들어간 뒤 다른 탭↔Home 탭을 오가도 스택이 유지되는지 확인했고 통과했다. D는 `[reissue]` 로그가 1회만 찍히는 것까지 확인했으나 **4/4 성공·로그인 유지·`access-token-ttl` 원복은 아직 최종 확인 전**이라 §9 체크리스트에 ⏳로 남겨뒀다. §12-0의 gen:api 완료 확인 4개 중 3개(`PageResponse<T>` 단일화, `tsc` 통과, `viewerId` 없음)를 체크했고 `api.d.ts` 커밋 여부는 사용자가 git을 직접 관리하므로 미확인으로 남겼다. **§E 되돌리기 체크리스트 중 아직 안 끝난 것 2개** — `src/screens/_debugProbe.tsx`와 `client.ts`의 임시 `console.log('[reissue]', ...)`가 아직 코드에 남아 있다(둘 다 `__DEV__` 가드는 걸려 있지만, D 최종 확인과 `access-token-ttl` 원복이 끝나야 지울 수 있다) |
 | 2026-08-30 | **§11 "남은 구멍 1건"을 코드에 반영.** `authStore.restore()`의 catch 블록 안 `deleteItemAsync` ×3을 내부 try/catch로 한 번 더 감싸 삭제 자체가 실패해도 아래 `set({ status: 'anonymous', ... })`이 항상 실행되도록 고쳤다. `App.tsx`의 `restore().catch(...)`도 빈 콜백(`() => {}`)이 아니라 `useAuthStore.setState({ status: 'anonymous' })`로 바꿔, 미지의 예외가 뚫고 올라와도 실제로 스플래시가 풀리도록 했다 — 기존 `.catch(() => {})`는 겉보기 안전망일 뿐 상태를 바꾸지 않아 조용히 `'loading'`에 갇히는 구조였다. **같은 세션에서 §11의 8건(색상 키 kebab화, `typography` 중복 제거, 카카오 패키지 제거, 요청 인터셉터 갱신 실패 시 재시도 중단, `ApiError`의 `Error` 상속화, `UserResponse`/`WriteReviewRequest` 계약 정정)도 전부 코드에 반영하고 `tsc --noEmit` 통과를 확인했다.** |
+| 2026-08-30 | **§12-1 정정 — 프로브 화면을 두 라우트에 등록하도록 변경.** 초판은 *"`HomeStack`의 `Home` 자리에 임시로 끼운다"* 였으나, **`RootNavigator`가 `status`로 분기하므로 비로그인 상태에서는 `MainTabNavigator`에 닿을 수 없다** — `Home`에만 두면 로그인 버튼을 누를 방법이 없어 검증이 시작조차 되지 않고, 반대로 `Login`에만 두면 로그인 성공 직후 화면이 전환돼 `동시요청 ×4` 버튼이 사라진다. 컴포넌트 하나를 `Login`과 `Home` 양쪽에 `__DEV__` 가드로 등록하면 `Login 프로브 → 로그인 → status 전환 → Home 프로브 → D 검증`으로 흐름이 이어진다. 함께 보강한 것 — ① **`계정 준비 + 로그인` 버튼이 `setTokens` 뒤에 `GET /api/users/me` → `setUser()`까지 해야 한다.** `POST /api/auth/login`은 `TokenResponse`만 주고 사용자 정보를 주지 않으므로, `setUser()`를 빠뜨리면 `cinemory.user` 키가 만들어지지 않아 **B-3(오염된 JSON) 검증 자체가 성립하지 않는다.** ② 계정 정보는 `.env.local`로 빼고 코드에 하드코딩하지 않는다. ③ 프로브에 현재 `status`·토큰 잔여 시간을 표시해 D 검증에서 만료 타이밍을 눈으로 잡을 수 있게 했다. **배경** — 12-0까지 통과해 Expo Go에서 앱이 뜨고 `Login` 플레이스홀더가 정상 표시되는 것을 확인한 시점에 발견했다 |
+| 2026-08-28 | **§12-0-a 신설 — 7번(생성 타입 교체) 상세화.** 원래 *"생성 타입으로 `src/types/index.ts` 교체 | §11 참고"* 한 줄이라 무엇을 하라는 것인지 읽히지 않는다는 지적을 받아, 교체 전/후 코드와 걸리는 지점 2가지를 풀어 적었다. ① **별칭 좌우 이름이 다른 경우** — 임시본의 `SignUpRequest`는 백엔드 클래스명이 `SignUpLocalRequest`이며, 생성 타입에는 백엔드 이름 그대로 들어온다. ② **⚠️ `PageResponse<T>` 제네릭은 생성분에서 가져올 수 없다** — Springdoc이 제네릭을 타입별 개별 스키마로 펼치기 때문이며(백엔드 5-7 B 스모크 체크에서 `PageResponseUserMovieListItemResponse` 등 **8종이 독립 스키마**로 잡히는 것이 실측 확인됨), `PageResponse<T>`라는 제네릭 자체가 존재하지 않는다. 래퍼만 손으로 유지하고 항목 타입만 생성분에서 가져오는 (A)안을 채택하되, **이것이 "손으로 쓴 타입 금지" 규칙의 의도된 유일한 예외**임을 코드 주석으로 남기도록 했다 — 적어두지 않으면 다음 사람이 규칙 위반으로 보고 지운다. 완료 확인 체크리스트 4개도 함께 넣어, 이 단계를 이해 없이도 실행·판정할 수 있게 했다 |
 | 2026-08-28 | **수정 8건 재검증 + §12 실기기 검증 절차 신설.** 8건 전부 반영을 코드로 확인했고 **Tailwind 전수 대조를 다시 돌려** kebab 클래스가 모두 생성됨을 확인했다(미생성 0건). **남은 구멍 1건을 §11에 기록** — `restore()`의 catch 블록 안 `deleteItemAsync`가 자체 try/catch 없이 들어 있어, **막으려던 시나리오(SecureStore 파손)에서 catch가 스스로 던지면 `set()`에 도달하지 못한다.** App.tsx의 `.catch(() => {})`는 조용히 삼킬 뿐 `status`를 바꾸지 않아 여전히 스플래시에 갇힌다 — 이중 안전망이 실제로는 아무것도 받아내지 못하는 구조였다. 삭제를 자체 try/catch로 감싸고, App.tsx의 catch가 `status: 'anonymous'`를 **설정하도록** 고친다. **§12는 검증을 절차로 만든 것**이다: ① 12-0(사전 준비)을 앞에 세운 이유는 `localhost`가 실기기에서 폰 자신을 가리키는 것과 Windows 방화벽 8080 차단이 가장 흔한 시간 낭비이기 때문이고, **폰 브라우저로 JSON이 오는지 먼저 보는 것**으로 앱 문제와 네트워크 문제를 분리한다. ② **12-1 디버그 프로브 화면을 공통 전제로 뽑았다** — M2-A에는 화면이 없어 아무것도 눌러볼 수 없는데, 임시 화면 하나(스타일 프로브 + 로그인 + 동시요청×4 + 로그아웃)면 A·B·D가 전부 가능해진다. ③ **B-3(restore 실패 폴백)** 을 추가해 수정 1번이 실제로 동작하는지를 검증 항목으로 만들었다. ④ **D의 계측을 백엔드 로그가 아니라 앱의 `console.log('[reissue]')`로** 잡게 했다 — 훨씬 간단하고 확실하며, 백엔드 DEBUG 로그는 교차 확인용으로 남겼다. ⑤ **E 되돌리기 체크리스트**를 명시했다 |
 | 2026-08-28 | **첫 구현본 리뷰 반영 — §11 신설 + §2·§4.2·§5·§10 개정.** 코드를 스펙과 대조하고 **Tailwind를 실제로 컴파일해** 검증했다. **가장 큰 발견은 §2의 색상 키 문제다** — `tailwind.config.js`가 `colors`를 통째로 넘기는데 토큰 키가 `primaryForeground`처럼 camelCase라, 실컴파일 결과 **`text-mutedForeground`는 생성되고 `text-muted-foreground`는 생성되지 않았다.** 와이어프레임 2,387줄이 전부 kebab-case를 쓰므로 그대로 두면 M2-B에서 클래스명을 전부 바꿔야 하고 **NativeWind를 택한 이유 자체가 사라진다.** 중첩 매핑(`primary: { DEFAULT, foreground }`)으로 고치도록 §2를 다시 썼다 — 화면이 0개인 지금은 파일 2개, M2-B 후엔 전 화면이라 **지금 고치는 것이 결정적으로 싸다.** **두 번째는 §5의 `restore()` 예외 처리 부재** — `JSON.parse`나 SecureStore가 던지면 `status`가 `'loading'`에 갇혀 **앱이 스플래시에서 영구 정지**한다(재설치 외 복구 불가). M2-A의 완료 판정이 부팅 시퀀스인데 그 경로에 안전망이 없었다. 그 외 요청 인터셉터의 갱신 실패 후 요청 발사(§4.2), `ApiError`를 `Error` 상속으로 전환(§4.2), 카카오 SDK 패키지 잔존(§10 — 플러그인만 지우고 패키지를 남기면 잠복하다 재등록 시 재발), 임시 타입의 계약 이탈 2건(§11)을 정리했다. **사전 의심 1건은 틀렸음을 실측으로 확인했다** — `borderRadius`에 숫자를 넣으면 단위 없는 CSS가 나올 것으로 봤으나 Tailwind가 `px`를 자동 부착한다(`rounded-md` → `10px`). 코드에서 쓰는 Tailwind 클래스 전수 대조에서도 미생성은 없었다. **순환 의존도 실제로는 없다** — `authStore → api/queryClient`가 생겼지만 `import type`이라 런타임 사이클이 없다 |
 | 2026-08-28 | 최초 작성. 상위 스펙 §12의 11단계를 파일 단위로 상세화. **npm 레지스트리 실측으로 스타일링 판단 근거를 확보** — `nativewind@4.2.6`의 `peerDependencies`는 **`{ tailwindcss: '>3.3.0' }` 하나뿐이라 RN·React 버전에 대해 아무 선언이 없는** 반면, `uniwind@1.11.0`은 `react-native >=0.81.0` · `react >=19.0.0` · `tailwindcss >=4`를 **명시**한다(이 프로젝트의 RN 0.85 / React 19.2를 포함). 또 **NativeWind v4를 쓸 때 `tailwindcss`를 `^3.4`로 핀해야 한다**는 것을 발견 — peer 범위가 `>3.3.0`이라 최신 4.3.3도 형식상 통과하지만 NativeWind v4는 Tailwind 3의 `tailwind.config.js` 방식을 전제로 하므로 **조용히 스타일이 안 먹는다.** 판정 기준(§1-B)에 *"실기기에서 실제로 붉게 렌더되는지"* 를 넣은 것도 같은 이유다 — className이 무시돼도 번들·실행은 정상이라 육안 확인 없이는 통과로 착각한다. Expo 56 `bundledNativeModules.json` 대조로 `expo-secure-store`·`reanimated 4.3.1`·`svg 15.15.4`·`webview 13.16.1`·`datetimepicker 9.1.0` 등이 전부 관리 대상임을 확인했고, `lucide-react-native`의 `react-native-svg ^15` peer와 충돌이 없음도 함께 확인했다. **§4.1에서 의존 방향을 못박은 것**은 `authStore → api/auth.ts → client.ts → authStore` 순환을 막기 위해서다 — `authStore`는 상태·영속화만 하고 API 호출은 훅이 한다. **재발급용 axios 인스턴스를 분리(`bare`)** 한 것은 스킵 플래그보다 재귀 사고가 없기 때문이고, **요청 인터셉터의 선제 갱신(만료 60초 전)** 을 추가해 401 폭풍 자체를 줄였다(단일 비행은 그래도 새는 것에 대한 안전망). §9의 8번(동시 401에서 `reissue` 1회) 검증 절차를 구체적으로 적은 것은 **이 버그가 재현이 어렵고 증상이 "가끔 혼자 로그아웃"으로 나타나** 나중에 발견하면 원인 추적에 오래 걸리기 때문이다 |

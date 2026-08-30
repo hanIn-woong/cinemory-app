@@ -7,7 +7,7 @@ const Stack = createNativeStackNavigator<HomeStackParamList>();
 export function HomeStack() {
   return (
     <Stack.Navigator>
-      <Stack.Screen name="Home" component={makePlaceholder('홈')} options={{ headerShown: false }} />
+      <Stack.Screen name="Home" component={makePlaceholder('홈')} />
       <Stack.Screen name="SearchResult" component={makePlaceholder('검색 결과')} options={{ title: '검색 결과' }} />
       <Stack.Screen
         name="MovieDetail"

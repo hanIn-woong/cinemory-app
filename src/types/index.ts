@@ -1,88 +1,50 @@
 /**
- * TEMPORARY STAND-IN.
- *
- * `src/types/api.d.ts` is meant to be generated from the live backend's
- * `/v3/api-docs` via `npm run gen:api` (docs/M2-frontend-spec.md §4). That
- * requires a reachable backend, which this environment does not have, so the
- * generated file doesn't exist yet and these two DTOs are hand-written as a
- * minimal unblock for `authStore`/`client.ts`.
- *
- * Once codegen has run, delete this file's contents and replace with:
- *
- *   import type { components } from './api';
- *   type S = components['schemas'];
- *   export type TokenResponse = S['TokenResponse'];
- *   export type UserResponse  = S['UserResponse'];
- *   // … other aliases as needed
+ * `npm run gen:api`로 생성된 `src/types/api.d.ts`의 별칭 모음이다. 필드명은
+ * 전부 생성 스키마에서 그대로 가져오고, 손으로 다시 적지 않는다
+ * (docs/M2A-foundation-spec.md §11 — DTO를 추측하면 반드시 어긋난다).
+ * `gen:api`를 다시 돌릴 때마다 아래 별칭들이 여전히 유효한지 확인한다.
  */
-export interface TokenResponse {
-  accessToken: string;
-  refreshToken: string;
-  accessTokenExpiresIn: number; // seconds
-}
+import type { components } from './api';
 
-export interface UserResponse {
-  id: number;
-  email: string;
-  nickname: string;
-  profileImage: string | null;
-  privacySetting: PrivacySetting;
-}
+type S = components['schemas'];
 
-// 요청/응답 바디는 docs/M2-frontend-spec.md §6.1에 명시된 계약 그대로다 (추측 아님).
-export interface SignUpRequest {
-  email: string;
-  rawPassword: string;
-  nickname: string;
-}
+// 로그인/재발급 응답 — 생성 스키마는 세 필드 모두 optional이지만, 성공 응답에서는
+// 항상 채워진다는 백엔드 계약(docs/M2-frontend-spec.md §6.1)을 반영해 Required로 좁힌다.
+// 필드명 자체는 생성 스키마 그대로다.
+export type TokenResponse = Required<S['TokenResponse']>;
 
-export interface LoginRequest {
-  email: string;
-  password: string;
-}
+export type UserResponse = S['UserResponse'];
 
-export interface NonceResponse {
-  nonce: string;
-  expiresIn: number; // seconds, 300
-}
+export type SignUpRequest = S['SignUpLocalRequest'];
+export type LoginRequest = S['LoginRequest'];
+export type NonceResponse = S['NonceResponse'];
+export type OAuthLoginRequest = S['OAuthLoginRequest'];
+export type ReissueRequest = S['ReissueRequest'];
+export type LogoutRequest = S['LogoutRequest'];
 
-export interface OAuthLoginRequest {
-  idToken: string;
-  nonce: string;
-}
+export type PrivacySetting = NonNullable<S['UserResponse']['privacySetting']>;
+export type WatchType = NonNullable<S['WatchRecordCreateRequest']['watchType']>;
+export type RankType = NonNullable<S['BoxOfficeResponse']['rankType']>;
+export type TargetType = S['CommentCreateRequest']['targetType'];
+export type RoleTier = NonNullable<S['ActorResponse']['roleTier']>;
 
-// enum 값은 docs/M2-frontend-spec.md §5.6에 명시된 그대로다.
-export type PrivacySetting = 'PRIVATE' | 'FRIENDS' | 'PUBLIC';
-export type WatchType = 'THEATER' | 'OTT' | 'ETC';
-export type RankType = 'DAILY' | 'WEEKLY' | 'WEEKEND';
-export type TargetType = 'COLLECTION' | 'REVIEW';
-export type RoleTier = 'LEAD' | 'SUPPORTING' | 'MINOR' | 'EXTRA';
+// 백엔드 스키마에 provider enum이 없다(경로 변수가 string) — 현재 지원하는 값만 직접 명시.
 export type OAuthProvider = 'KAKAO';
 
-// 시청 기록 생성 요청 — docs/M2-frontend-spec.md §9.3 모달 필드 그대로.
-// watchType === 'OTT'면 ottPlatformId 필수, 그 외에는 있으면 안 된다.
-export interface CreateRecordRequest {
-  movieId: number;
-  watchDate?: string | null;
-  watchType?: WatchType;
-  ottPlatformId?: number;
-  placeDetail?: string;
-  rating?: number; // 0.0~10.0
-  note?: string;
-}
+// 시청 기록 생성 요청 — docs/M2-frontend-spec.md §9.3.
+// watchType === 'OTT'면 ottPlatformId 필수, 그 외에는 있으면 안 된다(생성 스키마엔 없는 제약).
+export type CreateRecordRequest = S['WatchRecordCreateRequest'];
 
-// 리뷰 upsert 요청 — docs/M2-frontend-spec.md §5.3.
-// movieId는 PUT /api/movies/{movieId}/review의 경로 변수라 바디에 없다.
-export interface WriteReviewRequest {
-  rating: number; // 0.0~10.0, not null
-  content: string; // max 2000
-}
+// 리뷰 upsert 요청. movieId는 PUT /api/movies/{movieId}/review의 경로 변수라 바디에 없다.
+export type WriteReviewRequest = S['ReviewWriteRequest'];
 
-// 페이징 응답 래퍼 — docs/M2-frontend-spec.md §5.1. 무한스크롤은 `last`로 판정한다
+// 페이지네이션 래퍼 — 백엔드는 제네릭이 아니라 PageResponseXxx를 응답 타입별로 각각
+// 생성하지만, 필드 구성(content/page/size/totalElements/totalPages/first/last)은
+// 전부 동일함을 생성 결과로 확인했다. 무한스크롤은 `last`로 판정한다
 // (content.length===0 아님 — 비공개 리뷰가 필터링되면 size보다 적게 올 수 있다).
 export interface PageResponse<T> {
   content: T[];
-  page: number; // 0-based (움직임: search만 1-based)
+  page: number; // 0-based (예외: search만 1-based)
   size: number;
   totalElements: number;
   totalPages: number;
@@ -90,23 +52,8 @@ export interface PageResponse<T> {
   last: boolean;
 }
 
-// docs/M2-frontend-spec.md §5.2 — 검색 registered 섹션 항목.
-export interface MovieSummary {
-  id: number;
-  title: string;
-  posterPath: string | null;
-  releaseDate: string | null;
-}
+export type MovieSummary = S['MovieSummaryResponse'];
+export type MovieSuggestion = S['MovieSearchSuggestionResponse'];
 
-// §5.2 — 검색 suggestions 섹션 항목. movieId가 없는 것이 "미등록"의 신호다.
-export interface MovieSuggestion {
-  tmdbId: number;
-  title: string;
-  posterPath: string | null;
-  releaseDate: string | null;
-}
-
-export interface MovieSearchResponse {
-  registered: PageResponse<MovieSummary>;
-  suggestions: MovieSuggestion[]; // page 1에서만 채워진다
-}
+// {registered, suggestions} 2섹션. registered만 페이징되고 이 엔드포인트만 page가 1-based.
+export type MovieSearchResponse = S['MovieSearchResponse'];
