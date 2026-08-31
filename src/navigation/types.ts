@@ -1,8 +1,10 @@
 import type { NavigatorScreenParams } from '@react-navigation/native';
 
+// 게스트 우선(docs/M2-frontend-spec.md §6.7) — status로 분기하지 않는다. Main은 항상 뜨고
+// AuthModal은 로그인이 필요한 순간에만 push되는 모달 스택이다.
 export type RootStackParamList = {
-  Auth: NavigatorScreenParams<AuthStackParamList>;
   Main: NavigatorScreenParams<MainTabParamList>;
+  AuthModal: NavigatorScreenParams<AuthStackParamList>;
 };
 
 export type AuthStackParamList = {

@@ -90,6 +90,13 @@ api.interceptors.response.use(undefined, async (error: AxiosError<ErrorResponseB
     throw normalizeError(error);
   }
 
+  // 게스트 가드 — 게스트는 토큰이 없어 인증 필요 API에서 401을 받는다. 세션이 없으니
+  // refresh·logout은 낭비다 (docs/M2-frontend-spec.md §6.7). 애초에 훅의 enabled가
+  // 게스트의 인증 API 호출을 막지만, 빠뜨렸을 때를 위한 이중 방어다.
+  if (useAuthStore.getState().status !== 'authenticated') {
+    throw normalizeError(error);
+  }
+
   const code = response.data?.code;
   if (code !== 'TOKEN_EXPIRED') {
     // INVALID_TOKEN / REFRESH_TOKEN_NOT_FOUND / REFRESH_TOKEN_REUSED 등

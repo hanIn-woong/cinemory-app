@@ -122,6 +122,7 @@ M2 문서는 **우산 문서 1개 + 단계 문서 N개**로 나눈다. 백엔드
 | 아이콘 | `lucide-react-native` | 와이어프레임 아이콘명 그대로 |
 | 차트 | `react-native-gifted-charts` + `react-native-svg` | recharts 대체 (2군에서 필요) |
 | 지도 | `react-native-webview` + Kakao Maps JS SDK, **인터페이스 격리** | §13 |
+| **접근 모델** | **게스트 우선** — 비로그인이 기본, 로그인은 선택 (2026-08-30 확정) | 백엔드가 `viewerId == null`을 정상 입력으로 확정(service-layer-spec 4-6)했고 `PUBLIC_GET_ENDPOINTS`가 이미 열려 있다. §6.7 |
 | 브랜치 | `develop`에서 작업, `feature/*` 분기 | 기획노트 5절. ✅ `develop` 전환 완료 (2026-08-30) |
 
 ---
@@ -463,9 +464,12 @@ async function refreshOnce(): Promise<string> {
 - `accessToken` / `refreshToken` 모두 **`expo-secure-store`**. `AsyncStorage`에 두지 않는다.
 - **부팅 시 SecureStore를 읽는 동안 SplashScreen을 유지**한다(`expo-splash-screen`의
   `preventAutoHideAsync`). 빠뜨리면 앱 실행마다 로그인 화면이 한 번 깜빡였다가 메인으로 넘어간다.
-- `authStore`(zustand)가 `status: 'loading' | 'authenticated' | 'anonymous'` 3상태를 갖고,
-  `RootNavigator`가 이 값으로 분기한다. **화면에서 수동으로 `navigate`하지 않는다** —
-  로그인 성공 시 `setAuth()`만 호출하면 네비게이터가 알아서 바뀐다.
+- `authStore`(zustand)의 `status: 'loading' | 'authenticated' | 'anonymous'` 3상태는 유지한다.
+  ⚠️ **다만 `anonymous`의 의미가 바뀌었다(§6.7 게스트 우선).** 예전에는 *"로그인 화면을 보여라"*
+  였고, 지금은 *"게스트로 둘러보는 중"* 이다. **`RootNavigator`는 더 이상 `status`로 분기하지
+  않고 항상 `MainTabNavigator`를 띄운다.**
+- 부팅 후 도착 지점: 토큰이 있으면 **로그인 상태의 홈**, 없으면 **게스트 상태의 홈**. 어느 쪽이든
+  **홈이며 로그인 화면이 아니다.**
 
 ### 6.5 카카오 로그인 — M2에서 처음 붙는다
 
@@ -496,6 +500,84 @@ POST /api/auth/nonce → { nonce, expiresIn: 300 }
 - ⚠️ 가입 닉네임은 max **50**, 변경 API는 max **30**이다. 비대칭이니 각각 맞춘다.
 - `password-reset/request`는 **이메일 존재 여부와 무관하게 항상 200**이다(계정 열거 방지).
   화면도 "메일을 보냈습니다"로 동일하게 응답할 것 — 여기서 분기하면 백엔드 방어가 무의미해진다.
+
+---
+
+### 6.7 ★ 게스트 우선 — 접근 모델 (2026-08-30 확정)
+
+**비로그인이 기본이고 로그인은 선택이다.** 앱을 처음 켠 사람은 로그인 화면이 아니라 **홈**을 본다.
+
+**근거** — 백엔드가 `viewerId == null`을 **예외가 아닌 정상 입력**으로 확정했고
+(`service-layer-spec.md` 4-6: *"비로그인 조회 허용"*), `SecurityConfig.PUBLIC_GET_ENDPOINTS`가
+영화·극장·박스오피스·타인 공개 데이터를 이미 열어뒀다. 프론트가 전부 막으면 그 설계가 사장된다.
+
+#### 무엇이 열리고 무엇이 막히나
+
+| 게스트 가능 | 로그인 필요 |
+|---|---|
+| 영화 검색 (`registered`) | **미등록 영화 선택** (`POST /api/movies/sync` — 인증 필수) |
+| 영화 상세 · 출연진 | 시청 기록 · 리뷰 작성 · 찜 · 컬렉션 |
+| 공개 리뷰 목록 | 마이페이지 전체 |
+| 박스오피스 · 극장 | 팔로우 · 댓글 |
+| 타인의 **공개** 기록·컬렉션 | 타인의 비공개/친구 공개 데이터 |
+
+#### 네비게이션 — 인증을 **모달**로 뺀다
+
+`RootNavigator`가 `status`로 분기하던 구조를 버린다. 대신 `AuthNavigator`를 **필요할 때 올리는
+모달 스택**으로 둔다.
+
+```
+RootNavigator (NativeStack, headerShown: false)
+├── Main       MainTabNavigator                     ← 항상 여기서 시작
+└── AuthModal  AuthNavigator (presentation: 'modal') ← 로그인이 필요한 순간에만 push
+```
+
+- 로그인 성공 → `authStore.setTokens()` + `setUser()` → **모달을 닫는다**(`goBack()`).
+  뒤에 있던 화면이 그대로 남아 있고, 훅들이 재조회되며 로그인 상태로 다시 그려진다.
+- ⚠️ **M2-A의 *"화면에서 수동으로 navigate하지 않는다"* 규칙이 여기서만 바뀐다.** 모달은
+  명시적으로 닫아야 한다. 다만 **탭 스택을 갈아끼우는 일은 여전히 없으므로**, 그 규칙이 막으려던
+  사고(로그아웃 후 이전 사용자 화면이 스택에 남는 것)는 애초에 발생하지 않는다.
+- 로그아웃도 화면을 바꾸지 않는다. `status`만 `anonymous`가 되고 각 화면이 게스트 상태로 다시 그려진다.
+  ⚠️ 인증 전용 화면(`MyRecords` 등)에 머문 채 로그아웃하면 **그 자리에서 로그인 유도로 바뀐다.**
+
+#### 게이트는 두 종류다
+
+| | 쓰는 곳 | 형태 |
+|---|---|---|
+| **화면 게이트** | 화면 전체가 로그인 필요 (`MyPage` · `MyRecords`) | `<AuthRequired>` — 안내 + `로그인` 버튼 |
+| **액션 게이트** | 화면은 보이되 특정 동작만 (찜·기록·리뷰·`sync`) | `useRequireAuth()` — 미로그인이면 모달을 올린다 |
+
+```ts
+// src/hooks/useRequireAuth.ts
+const requireAuth = useRequireAuth();
+onPress={() => requireAuth(() => toggleWish(movieId))}   // 로그인 상태면 실행, 아니면 모달
+```
+
+**로그인 후 원래 동작을 이어서 실행할지는 M2-B 범위 밖으로 둔다.** 모달을 닫고 사용자가 다시
+누르게 한다 — 대기 중인 액션을 보관했다가 재생하는 구조는 상태가 꼬이기 쉽고, 지금 값이 크지 않다.
+
+#### ⚠️ 401 인터셉터에 게스트 가드를 추가한다
+
+게스트는 토큰이 없으므로 인증 필요 API를 부르면 401을 받는다. 현재 인터셉터는 401에서
+`logout()`을 호출하는데, **게스트를 로그아웃시키는 것은 무의미하고 refresh 시도는 낭비다.**
+
+```ts
+if (useAuthStore.getState().status !== 'authenticated') {
+  throw normalizeError(error);   // 게스트의 401은 그대로 화면으로 — refresh·logout 안 한다
+}
+```
+
+**애초에 게스트가 인증 API를 부르지 않는 것이 정상이다**(훅의 `enabled`가 막는다).
+이 가드는 그래도 새는 경우를 위한 이중 방어다.
+
+#### 탭별 게스트 동작
+
+| 탭 | 게스트 |
+|---|---|
+| 홈 · 검색 · 상세 | ✅ 정상 |
+| CineMap | ✅ 박스오피스·극장이 `permitAll` (단 3군이라 M2에서는 플레이스홀더) |
+| 추천 · 소셜 | 3군 플레이스홀더 (변화 없음) |
+| **마이페이지** | 🔒 `<AuthRequired>` — 로그인 유도 |
 
 ---
 
@@ -598,12 +680,16 @@ if (showStatistics)  return <StatisticsScreen onBack={...} />;
 
 ### 8.2 목표 구조
 
+> ⚠️ **2026-08-30 개정 — 게스트 우선 전환(§6.7).** `RootNavigator`가 `status`로 분기하던
+> 구조를 버리고, 인증을 **모달 스택**으로 뺐다.
+
 ```
-RootNavigator (status에 따라 분기, headerShown: false)
-├── [loading]        SplashScreen 유지
-├── [anonymous]      AuthNavigator
-│   └── Login · SignUp · PasswordResetRequest · PasswordResetConfirm
-└── [authenticated]  MainTabNavigator (BottomTabs 5개)
+RootNavigator (NativeStack, headerShown: false)
+├── Main       MainTabNavigator (BottomTabs 5개)      ← 항상 여기서 시작
+└── AuthModal  AuthNavigator (presentation: 'modal')  ← 로그인 필요 시에만 push
+    └── Login · SignUp · PasswordResetRequest · PasswordResetConfirm
+
+MainTabNavigator
     ├── HomeStack       Home → SearchResult → MovieDetail
     ├── RecommendStack  Recommendation(3군, 플레이스홀더) → MovieDetail
     ├── CineMapStack    CineMap(3군, 플레이스홀더)
@@ -612,6 +698,15 @@ RootNavigator (status에 따라 분기, headerShown: false)
                              → Wishlist → MovieDetail
                              → CollectionList → CollectionDetail → MovieDetail
                              → Report(2군) · EditProfile · Settings
+```
+
+**`RootStackParamList`도 함께 바뀐다.**
+
+```ts
+export type RootStackParamList = {
+  Main:      NavigatorScreenParams<MainTabParamList>;
+  AuthModal: NavigatorScreenParams<AuthStackParamList>;   // ← 분기가 아니라 모달
+};
 ```
 
 > **3군 탭은 M2-A에서 플레이스홀더 화면으로 만들어 둔다.** 탭이 5개인 것은 와이어프레임의
@@ -1113,6 +1208,7 @@ export { CineMapWebView as CineMapView } from './CineMapWebView';
 
 | 날짜 | 내용 |
 |---|---|
+| 2026-08-30 | **★ 게스트 우선 전환 확정 — §6.7 신설, §1·§6.4·§8.2 개정.** M2-B 검색 화면 구현 중 **스펙의 비로그인 시나리오와 `RootNavigator`의 로그인 게이트가 모순**임이 드러났다. 백엔드는 `service-layer-spec.md` 4-6에서 *"비로그인(`viewerId == null`) 조회 허용 — null을 예외가 아닌 정상 입력으로 다룬다"* 를 확정했고 `SecurityConfig.PUBLIC_GET_ENDPOINTS`가 영화·극장·박스오피스·타인 공개 데이터를 이미 열어뒀는데, **프론트는 `status !== 'authenticated'`면 `AuthNavigator`로 보내 게스트가 검색 화면에 도달조차 못 했다.** 둘 다 틀리지 않았고 화해되지 않은 상태였으며, 스펙이 백엔드 계약을 프론트 노출로 잘못 옮긴 것이 원인이다. **비로그인을 기본으로, 로그인을 선택으로 확정**했다. 핵심 구조 변경은 **인증을 모달로 빼는 것** — `RootNavigator`가 `status`로 `AuthNavigator`↔`MainTabNavigator`를 갈아끼우던 구조를 버리고 `Main`(항상) + `AuthModal`(`presentation: 'modal'`)로 바꾼다. 로그인 성공 시 **스택을 갈아끼우지 않고 모달만 닫으므로** 사용자가 있던 자리(검색 도중 찜을 누른 경우 등)를 잃지 않고, M2-A가 막으려던 사고(로그아웃 후 이전 사용자 화면이 스택에 남음)도 애초에 발생하지 않는다. 게이트는 **화면 게이트(`<AuthRequired>`)와 액션 게이트(`useRequireAuth()`)** 두 종류로 나눴다. ⚠️ **401 인터셉터에 게스트 가드가 필요하다** — 게스트는 토큰이 없어 인증 API에서 401을 받는데 현재 인터셉터가 refresh와 `logout()`을 시도해 무의미한 동작이 된다. 훅의 `enabled: isAuthed`가 1차 방어, 이 가드가 2차다. **로그인 후 원래 동작을 재생하는 것은 범위 밖으로 뒀다** — 대기 액션을 보관했다 실행하는 구조는 상태가 꼬이기 쉽고 지금 값이 크지 않다. **비용이 늘어나는 선택**임을 기록해 둔다 — 화면마다 게스트 분기가 붙고 선행 부품 2개와 네비게이션 재구성이 추가된다. 대안(로그인 게이트 유지)이 범위상 안전했으나 백엔드 설계와의 정합, 데모·앱스토어 심사 이점을 근거로 채택했다. 실행 계획은 `M2B-screens-spec.md` §0.1 |
 | 2026-08-30 | **「📚 문서 구성」 규칙 신설 + §12를 색인으로 축약.** 단계마다 문서를 새로 만드는 방식(현행)과 스펙 문서 하나를 계속 고치는 방식 중 어느 쪽이 효율적인지 검토한 결과, **분리를 유지하기로 확정**했다. 근거 넷 — ① **수명이 다르다.** 단계 문서는 착수~검증까지만 뜨겁고 끝나면 아카이브지만 우산 문서는 M2 내내 읽힌다. 한 파일에 두면 죽은 내용이 산 내용을 밀어낸다(실제로 §12가 그 상태였다). ② **크기가 곧 비용이다.** 현재 우산 1,105줄 + M2A 1,005줄이고 M2-B·C까지 합치면 4,000줄이 되는데, CLAUDE.md가 *"작업 전에 관련 문서를 읽는다"* 로 지시하고 있어 매 세션 전량을 읽거나 부분만 읽고 놓치거나 둘 중 하나가 된다. ③ **동시 편집이 부딪힌다.** 역할 분담상 구현 중에는 Claude Code가 변경 이력을, 리뷰 시에는 내가 리뷰 결과를 쓴다. ④ **백엔드가 이미 같은 구조**다(단계별 spec 5종 + 기획노트가 우산) — 프론트만 다르게 갈 이유가 없다. **분리의 유일한 위험인 중복·표류는 판별 기준 한 줄로 막는다** — *"M2가 끝난 뒤에도 읽을 것인가?"* 그리고 **중복이 아니라 계층으로 나눈다**는 원칙을 명시했다(우산 §6.3 = 인증 계약 / M2A §4.2 = 인증 구현 코드). 참조는 **단계 → 우산 한 방향**으로만 걸어 죽은 링크가 쌓이지 않게 했고, **우산의 섹션 번호를 바꾸지 않는다**는 제약도 함께 박았다(단계 문서들이 §4·§5.2·§6.3·§11.1·§13을 참조 중). 함께 §12를 색인으로 축약하고 M2-A 11단계 상세는 단계 문서로 넘겼다 — 끝난 단계의 실행 순서가 우산에 남으면 죽은 섹션이 된다는 것이 이번 검토의 출발점이었다. 단계 공통 원칙(*"뼈대가 끝까지 도는 것을 먼저 확인하고 내용을 채운다"*)만 §12에 남겼다 |
 | 2026-08-30 | **문서 상단에 「📍 진행 현황」 대시보드 신설.** M2-A~D 4단계를 범위·상태·백엔드 의존·상세 문서로 한 표에 모았다. v1에는 4단계 표가 §0에 있었으나 **v2 전면 개정에서 유실**됐고, 그 뒤로 단계 구분이 §2(화면 우선순위 1군/2군/3군)와 §11(백엔드 선행 항목)에 흩어져 전체 그림을 한눈에 볼 수 없었다. **섹션 번호를 붙이지 않은 이유**는 `M2A-foundation-spec.md`를 비롯한 다른 문서가 §4·§5.2·§11.1·§13 등을 참조하고 있어 번호를 밀면 전부 깨지기 때문이다. 함께 담은 것 — ① **현재 위치 마커**(M2-A 완료 → M2-B 다음) ② **M2-A 완료 근거**(실기기 A~D 통과 + 되돌리기 4건 확인) ③ **각 단계 진입 조건** — 특히 B-4는 화면 작업과 병렬 가능해 M2-B 착수를 막지 않는 반면 M2-D는 셋 다 백엔드 선행이 필수라는 구분 ④ **M2-B 도중의 prebuild 분기점** — 카카오 로그인 실기기 연결이 Expo Go를 못 쓰게 만드는 편도 전환이자 배포 트리거이며, 지도 SDK와 묶어 판단해야 한다는 경고. 함께 §1의 브랜치 행을 갱신했다(`main` 직접 커밋 → `develop` 전환 완료) |
 | 2026-08-28 | **`docs/M2A-foundation-spec.md` 신설 — §12를 파일 단위로 상세화.** npm 레지스트리 실측으로 스타일링 판단 근거를 확보했다: `nativewind@4.2.6`은 `peerDependencies`가 `{tailwindcss:'>3.3.0'}` 하나뿐이라 **RN·React 버전에 대해 아무 선언이 없고**, `uniwind@1.11.0`은 `react-native>=0.81.0`·`react>=19.0.0`·`tailwindcss>=4`를 **명시**한다(이 프로젝트의 RN 0.85/React 19.2 포함). **NativeWind v4 채택 시 `tailwindcss@^3.4` 핀이 필수**임도 확인 — peer 범위가 최신 4.3.3을 형식상 통과시키지만 조용히 스타일이 안 먹는다. Expo 56 `bundledNativeModules.json` 대조로 필요한 네이티브 패키지가 전부 관리 대상임을 확인했다(`lucide-react-native`의 `react-native-svg ^15` peer 충돌 없음). §12 상단에 상세 문서 링크 추가 |

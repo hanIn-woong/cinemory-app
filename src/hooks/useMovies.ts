@@ -3,6 +3,7 @@ import {
   useMutation,
   useQuery,
   useQueryClient,
+  type InfiniteData,
   type UseInfiniteQueryResult,
   type UseMutationResult,
   type UseQueryResult,
@@ -12,7 +13,12 @@ import type { ApiError } from '../api/client';
 import type { MovieDetailResponse, MovieSearchResponse } from '../types';
 import { queryKeys } from './queryKeys';
 
-export function useMovieSearch(query: string, year?: number): UseInfiniteQueryResult<MovieSearchResponse, ApiError> {
+// ⚠️ UseInfiniteQueryResult의 TData는 InfiniteData<T>로 감싼 형태다 — 원본 응답 타입을
+// 그대로 넣으면 .data.pages가 타입에 잡히지 않는다.
+export function useMovieSearch(
+  query: string,
+  year?: number,
+): UseInfiniteQueryResult<InfiniteData<MovieSearchResponse>, ApiError> {
   return useInfiniteQuery({
     queryKey: queryKeys.movies.search(query, year),
     queryFn: ({ pageParam }) => movieApi.search(query, pageParam, year),

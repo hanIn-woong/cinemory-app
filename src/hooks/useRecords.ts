@@ -3,6 +3,7 @@ import {
   useMutation,
   useQuery,
   useQueryClient,
+  type InfiniteData,
   type UseInfiniteQueryResult,
   type UseMutationResult,
   type UseQueryResult,
@@ -10,10 +11,14 @@ import {
 import { recordApi } from '../api/record';
 import type { ApiError } from '../api/client';
 import { useAuthStore } from '../store/authStore';
-import type { CreateRecordRequest, UserMovieListItemResponse, WatchRecordResponse } from '../types';
+import type { CreateRecordRequest, PageResponse, UserMovieListItemResponse, WatchRecordResponse } from '../types';
 import { queryKeys } from './queryKeys';
 
-export function useMyRecords(userId: number): UseInfiniteQueryResult<UserMovieListItemResponse, ApiError> {
+// ⚠️ UseInfiniteQueryResult의 TData는 InfiniteData<T>로 감싼 형태다 — 원본 응답 타입을
+// 그대로 넣으면 .data.pages가 타입에 잡히지 않는다.
+export function useMyRecords(
+  userId: number,
+): UseInfiniteQueryResult<InfiniteData<PageResponse<UserMovieListItemResponse>>, ApiError> {
   return useInfiniteQuery({
     queryKey: queryKeys.records.ofUser(userId),
     queryFn: ({ pageParam }) => recordApi.ofUser(userId, pageParam),

@@ -1,5 +1,7 @@
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { makePlaceholder } from '../../screens/_placeholder';
+import { HomeScreen } from '../../screens/home/HomeScreen';
+import { SearchResultScreen } from '../../screens/search/SearchResultScreen';
 import type { HomeStackParamList } from '../types';
 
 const Stack = createNativeStackNavigator<HomeStackParamList>();
@@ -7,8 +9,8 @@ const Stack = createNativeStackNavigator<HomeStackParamList>();
 export function HomeStack() {
   return (
     <Stack.Navigator>
-      <Stack.Screen name="Home" component={makePlaceholder('홈')} />
-      <Stack.Screen name="SearchResult" component={makePlaceholder('검색 결과')} options={{ title: '검색 결과' }} />
+      <Stack.Screen name="Home" component={HomeScreen} options={{ headerShown: false }} />
+      <Stack.Screen name="SearchResult" component={SearchResultScreen} options={{ title: '검색 결과' }} />
       <Stack.Screen
         name="MovieDetail"
         component={makePlaceholder('영화 상세')}

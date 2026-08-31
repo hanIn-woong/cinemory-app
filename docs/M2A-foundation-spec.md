@@ -587,6 +587,10 @@ const status = useAuthStore(s => s.status);
 return status === 'authenticated' ? <MainTabNavigator /> : <AuthNavigator />;
 ```
 
+> ⚠️ **2026-08-30 — 이 절은 게스트 우선 전환으로 대체됐다.** `RootNavigator`는 더 이상
+> `status`로 분기하지 않고, 인증은 모달 스택(`AuthModal`)으로 빠졌다.
+> **현행 구조는 상위 문서 `M2-frontend-spec.md` §6.7·§8.2를 따른다.** 아래는 M2-A 당시 기록이다.
+
 ⚠️ **화면에서 수동으로 `navigate('Main')`을 호출하지 않는다.** 로그인 성공 시
 `authStore.setTokens()` + `setUser()`만 부르면 이 분기가 알아서 바뀐다. 수동 네비게이션을
 섞으면 로그아웃 시 스택이 남아 이전 사용자 화면이 잠깐 보인다.

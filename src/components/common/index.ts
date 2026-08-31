@@ -3,3 +3,4 @@ export { ErrorState } from './ErrorState';
 export { EmptyState } from './EmptyState';
 export { ScreenHeader } from './ScreenHeader';
 export { ActionSheet, type ActionSheetOption } from './ActionSheet';
+export { AuthRequired } from './AuthRequired';

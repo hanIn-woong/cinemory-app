@@ -37,6 +37,11 @@ export function LoginScreen() {
   const onSubmit = handleSubmit((values) => {
     setFormError(null);
     login.mutate(values, {
+      // 게스트 우선 전환 이후 유일하게 화면에서 수동 navigate하는 지점이다 — 로그인은
+      // 모달이라 명시적으로 닫아야 한다(docs/M2-frontend-spec.md §6.7). 탭 스택 자체를
+      // 갈아끼우는 것이 아니므로 M2-A의 "수동 navigate 금지" 규칙이 막던 사고(로그아웃 후
+      // 이전 사용자 화면이 스택에 남는 것)는 여기서 발생하지 않는다.
+      onSuccess: () => navigation.goBack(),
       onError: (error) => setFormError(applyServerErrors(error, setError)),
     });
   });

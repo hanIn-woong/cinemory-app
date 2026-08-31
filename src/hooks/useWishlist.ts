@@ -3,6 +3,7 @@ import {
   useMutation,
   useQuery,
   useQueryClient,
+  type InfiniteData,
   type UseInfiniteQueryResult,
   type UseMutationResult,
   type UseQueryResult,
@@ -10,7 +11,7 @@ import {
 import { wishlistApi } from '../api/wishlist';
 import type { ApiError } from '../api/client';
 import { useAuthStore } from '../store/authStore';
-import type { WishListItemResponse } from '../types';
+import type { PageResponse, WishListItemResponse } from '../types';
 import { queryKeys } from './queryKeys';
 
 export function useWishToggle(): UseMutationResult<{ wished: boolean }, ApiError, number> {
@@ -43,7 +44,11 @@ export function useIsWished(movieId: number): UseQueryResult<{ wished: boolean }
   });
 }
 
-export function useMyWishes(userId: number): UseInfiniteQueryResult<WishListItemResponse, ApiError> {
+// ⚠️ UseInfiniteQueryResult의 TData는 InfiniteData<T>로 감싼 형태다 — 원본 응답 타입을
+// 그대로 넣으면 .data.pages가 타입에 잡히지 않는다.
+export function useMyWishes(
+  userId: number,
+): UseInfiniteQueryResult<InfiniteData<PageResponse<WishListItemResponse>>, ApiError> {
   return useInfiniteQuery({
     queryKey: queryKeys.wishes.ofUser(userId),
     queryFn: ({ pageParam }) => wishlistApi.ofUser(userId, pageParam),

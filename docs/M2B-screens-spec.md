@@ -28,9 +28,31 @@ M2-A는 **시그니처만** 만들고 본문을 비워 뒀다. 착수 첫 작업
 | 3 | `useMovies.ts`의 `type MovieDetailResponse = unknown` | `api.d.ts` 생성 전 임시 | **`S['MovieDetailResponse']` 별칭으로 교체** |
 | 4 | `src/hooks/_stub.ts` | 스텁 헬퍼 | 마지막 훅을 채운 뒤 **파일째 삭제** |
 | 5 | CRLF 21개 | `.gitattributes` 추가됨 | `git add --renormalize .` 후 커밋 |
+| 6 | **`RootNavigator`가 `status`로 분기** | M2-A 구조 | ⚠️ **게스트 우선으로 재구성** (§0.1) |
 
 > 3번은 `api.d.ts`가 이미 생성돼 있으므로 지금 바로 가능하다. `unknown`을 남겨두면
 > `MovieDetail` 화면 전체가 타입 검사를 못 받는다.
+
+### 0.1 ⚠️ 게스트 우선 전환 — 화면 작업보다 먼저 한다
+
+**2026-08-30 확정**(상위 §6.7). 비로그인이 기본이고 로그인은 선택이다. M2-A는 `RootNavigator`가
+`status`로 `AuthNavigator` ↔ `MainTabNavigator`를 갈아끼우는 구조였고, 그대로 두면 **게스트가
+검색 화면에 도달조차 못 한다.**
+
+**선행 작업 4건**
+
+| # | 작업 | 내용 |
+|---|---|---|
+| 1 | `RootNavigator` 재구성 | `Main`(항상) + `AuthModal`(`presentation: 'modal'`). `status` 분기 제거 |
+| 2 | `navigation/types.ts` | `RootStackParamList`을 `{ Main, AuthModal }`로 |
+| 3 | **`useRequireAuth()`** 훅 | 액션 게이트 — 미로그인이면 모달을 올린다 |
+| 4 | **`<AuthRequired>`** 부품 | 화면 게이트 — 안내 + `로그인` 버튼 |
+| 5 | **인터셉터 게스트 가드** | `status !== 'authenticated'`면 401에서 refresh·logout 하지 않는다 |
+
+> **왜 화면보다 먼저인가** — 이 다섯을 나중에 넣으면 이미 만든 화면을 전부 다시 열어
+> 게이트를 끼워 넣어야 한다. 뼈대 먼저라는 단계 공통 원칙(상위 §12)이 여기에도 적용된다.
+
+**게스트로 열리는 것과 막히는 것의 경계는 상위 §6.7의 표를 따른다.**
 
 ---
 
@@ -41,6 +63,7 @@ M2-A는 **시그니처만** 만들고 본문을 비워 뒀다. 착수 첫 작업
 
 | # | 작업 | 산출물 | 검증 |
 |---|---|---|---|
+| 0 | **게스트 우선 전환** (§0.1) | `RootNavigator` · `useRequireAuth` · `AuthRequired` · 인터셉터 가드 | 앱 실행 시 **로그인 없이 홈** 도달 |
 | 1 | `src/api/*.ts` 구현 (§2) | auth · movie · record · review · wishlist · user | 타입 통과 |
 | 2 | `src/hooks/*.ts` 구현 (§3) | 훅 + 무효화 매트릭스 | `_stub.ts` 삭제 가능 |
 | 3 | 공통 화면 부품 (§4) | `PosterImage` · `MovieListItem` · `RatingStars` 등 | |
@@ -55,6 +78,8 @@ M2-A는 **시그니처만** 만들고 본문을 비워 뒀다. 착수 첫 작업
 > **4번(로그인)을 5번(검색)보다 먼저 하는 이유** — `POST /api/movies/sync`가 인증 필수라
 > 로그인 없이는 검색의 절반(미등록 영화 선택)을 시험할 수 없다. 또 M2-A의 디버그 프로브를
 > 지웠으므로 로그인 화면이 없으면 인증 상태를 만들 방법이 없다.
+> **게스트 우선으로 바뀌어도 이 순서는 유지된다** — 게스트로 검색은 되지만 `sync` 경로를
+> 검증하려면 여전히 로그인이 필요하다.
 > **5번을 6번보다 먼저** 하는 것은 `Home`이 검색창 하나뿐이라 결과 화면이 없으면 확인할 게 없어서다.
 
 ---
@@ -135,16 +160,27 @@ getNextPageParam: (lastPage, allPages) =>
 
 ⚠️ `content.length === 0`으로 종료를 판정하지 않는다 — 상위 §5.1.
 
-### 3.4 인증 의존 훅은 `enabled`로 막는다
+### 3.4 ★ 인증 의존 훅은 `enabled`로 막는다 — 게스트 우선에서 필수다
 
-`MovieDetail`은 비로그인도 볼 수 있어야 한다. 내 기록·내 리뷰·찜 여부 세 훅만 꺼진다.
+게스트가 상시 존재하므로 **이 게이팅이 선택이 아니라 필수**가 됐다.
 
 ```ts
 const isAuthed = useAuthStore(s => s.status === 'authenticated');
 useQuery({ ..., enabled: isAuthed });
 ```
 
-빠뜨리면 비로그인 진입 시 **401이 세 번 나고 인터셉터가 로그아웃 경로를 탄다.**
+**`enabled: isAuthed`가 필요한 훅**
+
+| 훅 | 이유 |
+|---|---|
+| `useWatchLog` · `useMyReview` · `useIsWished` | 상세 화면의 개인 데이터 3종 |
+| `useMyRecords` · `useMe` | 인증 전용 화면 |
+
+빠뜨리면 **게스트가 상세 화면에 들어가는 것만으로 401이 세 번 난다.** 그리고 인터셉터가
+`logout()` 경로를 타면서 refresh 시도까지 낭비된다.
+
+⚠️ **`enabled`와 짝으로 인터셉터 게스트 가드도 필요하다**(§0.1-5, 상위 §6.7). 훅 하나를
+빠뜨렸을 때 조용히 새는 것을 막는 이중 방어다.
 
 ---
 
@@ -206,10 +242,20 @@ export const starsToApi = (s: number) => s * 2;   // 4.5 → 9.0
 - 닉네임 **가입 max 50 / 변경 API max 30** — ⚠️ **비대칭이다.** 각각 맞춘다
 - 서버 `errors[]`를 `react-hook-form`의 `setError`에 필드명으로 매핑
 
+**⚠️ 로그인 화면은 이제 모달이다** (게스트 우선, 상위 §6.7)
+
+```
+성공 → authStore.setTokens() + setUser() → navigation.goBack()   // 모달을 닫는다
+```
+
+뒤에 있던 화면이 그대로 남아 있고, 훅들이 재조회되며 로그인 상태로 다시 그려진다.
+
 **절대 하지 말 것**
 
-- ❌ 로그인 성공 후 `navigate('Main')` — `RootNavigator`가 `status`로 알아서 전환한다.
-  수동 네비게이션을 섞으면 로그아웃 시 스택이 남아 이전 사용자 화면이 잠깐 보인다.
+- ❌ 로그인 성공 후 `navigate('Main')` 또는 스택 `reset` — **모달을 닫기만 한다.**
+  탭 스택을 갈아끼우면 사용자가 있던 자리를 잃는다(검색 도중 찜을 누른 경우 등).
+- ❌ 로그아웃 시 화면 전환 — `status`만 `anonymous`가 되고 각 화면이 게스트 상태로 다시
+  그려진다. 인증 전용 화면에 머물러 있었다면 **그 자리에서 `<AuthRequired>`로 바뀐다.**
 - ❌ `password-reset/request` 응답으로 분기 — **계정 존재 여부와 무관하게 항상 200**이다
   (계정 열거 방지). 화면도 항상 "메일을 보냈습니다"로 동일하게 응답한다. 여기서 분기하면
   백엔드 방어가 무의미해진다.
@@ -243,7 +289,7 @@ SectionList
 
 | 항목 | 주의 |
 |---|---|
-| 인증 | `sync`는 **인증 필수**. 비로그인 상태면 로그인 유도 |
+| 인증 | `sync`는 **인증 필수**. 게스트가 탭하면 `useRequireAuth()`로 **로그인 모달**을 올린다. `registered` 항목은 게스트도 그대로 열린다 |
 | 페이지 | 요청 `page`가 **1-based** (이 엔드포인트만). `initialPageParam: 1` |
 | suggestions 범위 | **`page === 1`에서만** 채워진다. 2페이지부터 `registered`만 이어붙인다 |
 | 개수 | 백엔드에 slice가 없어 **최대 20건이 그대로 온다.** 화면에서 5~10건으로 자른다 |
@@ -264,6 +310,18 @@ SectionList
 | 내 리뷰 | `useMyReview(movieId)` | 로그인 시. **204 = 없음(정상)** |
 | 찜 여부 | `useIsWished(movieId)` | 로그인 시 |
 | 공개 리뷰 목록 | `useMovieReviews(movieId)` | 항상 |
+
+**게스트 상태의 상세 화면**
+
+| 영역 | 게스트 |
+|---|---|
+| 영화 정보 · 줄거리 · 출연진 | ✅ 그대로 |
+| 공개 리뷰 목록 | ✅ 그대로 |
+| **내 기록 카드** | 🔒 카드 자리에 *"기록하려면 로그인"* + 버튼 |
+| **찜 버튼** | 표시하되 탭 시 `useRequireAuth()` → 모달 |
+
+⚠️ **개인 데이터 훅 3개(`useWatchLog` · `useMyReview` · `useIsWished`)에 `enabled: isAuthed`를
+반드시 건다**(§3.4). 안 걸면 게스트가 이 화면에 들어오는 것만으로 401이 세 번 난다.
 
 > ⚠️ **이 화면이 §12 D에서 검증한 동시 401이 실제로 발생하는 첫 지점이다.** 진입 시 5개가
 > 병렬로 나가므로, access token이 만료된 순간에 들어오면 401이 동시에 터진다. 인터셉터의
@@ -300,6 +358,7 @@ TMDB 한글화 커버리지 한계이며 우리 버그가 아니다.
 
 ### 5.5 `MyRecords`
 
+- 🔒 **화면 게이트** — 게스트는 `<AuthRequired>`를 본다(상위 §6.7)
 - `GET /api/users/{myId}/records` → `PageResponse<UserMovieListItemResponse>`
 - `myId`는 `authStore.user.id`. **`user`가 `null`이면 조회하지 않는다**(`enabled`)
 - 그리드(3열) ↔ 리스트 토글
@@ -310,6 +369,8 @@ TMDB 한글화 커버리지 한계이며 우리 버그가 아니다.
 
 ### 5.6 `MyPage` · `Settings`
 
+- 🔒 **화면 게이트** — 게스트는 `<AuthRequired>`를 본다. **마이페이지 탭 자체는 보이되**
+  내용이 로그인 유도로 바뀐다(탭을 숨기지 않는다 — 탭 5개는 와이어프레임 확정 사항)
 - 프로필: `GET /api/users/me`
 - ⚠️ **`UserProfileResponse`에 `watchedCount`가 없다.** "N편 관람"은
   `GET /api/users/{myId}/records?size=1`의 `totalElements`로 얻는다
@@ -369,7 +430,8 @@ TMDB 한글화 커버리지 한계이며 우리 버그가 아니다.
 
 | # | 확인 | 통과 기준 |
 |---|---|---|
-| 1 | 로그인 성공 | 수동 navigate 없이 **탭 화면으로 자동 전환** |
+| 0 | **앱 실행** | 로그인 화면이 아니라 **홈(게스트)** 에 도달 |
+| 1 | 로그인 성공 | **모달이 닫히고 원래 있던 화면이 그대로 남는다** |
 | 2 | 검색 2섹션 | `registered` / `suggestions`가 분리돼 보인다 |
 | 3 | **미등록 영화 선택** | 로딩 후 상세 진입, 재검색 시 `registered`로 올라온다 |
 | 4 | 상세 5개 호출 | 로딩 → 정상 렌더. **비로그인 진입 시 401이 나지 않는다**(`enabled` 확인) |
@@ -385,8 +447,12 @@ TMDB 한글화 커버리지 한계이며 우리 버그가 아니다.
 | E-1 | **리뷰 없는 영화 상세** | `GET /api/reviews/me`가 **204** → 에러 화면이 아니라 "리뷰 작성" 상태 |
 | E-2 | 검색 결과 0건 | `EmptyState`. 에러 아님 |
 | E-3 | TMDB 장애 (`suggestions: []`) | `registered`만 정상 표시. 에러 화면 금지 |
-| E-4 | 비로그인으로 상세 진입 | 영화 정보·공개 리뷰는 보이고, 내 기록/찜 영역은 로그인 유도 |
-| E-5 | 비로그인으로 `suggestions` 탭 | 로그인 유도 (`sync`는 인증 필수) |
+| **G-1** | **게스트로 앱 실행 → 검색 → `registered` 상세** | 끊김 없이 진행. **401이 한 번도 나지 않는다**(`enabled` 확인) |
+| **G-2** | 게스트로 `suggestions` 탭 | 로그인 모달 → 로그인 → 모달 닫힘 → **검색 결과 화면 그대로** |
+| **G-3** | 게스트로 찜 버튼 탭 | 로그인 모달. 닫으면 상세 화면 그대로 |
+| **G-4** | 게스트로 마이페이지 탭 | `<AuthRequired>` — 빈 화면이나 에러가 아니다 |
+| **G-5** | **인증 전용 화면에서 로그아웃** (`MyRecords`에서) | 그 자리에서 `<AuthRequired>`로 바뀐다. 튕기거나 크래시하지 않는다 |
+| **G-6** | 게스트 상태로 인증 API 강제 호출 | 401이 그대로 `ApiError`로 온다 — **refresh·logout을 시도하지 않는다**(§0.1-5) |
 | E-6 | `watchType=OTT` + `ottPlatformId` 없음 | **클라이언트에서 막힌다** (400을 받기 전에) |
 | E-7 | 별점 범위 초과 | 클라이언트에서 막힌다 |
 | E-8 | 비행기 모드 | `isNetwork: true` → 재시도 버튼. **로그아웃되지 않는다** |
@@ -449,5 +515,7 @@ M2-B가 끝나면 2군으로 간다. 미리 알아둘 것.
 
 | 날짜 | 내용 |
 |---|---|
+| 2026-08-31 | **§0.1(게스트 우선 전환) 선행 5건 구현 완료.** `RootNavigator`를 `status` 분기에서 `Main`(항상) + `AuthModal`(`presentation:'modal'`) 구조로 재구성하고 `RootStackParamList`를 `{Main, AuthModal}`로 변경. `src/hooks/useRequireAuth.ts`(액션 게이트)와 `src/components/common/AuthRequired.tsx`(화면 게이트) 신규 추가. `src/api/client.ts` 응답 인터셉터에 게스트 401 가드 추가(`status !== 'authenticated'`면 refresh·logout 없이 그대로 던진다). 이어서 기존 화면 2곳을 새 구조에 맞춰 갱신했다 — `LoginScreen`은 로그인 성공 시 `navigation.goBack()`으로 모달을 닫도록(§6.7에서 유일하게 허용된 수동 navigate), `MyPageScreen`은 `isAuthed`가 아니면 `<AuthRequired>`를 먼저 렌더하도록, `SearchResultScreen`의 suggestions 탭 가드는 막다른 `Alert` 대신 `useRequireAuth()`로 교체해 실제로 로그인 모달을 띄우도록 고쳤다. `npx tsc --noEmit`·`expo export --platform android` 통과 확인. **1군 화면 자체(§1의 4·5번 이후 나머지, `MovieDetail`부터)는 이 작업 다음이다.** |
 | 2026-08-31 | **§0(착수 전 정리) 5건 완료.** ① `src/api/movie.ts`·`wishlist.ts`·`collection.ts` 실구현, `record.ts`·`review.ts`·`user.ts` 신규 추가(§2) — `reviews/me`의 204는 `null`로 정규화. ② `src/hooks/` 전 훅을 실 API 연동으로 교체(§3) — 무효화 매트릭스(§3.2), 검색 1-based 페이징(§3.3), 인증 의존 훅(`useWatchLog`·`useMyReview`·`useIsWished`) `enabled` 가드(§3.4) 반영. 진행 중 `useCreateCollection`이 실제 스키마(`CollectionCreateRequest.name`)와 다르게 `title`로 잘못 선언돼 있던 것을 발견해 바로잡았다 — M2-A 단계에서 필드명을 추측한 사례. ③ `useMovies.ts`의 `MovieDetailResponse = unknown`을 `S['MovieDetailResponse']`로 교체, 나머지 훅의 임시 `unknown` 타입도 동일하게 정리. ④ 마지막 훅을 채운 뒤 `src/hooks/_stub.ts` 삭제. ⑤ `git add --renormalize .`로 CRLF 정규화 후 커밋(`81d66d4`) — 단, `CLAUDE.md`·`docs/M2-frontend-spec.md`·`docs/M2A-foundation-spec.md`·`.gitignore`는 이 작업과 무관한 기존 미커밋 변경이 섞여 있어 커밋에서 제외(unstage)했다. `npx tsc --noEmit` 통과 확인. **1군 화면 자체(§1의 4번 이후)는 아직 손대지 않았다.** |
+| 2026-08-30 | **게스트 우선 전환 반영 — §0.1 신설 + §1·§3.4·§5·§7 개정.** 검색 화면 구현 중 **스펙의 비로그인 시나리오(E-4·E-5)와 `RootNavigator`의 로그인 게이트가 모순**임이 드러났다 — 비로그인 사용자는 `AuthNavigator`로 보내지므로 검색 화면에 도달조차 못 하는데 스펙은 게스트 동작을 규정하고 있었다. **원인은 내가 백엔드의 `permitAll`을 프론트가 노출하는 것으로 잘못 옮긴 것**이다. 백엔드는 `service-layer-spec.md` 4-6에서 *"비로그인(`viewerId == null`) 조회 허용"* 을 확정했고 `PUBLIC_GET_ENDPOINTS`도 열려 있어 계약 자체는 존재했으나, 프론트 네비게이션과 화해되지 않은 상태였다. **게스트 우선으로 해소하기로 확정**(상위 §6.7) — 비로그인이 기본, 로그인은 선택. **화면 작업보다 먼저 할 선행 5건을 §0.1로 뽑았다**: `RootNavigator` 재구성(`status` 분기 제거 → `Main` + `AuthModal` 모달), `RootStackParamList` 변경, `useRequireAuth()`(액션 게이트), `<AuthRequired>`(화면 게이트), **인터셉터 게스트 가드**. 마지막 것이 특히 중요한데, 게스트는 토큰이 없어 인증 API에서 401을 받는데 현재 인터셉터가 `logout()`과 refresh를 시도해 **무의미한 동작과 낭비**가 생긴다. **`enabled: isAuthed`가 선택에서 필수로 승격**됐다(§3.4) — 게스트가 상세 화면에 들어오는 것만으로 401이 세 번 나기 때문이며, 인터셉터 가드는 훅 하나를 빠뜨렸을 때를 위한 이중 방어다. **로그인 성공 시 동작도 바뀐다** — 스택을 갈아끼우지 않고 **모달만 닫는다.** 검색 도중 찜을 눌러 로그인한 사용자가 있던 자리를 잃지 않게 하기 위함이다. 검증에 게스트 케이스 6건(G-1~G-6)을 추가했고, 그중 **G-5(인증 전용 화면에서 로그아웃)** 는 게스트 우선에서만 생기는 새 경로다. **비용은 늘어난다** — 화면마다 게스트 분기가 하나씩 붙고 선행 부품 2개와 네비게이션 재구성이 추가된다. 대안(로그인 게이트 유지)이 범위상 안전했으나, 백엔드 설계와의 정합과 데모·심사 이점을 근거로 게스트 우선을 택했다 |
 | 2026-08-30 | 최초 작성. M2-A 완료 직후, 상위 문서의 「📚 문서 구성」 경계 기준에 따라 **실행·검증만** 담았다(화면 요구사항·API 계약은 상위 §9·§5·§6 참조). **실행 순서를 계층별(가로)로 잡은 이유** — 화면 하나를 끝까지 만드는 방식은 데이터 흐름이 확정되기 전에 레이아웃을 굳혀 나중에 전부 다시 손대게 된다. `api → hooks → 부품 → 화면` 순으로 가고, 첫 화면에서 흐름을 확정한 뒤 복제한다. **로그인을 검색보다 먼저 두었다** — `POST /api/movies/sync`가 인증 필수라 로그인 없이는 검색의 절반을 시험할 수 없고, M2-A의 디버그 프로브를 지웠으므로 인증 상태를 만들 다른 방법이 없다. **구현 시 걸리는 것으로 새로 뽑아낸 것 4건** — ① **`GET /api/reviews/me`의 204를 `null`로 정규화**해야 한다. axios가 204에서 `data`를 빈 문자열로 주므로 그대로 흘리면 **빈 문자열이 `ReviewResponse` 행세를 하며 화면까지 내려간다.** ② **무한스크롤에서 `registered.page`(0-based)와 요청 쿼리 `page`(1-based)를 섞으면** 페이지를 건너뛰거나 중복 로드한다 — `allPages.length + 1`로 계산한다. ③ **`MovieDetail`이 5개 병렬 호출**이라 M2-A §12 D에서 인위적으로 만든 동시 401이 여기서 실제로 발생한다. 인증 의존 훅 3개에 `enabled`를 안 걸면 비로그인 진입만으로 401이 세 번 나고 인터셉터가 로그아웃 경로를 탄다. ④ **`signup`은 `rawPassword`, `login`은 `password`** 로 필드명이 다르다. **백엔드 선행은 B-4 하나**이며 화면 작업과 병렬 가능하므로 착수를 막지 않는다 — 그때까지 평점 블록은 **조건부로 숨기고 플레이스홀더 숫자를 넣지 않는다**(데모에서 실제 값처럼 보인다) |
