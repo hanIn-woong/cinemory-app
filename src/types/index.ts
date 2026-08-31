@@ -57,3 +57,21 @@ export type MovieSuggestion = S['MovieSearchSuggestionResponse'];
 
 // {registered, suggestions} 2섹션. registered만 페이징되고 이 엔드포인트만 page가 1-based.
 export type MovieSearchResponse = S['MovieSearchResponse'];
+
+export type MovieDetailResponse = S['MovieDetailResponse'];
+
+// 회차별 시청 기록. WatchRecordResponse는 배열 그대로 온다(페이징 없음).
+export type WatchRecordResponse = S['WatchRecordResponse'];
+
+// `GET /api/users/{userId}/records` 목록 항목 — 대표 기록만 담긴다.
+export type UserMovieListItemResponse = S['UserMovieListItemResponse'];
+
+export type ReviewResponse = S['ReviewResponse'];
+
+export type WishListItemResponse = S['WishListItemResponse'];
+
+export type CollectionResponse = S['CollectionResponse'];
+export type CollectionCreateRequest = S['CollectionCreateRequest'];
+
+// ⚠️ 컬렉션 단건 조회 API가 없다 — 제목 등은 목록에서 받은 값을 화면 파라미터로 넘겨야 한다.
+export type CollectionMovieListItemResponse = S['CollectionMovieListItemResponse'];
