@@ -1,6 +1,7 @@
 # CineMory M2-A — 기반 구축 구현 스펙
 
-> 상위 문서: `docs/M2-frontend-spec.md` (§12 실행 순서의 상세판)
+> 상위 문서: `docs/M2-frontend-spec.md` — 계약과 사실은 그쪽, 실행과 검증은 여기
+> (분담 기준은 상위 문서의 「📚 문서 구성」)
 > 대상: `cinemory-app` — Expo SDK 56 / RN 0.85 / React 19.2 / TypeScript
 > 이 문서는 **Claude Code가 그대로 구현할 수 있는 수준의 파일 단위 스펙**이다.
 
