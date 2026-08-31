@@ -4,3 +4,4 @@ export { Card } from './Card';
 export { Button, type ButtonVariant } from './Button';
 export { Divider } from './Divider';
 export { Spacer } from './Spacer';
+export { TextField } from './TextField';
