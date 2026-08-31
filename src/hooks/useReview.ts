@@ -8,8 +8,16 @@ import {
 import { reviewApi } from '../api/review';
 import type { ApiError } from '../api/client';
 import { useAuthStore } from '../store/authStore';
-import type { ReviewResponse, WriteReviewRequest } from '../types';
+import type { PageResponse, ReviewResponse, WriteReviewRequest } from '../types';
 import { queryKeys } from './queryKeys';
+
+export function useMovieReviews(movieId: number): UseQueryResult<PageResponse<ReviewResponse>, ApiError> {
+  // GET /api/movies/{movieId}/reviews — 공개 리뷰 목록. 비로그인도 볼 수 있다(§9.3).
+  return useQuery({
+    queryKey: ['movies', 'reviews', movieId],
+    queryFn: () => reviewApi.ofMovie(movieId, 0),
+  });
+}
 
 export function useMyReview(movieId: number): UseQueryResult<ReviewResponse | null, ApiError> {
   // GET /api/reviews/me?movieId= — 204는 "리뷰 없음"(정상)이므로 null로 매핑한다.

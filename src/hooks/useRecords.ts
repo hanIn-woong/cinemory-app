@@ -59,3 +59,20 @@ export function useDeleteRecord(): UseMutationResult<void, ApiError, number> {
     },
   });
 }
+
+interface SetRepresentativeVars {
+  recordId: number;
+  userId: number;
+  movieId: number;
+}
+
+export function useSetRepresentative(): UseMutationResult<void, ApiError, SetRepresentativeVars> {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ recordId }) => recordApi.setRepresentative(recordId),
+    onSuccess: (_data, { userId, movieId }) => {
+      // 대표 기록 변경 → ['records','ofUserMovie',userId,movieId] 무효화 (§3.2 무효화 매트릭스)
+      queryClient.invalidateQueries({ queryKey: queryKeys.records.ofUserMovie(userId, movieId) });
+    },
+  });
+}

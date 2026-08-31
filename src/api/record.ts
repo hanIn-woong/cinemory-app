@@ -16,4 +16,7 @@ export const recordApi = {
     api.post<WatchRecordResponse>(EP.records.create, body).then((r) => r.data),
 
   remove: (recordId: number) => api.delete<void>(EP.records.byId(recordId)).then((r) => r.data),
+
+  setRepresentative: (recordId: number) =>
+    api.patch<void>(EP.records.representative(recordId)).then((r) => r.data),
 };
