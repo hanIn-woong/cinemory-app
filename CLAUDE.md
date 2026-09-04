@@ -9,6 +9,8 @@ React Native (Expo SDK 56) + TypeScript. 백엔드는 별도 리포 `cinemory-ba
 
 ## 문서
 
+- `cinemory-backend/docs/CineMory_기획노트.md` — 프로젝트 기획 문서
+
 **설계 스펙은 `docs/`에 있고 그것이 단일 출처다. 작업 전에 관련 문서를 읽는다.**
 
 - `docs/M2-frontend-spec.md` — 화면·API 표면·네비게이션·백엔드 선행 항목
