@@ -141,8 +141,13 @@ M2-A에 설계만 있고 구현이 없다. **지금은 만들지 않는다** —
 | 액션 | `invalidateQueries` 대상 |
 |---|---|
 | 시청 기록 생성/삭제 | `['records']` · `['movies','detail',movieId]` |
+| **시청 기록 수정** (B-15) | `['records']` · `['movies','detail',movieId]` · **`['reviews']`** ← ★ |
 | 대표 기록 변경 | `['records','ofUserMovie',userId,movieId]` |
 | 리뷰 upsert/삭제 | `['reviews','me',movieId]` · `['movies','reviews',movieId]` |
+
+> ★ **기록 수정에 `['reviews']`가 붙는 이유** — 공개 리뷰의 별점이 대표 기록에서 파생되므로
+> (상위 §7.3), **대표 기록의 `rating`을 고치면 리뷰에 보이는 별점도 바뀐다.** 무효화하지 않으면
+> 화면에 옛 별점이 남는다.
 | 찜 토글 | `['wishes']` — **낙관적 업데이트 후 무효화** |
 | 프로필 수정 | `['users','me']` |
 | **미등록 영화 sync** | `['movies','search']` — 다음 검색에서 `registered`로 올라온다 |
@@ -336,10 +341,16 @@ SectionList
 | **찜** | **즉시**, 낙관적 업데이트 | `POST /api/movies/{id}/wish` (토글) |
 | **컬렉션 추가** | 즉시 (선택 시트) | `POST /api/collections/{id}/movies` — **M2-C로 미룬다** |
 | **시청 기록** | 모달 → 저장 | `POST /api/records` |
-| **리뷰** | 모달 → 저장 | `PUT /api/movies/{id}/review` (upsert) |
+| **리뷰** | 모달 → 저장 | `PUT /api/movies/{id}/review` (upsert). ⚠️ **바디는 `{ content }` 뿐** |
 
 ⚠️ **기록과 리뷰를 한 폼에 섞지 않는다.** 기록은 회차별 여러 개, 리뷰는 영화당 정확히 1개다
 (상위 §5.3). 섞으면 두 번째 관람을 기록할 때 리뷰가 덮인다.
+
+⚠️ **별점 입력은 시청 기록 모달에만 둔다** (상위 §7.3, 2026-09-01 확정). 리뷰 모달은
+**텍스트만** 받는다 — `ReviewWriteRequest`가 `{ content }`로 바뀐다. 리뷰 영역에 표시되는
+별점은 대표 시청 기록에서 파생된 값이며, `ReviewResponse.rating`이 **nullable**이므로
+**null이면 별점을 그리지 않는다**(기록이 없거나 한 번도 별점을 안 매긴 경우).
+*"별점은 내 시청 기록의 별점이 함께 표시됩니다"* 안내를 둔다.
 
 **시청 기록 모달**
 
@@ -349,6 +360,19 @@ SectionList
 - 날짜: `@react-native-community/datetimepicker` — Android는 `DateTimePickerAndroid.open()`,
   iOS는 인라인. **플랫폼 분기가 필요하다**
 - 회차가 2개 이상이면 목록으로 보여주고 `PATCH /api/records/{id}/representative`로 대표 지정
+- **각 회차에 `수정` 진입점을 둔다** — 기록 모달을 **생성/수정 겸용**으로 만든다(초기값만 다르다).
+  ✅ **구현 완료(B-15, 2026-09-04)** — `PATCH /api/records/{recordId}` 연동, 상위 §11.2가 설계 확정본이다.
+  ⚠️ 수정 저장 성공 시 무효화에 **`['reviews']`를 포함**한다(§3.2)
+- ⚠️ **관람일 수정 시 하한 제약** — 더 먼저 본 회차들 중 날짜가 있는 가장 가까운 것보다
+  이전 날짜로는 저장할 수 없다(2026-09-04 추가). 목록이 `id DESC`이므로 수정 대상보다
+  뒤쪽 원소를 탐색해 날짜 있는 첫 회차를 찾는다 — 인접 원소만 보면 안 된다(그 회차에
+  날짜가 없을 수 있다). 날짜 입력에는 **지우기**(null로 되돌리기) 진입점도 필요하다 —
+  없으면 잘못 입력한 날짜를 고치려고 기록 전체를 지워야 한다
+- 🔖 **백로그 — 회차 더보기 페이지**(사용자 요청, 2026-09-04). 시청 기록이 5개를 넘으면
+  상세 화면 카드 안에 전부 나열하기보다 별도 페이지로 분리하는 게 낫다. `getWatchLog`가
+  현재 **페이징 없는 배열**이라(상위 §9.3) 구현하려면 백엔드에 페이징 추가를 먼저 확인해야
+  할지, 클라이언트에서 이미 받은 배열을 자르기만 하면 될지 착수 시점에 판단한다. M2-B
+  범위 밖 — 지금은 진행하지 않는다
 
 **출연진** — 상세 응답은 `displayOrder <= 20`(최대 21명)만 온다. 더보기는
 `GET /api/movies/{id}/cast`(페이징, size 50). ⚠️ **인물명의 약 71%가 영문**이다 —
@@ -366,6 +390,83 @@ TMDB 한글화 커버리지 한계이며 우리 버그가 아니다.
   지원하지 않는다**(5-0-D — 인덱스를 타지 않는 정렬이 조용히 만들어지는 것을 막기 위함).
   와이어프레임의 정렬/별점 필터는 state만 있고 동작하지 않는 미구현 부분이었다
 - 찜 목록은 **별도 화면(M2-C)** 이다. 엔드포인트도 DTO도 다르므로 탭으로 묶지 않는다
+
+#### 스크롤 시 툴바 접기 (2026-09-02 추가)
+
+**접는 것은 화면 안 툴바(그리드/리스트 토글)뿐이다. 네이티브 스택 헤더는 건드리지 않는다**
+(상위 §9.4 — 플랫폼 뷰라 부드럽게 움직일 수 없다).
+
+**Reanimated를 쓴다.** `reanimated 4.3.1` + `react-native-worklets`가 이미 설치돼 있다
+(NativeWind가 worklets를 요구해 들어온 것). `Animated.diffClamp`(RN 내장)를 쓰지 않는 이유:
+
+1. **이 화면은 포스터 그리드라 이미지 디코딩이 JS 스레드를 먹는다.** JS 드리븐 애니메이션은
+   **정확히 스크롤하는 그 순간에** 끊긴다. Reanimated는 UI 스레드에서 돌아 영향을 받지 않는다.
+2. `diffClamp`는 iOS 바운스(음수 offset)에서 헤더가 중간에 걸린다.
+3. 스냅(손을 떼면 완전히 숨김/보임)을 만들기 어렵다.
+
+**동작은 위치 기반이 아니라 방향 기반으로 한다.** 위치 기반(스크롤량 1:1 연동)은 툴바를 다시
+보려면 맨 위까지 올라가야 한다.
+
+```
+delta > 8  이고 scrollY > TOOLBAR_HEIGHT  →  숨김   withTiming(200)
+delta < -8                                →  보임
+scrollY <= TOOLBAR_HEIGHT                 →  항상 보임
+```
+
+⚠️ **마지막 줄이 짧은 목록을 방어한다.** 없으면 툴바를 숨긴 뒤 되돌릴 스크롤이 없어
+**영영 안 보이는 상태**가 된다.
+
+**레이아웃 — `marginTop`을 애니메이션하지 않는다**
+
+와이어프레임은 body의 `marginTop`을 헤더 높이와 동기화했는데, 그러면 **매 프레임 레이아웃이
+재계산돼 끊긴다.** 툴바는 `absolute` + `translateY`, 리스트는 `paddingTop` **고정**이다.
+
+```tsx
+<View className="flex-1 overflow-hidden">
+  <Animated.View style={toolbarStyle}
+    className="absolute top-0 left-0 right-0 z-10 bg-background">
+    {/* 그리드/리스트 토글 */}
+  </Animated.View>
+
+  <Animated.FlatList
+    onScroll={onScroll}
+    scrollEventThrottle={16}
+    contentContainerStyle={{ paddingTop: TOOLBAR_HEIGHT, /* 기존 값 유지 */ }}
+  />
+</View>
+```
+
+**⚠️ 이 화면 특유의 함정 넷**
+
+| # | 함정 | 대응 |
+|---|---|---|
+| 1 | **`key={viewMode}`로 FlatList가 재생성**된다. 그리드↔리스트 토글 시 스크롤은 0으로 가는데 **툴바 상태는 숨김으로 굳는다** | `useEffect`로 `viewMode` 변경 시 `reset()` |
+| 2 | 숨은 툴바가 터치를 먹으면 **목록 상단 항목이 안 눌린다** | `pointerEvents="box-none"` 또는 숨김 상태에서 `none` |
+| 3 | 툴바가 컨테이너 위로 삐져나와 네이티브 헤더 영역에 보일 수 있다(iOS `overflow: visible`) | 감싸는 `View`에 **`overflow: hidden`** |
+| 4 | `EmptyState`일 때는 스크롤이 없다 | 목록이 비면 **툴바를 고정**한다(접기 비활성) |
+
+**재사용 — 훅으로 뽑는다**
+
+2군의 `Wishlist`·`CollectionDetail`이 같은 형태의 리스트다. 화면에 직접 박으면 세 번 복사하게 된다.
+
+```
+src/hooks/useCollapsibleToolbar.ts   →  { onScroll, toolbarStyle, reset }
+```
+
+`reset`을 밖으로 노출해야 함정 1을 화면에서 처리할 수 있다.
+
+**검증**
+
+| # | 확인 |
+|---|---|
+| 1 | 포스터 로딩 중에도 스크롤이 끊기지 않는다 |
+| 2 | 조금만 위로 올려도 툴바가 나온다 |
+| 3 | **목록이 짧을 때 툴바가 사라지지 않는다** |
+| 4 | **그리드↔리스트 토글 후 툴바가 다시 보인다** |
+| 5 | 툴바가 숨은 상태에서 목록 상단 항목이 눌린다 |
+| 6 | iOS 바운스에서 툴바가 중간에 걸리지 않는다 |
+
+**3·4번이 실제로 자주 깨진다.**
 
 ### 5.6 `MyPage` · `Settings`
 
@@ -389,9 +490,21 @@ TMDB 한글화 커버리지 한계이며 우리 버그가 아니다.
 
 ---
 
-## 6. 백엔드 선행 — **B-4** 하나뿐이다
+## 6. 백엔드 선행 — 1군에 걸리는 것 4건
 
-상위 §11의 B-1~B-12 중 M2-B에 걸리는 것은 **B-4(영화 상세 평점)** 하나다. 나머지 1군 API는 완비돼 있다.
+상위 §11에서 M2-B를 실제로 막는 것은 아래 넷이다. 나머지 1군 API는 완비돼 있다.
+
+| # | 항목 | 화면 영향 | 병렬 가능? |
+|---|---|---|---|
+| **B-4** | 영화 상세 평점 (`voteAverage` 노출 + `AVG` 집계) | 평점 블록만 숨기면 진행 가능 | ✅ |
+| **B-13** | OTT 플랫폼 목록 API | `watchType=OTT` 저장 불가 → **THEATER/ETC만 지원**하고 진행 | ✅ |
+| **B-15** | **시청 기록 수정 API** | 수정 진입점을 숨기고 진행. 설계 확정본은 상위 **§11.2** | ✅ |
+| **B-16** | `review.rating` 제거 + 파생 | ⚠️ **리뷰 *작성*을 붙이면 400.** 읽기만 먼저 | ⚠️ **작성은 차단** |
+
+**넷 다 화면 작업과 병렬 가능하지만, B-16만 리뷰 저장을 막는다.** 요청을 지금 넣어두고
+화면부터 진행한다.
+
+### B-4 상세
 
 **현재 상태** — `MovieDetailResponse`에 평점 필드가 **하나도 없다.** `Movie` 엔티티에
 `voteAverage`/`voteCount`가 있지만 DTO로 노출되지 않고, 우리 평점(`AVG(review.rating)`)
@@ -515,10 +628,22 @@ M2-B가 끝나면 2군으로 간다. 미리 알아둘 것.
 
 | 날짜 | 내용 |
 |---|---|
+| 2026-09-04 | **"스크롤 시 툴바 접기"(§5.5) 구현.** `src/hooks/useCollapsibleToolbar.ts` 신규 — `Reanimated`의 `useAnimatedScrollHandler`/`useSharedValue`/`useAnimatedStyle`/`withTiming`으로 방향 기반 접기(`{onScroll, toolbarStyle, reset}`)를 구현했다. `babel-preset-expo`가 `react-native-worklets` 설치를 감지해 워클릿 babel 플러그인을 자동으로 넣어준다는 것을 소스로 확인해 `babel.config.js`는 손대지 않았다. `MyRecordsScreen.tsx`에 통합 — 툴바를 `Animated.View`(`absolute` + `translateY`, 고정 높이 44)로, 리스트를 `Animated.FlatList`로 바꾸고 `contentContainerStyle.paddingTop`을 툴바 높이로 고정(`marginTop` 애니메이션 금지 원칙 준수). 스펙이 짚은 함정 4개 전부 반영 — ① 그리드↔리스트 토글 시 `useEffect`로 `reset()` 호출 ② 툴바에 `pointerEvents="box-none"` ③ 감싸는 `View`에 `overflow-hidden` ④ 목록이 비면 `EmptyState`만 렌더해 `onScroll`이 아예 안 붙으므로 툴바가 자연히 고정된다(별도 분기 불필요). `npx tsc --noEmit`·`expo export` 통과 확인. **실기기 검증 전이다 — 스크롤 끊김·바운스 동작·토글 후 복귀는 번들 확인만으로는 알 수 없다** |
+| 2026-09-04 | **`MyRecords` 그리드 UI 조정 — 실기기 피드백.** ① `MovieGridItem`에서 포스터 아래 제목 텍스트 제거(포스터만 표시, 접근성 라벨로만 `title` 유지). ② 그리드 열 사이 간격을 `spacing.sm`(8)에서 2로 줄이고, **그리드 모드일 때만** 화면 좌우 여백도 0으로 없애 포스터가 화면을 꽉 채우도록 했다(리스트 모드는 기존 여백 유지 — 텍스트 가독성 때문에). `npx tsc --noEmit`·`expo export` 통과 확인 |
+| 2026-09-04 | **`MyRecords`(§5.5, §1 8번) 구현.** `<AuthRequired>` 화면 게이트, `useMyRecords(userId)`(§0에서 이미 구현된 무한스크롤 훅) 연동. `src/components/movie/MovieGridItem.tsx` 신규(§4의 3열 그리드 셀) — 열 폭은 `useWindowDimensions()`로 계산해 호출부가 넘긴다. 그리드/리스트 토글은 `FlatList`의 `numColumns`을 바꿔야 해서 `key={viewMode}`로 강제 리마운트시켰다. 정렬·필터 UI는 스펙대로 넣지 않았다(5-0-D). `MyPageStack.tsx`의 `MyRecords`·`MovieDetail` 플레이스홀더를 실제 화면으로 교체 — `MovieDetail`은 `HomeStack`과 같은 컴포넌트를 공유한다(라우트 파라미터 모양이 동일). `MyPageScreen.tsx`에 "내 기록" 진입점 추가 — 진입점이 없으면 방금 만든 화면을 실기기에서 볼 방법이 없어서(Home/MyPage 때와 같은 패턴). `npx tsc --noEmit`·`expo export` 통과 확인. **실기기 검증 전이다** — 특히 7번(MovieDetail)에서 저장한 기록이 여기 반영되는지(§7.1 6번)가 M2-B 완료 판정의 핵심 동선이다 |
+| 2026-09-04 | **§5.4 문서 정리 + 백로그 1건 추가.** MovieDetail 실기기 검증이 §5.4의 "수정 진입점 — 미구현(B-15)" 문구와 어긋나 있어(B-15는 이미 해소돼 구현 완료) 갱신했다. 겸사겸사 날짜 하한 제약(같은 날 추가된 기능)도 §5.4 본문에 반영. **백로그 신설** — 시청 기록이 5개를 넘으면 상세 화면 카드 안에 전부 나열하기보다 별도 "더보기" 페이지로 분리하자는 요청(사용자, 2026-09-04). `getWatchLog`가 페이징 없는 배열이라 백엔드 페이징 추가 여부부터 착수 시점에 판단해야 한다 — M2-B 범위 밖, 지금은 진행하지 않는다 |
+| 2026-09-04 | **날짜 하한 제약 수정 2건 — 실기기 피드백 반영.** ① **"이전 회차" 판정을 배열 인접 원소에서 탐색으로 변경** — 전날 구현은 수정 대상 바로 다음 원소만 봤는데, 요청은 "날짜 있는 회차가 이전 전체에 있으면 그걸 반영"이었다. `records.slice(index + 1).find(r => r.watchDate != null)`로 고쳐 날짜 없는 회차는 건너뛰고 더 먼저 본 회차들 중 날짜가 있는 가장 가까운 것을 찾는다. ② **관람일 지우기 버튼 추가** — 날짜를 잘못 입력했을 때 기록 전체를 삭제하지 않고도 "기억나지 않아요" 상태로 되돌릴 방법이 없었다. `WatchRecordModal.tsx`의 날짜 필드 옆에 `watchDate`가 있을 때만 보이는 "지우기"를 추가해 `setWatchDate(null)`로 되돌린다. `npx tsc --noEmit`·`expo export` 통과 확인 |
+| 2026-09-04 | **시청 기록 수정에 날짜 하한 제약 추가.** 실기기에서 수정 기능 정상 확인 후 요청받은 소기능 — 관람일을 고칠 때 **이전 회차(더 먼저 본 회차)의 날짜보다 앞선 날짜는 선택·저장할 수 없다.** 이전 회차의 날짜가 없으면 제약 없음. "이전 회차"는 `getWatchLog`가 `id DESC`(최신 생성 순)로 반환하므로(`cinemory-backend/docs/service-layer-spec.md` 4-6-E) 배열상 수정 대상 바로 다음 원소로 판단했다 — 날짜 기준으로 가장 가까운 걸 찾는 게 아니라 **그 특정 다음 회차**만 본다(요청 문구가 "그 회차에 날짜가 없으면 제약 없음"이라고 해 탐색이 아닌 고정 위치 참조로 해석). `WatchRecordModal.tsx`에 `minDate` prop 추가 — Android/iOS 피커의 `minimumDate`로 1차 방어, 제출 시 재검증으로 2차 방어. `MovieDetailScreen.tsx`의 "수정" 액션에서 이전 회차를 찾아 넘긴다. `npx tsc --noEmit`·`expo export` 통과 확인. **"이전 회차"의 해석(배열 인접 vs 날짜 기준 탐색)은 확인 없이 진행한 판단이라 실기기 검증 시 의도와 맞는지 봐야 한다** |
+| 2026-09-04 | **B-15 해소 — 시청 기록 수정 기능 구현.** 백엔드가 `PATCH /api/records/{recordId}`를 완료했다는 보고를 받고 `npm run gen:api`로 확인(`WatchRecordUpdateRequest` 확인 — 전체 치환, `movieId`·`representative` 제외). `src/api/record.ts`에 `update()`, `src/hooks/useRecords.ts`에 `useUpdateRecord()`(§3.2 매트릭스 그대로 `['records']`·`['movies','detail',movieId]`·`['reviews']` 무효화) 추가. `WatchRecordModal.tsx`가 `editing?: WatchRecordResponse` prop을 받아 생성/수정 겸용이 되도록 재구성 — 열릴 때 기존 값으로 채우고, 저장 시 폼의 전체 상태를 그대로 보낸다(전체 치환이라 일부만 보내면 나머지가 null로 지워지므로). 시청 기록 문자열→Date 파싱도 로컬 타임존 기준으로 하는 `parseLocalDateString()`을 추가해 이전에 고친 날짜 밀림 버그와 대칭을 맞췄다. `MovieDetailScreen.tsx`의 기록 ActionSheet에 "수정" 옵션 추가(대표 지정·삭제 옵션 앞). `npx tsc --noEmit`·`expo export` 통과 확인. **실기기 검증 전이다** |
+| 2026-09-04 | **실기기 재검증(게스트 잠금·별점 없는 리뷰 저장) 통과, 이어서 발견 2건 처리.** ① 시청 기록 목록에 `placeDetail`·`note`가 아예 표시되지 않고 있었다 — `MovieDetailScreen.tsx`에서 `placeDetail`은 관람 방식 옆에, `note`는 기록 정보 줄과 별점 사이에 표시하도록 추가. ② **시청 기록 수정 기능이 없다는 것을 발견** — 확인해보니 백엔드에 애초에 update API가 없다(`POST`·`DELETE`·대표 지정 `PATCH`뿐). 삭제 후 재생성하는 우회안은 대표 자동 승격 부작용(§7.3) 때문에 채택하지 않기로 하고, `docs/M2-frontend-spec.md` §11에 **B-15**로 등록 후 지금은 보류(사용자 결정) — 백엔드에 `PATCH /api/records/{recordId}` 신설을 요청한다. `npx tsc --noEmit` 통과 확인 |
+| 2026-09-02 | **§5.4 기획 변경분 반영.** 사용자가 M2B-screens-spec.md §5.4를 게스트 잠금 모델·별점 단일 출처(`watch_record.rating`)로 수정한 데 맞춰 코드를 고쳤다. `ReviewWriteRequest`에서 `rating`이 빠지는 변경은 백엔드 반영을 먼저 확인했다 — 백엔드가 이미 구현했음을 확인 후 `npm run gen:api`로 `api.d.ts` 재생성(`ReviewWriteRequest.rating` 필드 삭제 확인, 2줄 diff). ① `ReviewModal.tsx`에서 별점 입력을 완전히 제거하고 `{content}`만 전송, "별점은 내 시청 기록의 별점이 함께 표시됩니다" 안내를 추가했다. ② `MovieDetailScreen.tsx`의 "내 기록" 카드를 재구성 — 찜 버튼(하트)은 게스트에게도 항상 보이되 탭 시 `useRequireAuth()`가 모달을 띄우고, 그 외(컬렉션·시청 기록·리뷰)는 게스트에게 섹션별 개별 안내 대신 카드 전체를 "기록하려면 로그인하세요" 한 문구로 잠근다. ③ 공개 리뷰 카드에서 `review.rating`이 `null`이면 `RatingStars`를 아예 렌더하지 않도록 수정(기존엔 `?? 0`으로 채워 빈 별을 그렸다 — 스펙의 "null이면 별점 영역을 생략한다"에 위배). `npx tsc --noEmit`·`expo export` 통과 확인. **아직 실기기 재검증 전이다** — 특히 게스트로 상세 진입 시 카드 잠금 문구, 리뷰 작성 시 별점 없이 저장되는지 확인 필요 |
 | 2026-09-01 | **`MovieDetail` 실기기 검증 중 버그 2건 발견·수정.** ① 시청 기록 모달의 날짜 선택이 하루 밀리는 버그 — `watchDate.toISOString().slice(0,10)`이 UTC로 변환 후 자르는데, KST(UTC+9)에서 자정 근처 날짜를 고르면 하루 전으로 밀린다(8/3 선택 → 8/2 저장). `getFullYear`/`getMonth`/`getDate`로 로컬 날짜를 직접 포맷하는 `toLocalDateString()`으로 교체(표시·저장 페이로드 공용). ② 설치된 `@react-native-community/datetimepicker@9.1.0`에서 `onChange`가 deprecated였다 — Android `DateTimePickerAndroid.open()`·iOS 인라인 둘 다 `onValueChange`로 교체. `npx tsc --noEmit`·`expo export` 재확인. 나머지 검증 항목(찜 토글·리뷰 upsert·리뷰 없음(204) 상태·대표 기록 지정·비로그인 상세 진입·OTT 저장 차단)은 실기기에서 정상 확인됨 |
 | 2026-09-01 | **§7.3 동시 401 실기기 검증 통과.** `jwt.access-token-ttl`을 `PT10S`로 낮추고 백엔드를 `--logging.level.org.springframework.web=DEBUG`로 띄워 `DispatcherServlet`의 요청 로그로 `POST /api/auth/reissue` 수신 횟수를 확인했다. 세션 전체로는 4번 찍혔는데(화면 전환마다 독립적으로 갱신 — TTL이 워낙 짧아 예상된 동작), **`MovieDetail` 진입(5개 병렬 호출) 시점 한 번만 떼어보면 정확히 1줄**이었고 바로 뒤 `Mapped to`/`Read` 로그도 그 요청 하나에 대한 것뿐이었다 — 단일 비행 재발급이 의도대로 작동함을 확인했다. 화면도 로그인 화면으로 튕기지 않고 정상 렌더됐다. TTL은 `PT30M`으로 복구 완료 |
 | 2026-08-31 | **`MovieDetail`(§5.4, §1 7번) 구현.** 5개 병렬 호출(`useMovieDetail`·`useWatchLog`·`useMyReview`·`useIsWished`·`useMovieReviews` — 마지막은 신규 훅) 연동, 내 기록 카드를 찜(낙관적 토글)·컬렉션(자리만, M2-C)·시청 기록·리뷰 4개 액션으로 분리(§9.3). `src/components/movie/RatingStars.tsx`(§4.1, 반개 단위 입력 + 동일 별 재탭 시 해제)·`src/utils/rating.ts`(`apiToStars`/`starsToApi`) 신규. `src/screens/movie/WatchRecordModal.tsx`·`ReviewModal.tsx` 분리 구현 — 기록과 리뷰를 한 폼에 섞지 않았다. 회차 2개 이상일 때 대표 지정을 위해 `recordApi.setRepresentative`·`useSetRepresentative` 훅을 새로 추가(§3.2 무효화 매트릭스의 `['records','ofUserMovie',userId,movieId]`만 무효화). 게스트 액션은 `useRequireAuth()`로 게이트. `npx expo install @react-native-community/datetimepicker` 설치 — Android는 `DateTimePickerAndroid.open()`, iOS는 인라인으로 플랫폼 분기. **B-4(평점) 외에 새로 발견한 백엔드 갭 2건**을 §11에 추가할 필요가 있다 — ① **OTT 플랫폼 목록 조회 API가 없다.** `WatchRecordCreateRequest.ottPlatformId`가 필수인데 유효한 ID를 얻을 방법이 없어, 지금은 `watchType=OTT` 선택 시 저장을 막고 안내만 띄운다(THEATER/ETC만 동작). ② `MovieDetailResponse`에 `backdropPath`가 없다 — 히어로 배경은 `posterPath`로 대신했다. `npx tsc --noEmit`·`expo export --platform android` 통과 확인. **실기기 검증 전이다 — 특히 동시 401 실경로(§7.3)와 회차 대표 지정 흐름을 확인해야 한다.** |
 | 2026-08-31 | **§0.1(게스트 우선 전환) 선행 5건 구현 완료.** `RootNavigator`를 `status` 분기에서 `Main`(항상) + `AuthModal`(`presentation:'modal'`) 구조로 재구성하고 `RootStackParamList`를 `{Main, AuthModal}`로 변경. `src/hooks/useRequireAuth.ts`(액션 게이트)와 `src/components/common/AuthRequired.tsx`(화면 게이트) 신규 추가. `src/api/client.ts` 응답 인터셉터에 게스트 401 가드 추가(`status !== 'authenticated'`면 refresh·logout 없이 그대로 던진다). 이어서 기존 화면 2곳을 새 구조에 맞춰 갱신했다 — `LoginScreen`은 로그인 성공 시 `navigation.goBack()`으로 모달을 닫도록(§6.7에서 유일하게 허용된 수동 navigate), `MyPageScreen`은 `isAuthed`가 아니면 `<AuthRequired>`를 먼저 렌더하도록, `SearchResultScreen`의 suggestions 탭 가드는 막다른 `Alert` 대신 `useRequireAuth()`로 교체해 실제로 로그인 모달을 띄우도록 고쳤다. `npx tsc --noEmit`·`expo export --platform android` 통과 확인. **1군 화면 자체(§1의 4·5번 이후 나머지, `MovieDetail`부터)는 이 작업 다음이다.** |
 | 2026-08-31 | **§0(착수 전 정리) 5건 완료.** ① `src/api/movie.ts`·`wishlist.ts`·`collection.ts` 실구현, `record.ts`·`review.ts`·`user.ts` 신규 추가(§2) — `reviews/me`의 204는 `null`로 정규화. ② `src/hooks/` 전 훅을 실 API 연동으로 교체(§3) — 무효화 매트릭스(§3.2), 검색 1-based 페이징(§3.3), 인증 의존 훅(`useWatchLog`·`useMyReview`·`useIsWished`) `enabled` 가드(§3.4) 반영. 진행 중 `useCreateCollection`이 실제 스키마(`CollectionCreateRequest.name`)와 다르게 `title`로 잘못 선언돼 있던 것을 발견해 바로잡았다 — M2-A 단계에서 필드명을 추측한 사례. ③ `useMovies.ts`의 `MovieDetailResponse = unknown`을 `S['MovieDetailResponse']`로 교체, 나머지 훅의 임시 `unknown` 타입도 동일하게 정리. ④ 마지막 훅을 채운 뒤 `src/hooks/_stub.ts` 삭제. ⑤ `git add --renormalize .`로 CRLF 정규화 후 커밋(`81d66d4`) — 단, `CLAUDE.md`·`docs/M2-frontend-spec.md`·`docs/M2A-foundation-spec.md`·`.gitignore`는 이 작업과 무관한 기존 미커밋 변경이 섞여 있어 커밋에서 제외(unstage)했다. `npx tsc --noEmit` 통과 확인. **1군 화면 자체(§1의 4번 이후)는 아직 손대지 않았다.** |
+| 2026-09-01 | **B-15(시청 기록 수정) 반영 — §3.2·§5.4·§6.** 상세 화면 사용 중 **잘못 입력한 기록을 고칠 방법이 없다**는 것이 드러났다. 설계 확정본은 상위 §11.2에 두고 여기에는 화면 쪽 귀결만 적었다 — 기록 모달을 **생성/수정 겸용**으로 만들고(초기값만 다르다) 회차 목록의 각 항목에 수정 진입점을 둔다. **무효화 매트릭스에 `['reviews']`가 추가된 것이 핵심이다** — §7.3 확정으로 공개 리뷰의 별점이 대표 기록에서 파생되므로 **대표 기록의 `rating`을 고치면 리뷰 별점도 바뀌는데**, 무효화하지 않으면 화면에 옛 별점이 남는다. 조용히 틀리는 유형이라 표에 ★로 표시했다. 함께 **§6을 "B-4 하나뿐"에서 4건(B-4·B-13·B-15·B-16)으로 갱신**했다 — Claude Code가 구현 중 B-13·B-14를 추가하고 내가 B-15·B-16을 확정하는 동안 이 절이 낡아 있었다. **넷 중 B-16만 병렬 불가**(리뷰 작성을 붙이면 400)라는 구분을 명시했다 |
+| 2026-09-02 | **§5.5에 스크롤 시 툴바 접기 추가.** 상위 §9.4의 *"M2에서 생략"* 결정을 되돌린 것이다 — 실기기 사용 중 그리드/리스트 툴바가 목록 상단을 계속 차지한다는 요구가 나왔다. **접는 대상을 툴바로 한정**했다(네이티브 헤더는 플랫폼 뷰라 부드럽게 못 움직인다 — 상위 §9.4). **`Animated.diffClamp`가 아니라 Reanimated를 쓰는 이유를 명시**했다: 이 화면은 포스터 그리드라 **이미지 디코딩이 JS 스레드를 먹어 JS 드리븐 애니메이션이 정확히 스크롤하는 순간에 끊긴다.** UI 스레드 실행이 여기서 결정적이다. **동작을 위치 기반이 아니라 방향 기반으로** 정한 것은 위치 기반이면 툴바를 다시 보려고 맨 위까지 올라가야 하기 때문이고, `scrollY <= TOOLBAR_HEIGHT`면 항상 보이게 한 것은 **짧은 목록에서 툴바가 영영 안 보이는 상태**를 막기 위해서다. ⚠️ **`marginTop`을 애니메이션하지 말 것**을 못박았다 — 와이어프레임이 그렇게 했는데 매 프레임 레이아웃이 재계산돼 끊긴다(`translateY` + 고정 `paddingTop`이 정답). 함정 넷 중 **①(`key={viewMode}` 재생성 시 툴바가 숨김으로 굳음)과 ④(빈 목록)** 가 실제로 자주 깨지는 지점이라 검증 항목에도 넣었다. 2군의 `Wishlist`·`CollectionDetail`이 같은 형태라 **`useCollapsibleToolbar` 훅으로 뽑도록** 했다 |
+| 2026-09-01 | **별점 단일 출처 확정 반영 (§5.4).** 상위 §7.3 확정에 따라 **리뷰 작성 모달에서 별점 입력을 제거**하고 텍스트만 받는다(`ReviewWriteRequest` → `{ content }`). 별점 입력은 시청 기록 모달에만 남는다. 리뷰 영역에 보이는 별점은 **대표 시청 기록에서 파생된 표시 전용 값**이며 `ReviewResponse.rating`이 nullable이므로 **null이면 별점을 그리지 않는다.** 앞서 이 문제를 *"M2-B에서 리뷰 작성을 제거하자"* 로 해소하려던 안은 **철회했다** — 별점 모호성이 파생 방식으로 해소되므로 리뷰 작성을 뺄 이유가 없어졌고, 공개 리뷰 목록 유지(댓글 대상·소셜 설계 보존) 결정과도 맞는다. **백엔드 선행 작업 7건이 붙는다** — 완료 전까지 리뷰 작성 UI는 별점 없이 만들되 `PUT`은 기존 계약(`{rating, content}`)을 따라야 하므로, **백엔드 반영 후에 리뷰 저장을 붙인다** |
 | 2026-08-30 | **게스트 우선 전환 반영 — §0.1 신설 + §1·§3.4·§5·§7 개정.** 검색 화면 구현 중 **스펙의 비로그인 시나리오(E-4·E-5)와 `RootNavigator`의 로그인 게이트가 모순**임이 드러났다 — 비로그인 사용자는 `AuthNavigator`로 보내지므로 검색 화면에 도달조차 못 하는데 스펙은 게스트 동작을 규정하고 있었다. **원인은 내가 백엔드의 `permitAll`을 프론트가 노출하는 것으로 잘못 옮긴 것**이다. 백엔드는 `service-layer-spec.md` 4-6에서 *"비로그인(`viewerId == null`) 조회 허용"* 을 확정했고 `PUBLIC_GET_ENDPOINTS`도 열려 있어 계약 자체는 존재했으나, 프론트 네비게이션과 화해되지 않은 상태였다. **게스트 우선으로 해소하기로 확정**(상위 §6.7) — 비로그인이 기본, 로그인은 선택. **화면 작업보다 먼저 할 선행 5건을 §0.1로 뽑았다**: `RootNavigator` 재구성(`status` 분기 제거 → `Main` + `AuthModal` 모달), `RootStackParamList` 변경, `useRequireAuth()`(액션 게이트), `<AuthRequired>`(화면 게이트), **인터셉터 게스트 가드**. 마지막 것이 특히 중요한데, 게스트는 토큰이 없어 인증 API에서 401을 받는데 현재 인터셉터가 `logout()`과 refresh를 시도해 **무의미한 동작과 낭비**가 생긴다. **`enabled: isAuthed`가 선택에서 필수로 승격**됐다(§3.4) — 게스트가 상세 화면에 들어오는 것만으로 401이 세 번 나기 때문이며, 인터셉터 가드는 훅 하나를 빠뜨렸을 때를 위한 이중 방어다. **로그인 성공 시 동작도 바뀐다** — 스택을 갈아끼우지 않고 **모달만 닫는다.** 검색 도중 찜을 눌러 로그인한 사용자가 있던 자리를 잃지 않게 하기 위함이다. 검증에 게스트 케이스 6건(G-1~G-6)을 추가했고, 그중 **G-5(인증 전용 화면에서 로그아웃)** 는 게스트 우선에서만 생기는 새 경로다. **비용은 늘어난다** — 화면마다 게스트 분기가 하나씩 붙고 선행 부품 2개와 네비게이션 재구성이 추가된다. 대안(로그인 게이트 유지)이 범위상 안전했으나, 백엔드 설계와의 정합과 데모·심사 이점을 근거로 게스트 우선을 택했다 |
 | 2026-08-30 | 최초 작성. M2-A 완료 직후, 상위 문서의 「📚 문서 구성」 경계 기준에 따라 **실행·검증만** 담았다(화면 요구사항·API 계약은 상위 §9·§5·§6 참조). **실행 순서를 계층별(가로)로 잡은 이유** — 화면 하나를 끝까지 만드는 방식은 데이터 흐름이 확정되기 전에 레이아웃을 굳혀 나중에 전부 다시 손대게 된다. `api → hooks → 부품 → 화면` 순으로 가고, 첫 화면에서 흐름을 확정한 뒤 복제한다. **로그인을 검색보다 먼저 두었다** — `POST /api/movies/sync`가 인증 필수라 로그인 없이는 검색의 절반을 시험할 수 없고, M2-A의 디버그 프로브를 지웠으므로 인증 상태를 만들 다른 방법이 없다. **구현 시 걸리는 것으로 새로 뽑아낸 것 4건** — ① **`GET /api/reviews/me`의 204를 `null`로 정규화**해야 한다. axios가 204에서 `data`를 빈 문자열로 주므로 그대로 흘리면 **빈 문자열이 `ReviewResponse` 행세를 하며 화면까지 내려간다.** ② **무한스크롤에서 `registered.page`(0-based)와 요청 쿼리 `page`(1-based)를 섞으면** 페이지를 건너뛰거나 중복 로드한다 — `allPages.length + 1`로 계산한다. ③ **`MovieDetail`이 5개 병렬 호출**이라 M2-A §12 D에서 인위적으로 만든 동시 401이 여기서 실제로 발생한다. 인증 의존 훅 3개에 `enabled`를 안 걸면 비로그인 진입만으로 401이 세 번 나고 인터셉터가 로그아웃 경로를 탄다. ④ **`signup`은 `rawPassword`, `login`은 `password`** 로 필드명이 다르다. **백엔드 선행은 B-4 하나**이며 화면 작업과 병렬 가능하므로 착수를 막지 않는다 — 그때까지 평점 블록은 **조건부로 숨기고 플레이스홀더 숫자를 넣지 않는다**(데모에서 실제 값처럼 보인다) |
