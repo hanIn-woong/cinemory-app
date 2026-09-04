@@ -1,16 +1,21 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Alert, Modal, Platform, Pressable, View } from 'react-native';
 import DateTimePicker, { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
 import { ActionSheet, type ActionSheetOption } from '../../components/common';
 import { RatingStars } from '../../components/movie/RatingStars';
 import { Button, Screen, Spacer, TextField, Txt } from '../../components/primitives';
-import { useCreateRecord } from '../../hooks/useRecords';
-import type { CreateRecordRequest, WatchType } from '../../types';
+import { useCreateRecord, useUpdateRecord } from '../../hooks/useRecords';
+import type { CreateRecordRequest, UpdateRecordRequest, WatchRecordResponse, WatchType } from '../../types';
 
 interface WatchRecordModalProps {
   visible: boolean;
   onClose: () => void;
   movieId: number;
+  // 있으면 수정 모드(값 미리 채움 + PATCH), 없으면 새로 작성(POST).
+  editing?: WatchRecordResponse | null;
+  // 바로 이전 회차(더 먼저 본 회차)의 날짜 — 있으면 그보다 이전 날짜는 선택·저장을 막는다.
+  // 이전 회차가 없거나 그 회차에 날짜가 없으면 제약 없음.
+  minDate?: string | null;
 }
 
 const WATCH_TYPE_LABEL: Record<WatchType, string> = {
@@ -28,8 +33,17 @@ function toLocalDateString(date: Date): string {
   return `${year}-${month}-${day}`;
 }
 
-export function WatchRecordModal({ visible, onClose, movieId }: WatchRecordModalProps) {
+// toLocalDateString의 역변환 — new Date('YYYY-MM-DD')는 UTC 자정으로 해석돼 UTC보다
+// 뒤처진 타임존에서는 하루 앞으로 당겨질 수 있다. 로컬 구성요소로 직접 만든다.
+function parseLocalDateString(value: string): Date {
+  const [year, month, day] = value.split('-').map(Number);
+  return new Date(year, month - 1, day);
+}
+
+export function WatchRecordModal({ visible, onClose, movieId, editing, minDate }: WatchRecordModalProps) {
   const createRecord = useCreateRecord();
+  const updateRecord = useUpdateRecord();
+  const minDateObj = minDate ? parseLocalDateString(minDate) : undefined;
 
   const [watchDate, setWatchDate] = useState<Date | null>(null);
   const [showIosPicker, setShowIosPicker] = useState(false);
@@ -39,15 +53,16 @@ export function WatchRecordModal({ visible, onClose, movieId }: WatchRecordModal
   const [note, setNote] = useState('');
   const [typeSheetVisible, setTypeSheetVisible] = useState(false);
 
-  function resetAndClose() {
-    setWatchDate(null);
+  // 열릴 때마다 수정 대상 값으로 채우거나(수정 모드) 비운다(새 작성).
+  useEffect(() => {
+    if (!visible) return;
     setShowIosPicker(false);
-    setWatchType(null);
-    setPlaceDetail('');
-    setRating(0);
-    setNote('');
-    onClose();
-  }
+    setWatchDate(editing?.watchDate ? parseLocalDateString(editing.watchDate) : null);
+    setWatchType(editing?.watchType ?? null);
+    setPlaceDetail(editing?.placeDetail ?? '');
+    setRating(editing?.rating ?? 0);
+    setNote(editing?.note ?? '');
+  }, [visible, editing]);
 
   function openDatePicker() {
     if (Platform.OS === 'android') {
@@ -55,6 +70,7 @@ export function WatchRecordModal({ visible, onClose, movieId }: WatchRecordModal
         value: watchDate ?? new Date(),
         mode: 'date',
         maximumDate: new Date(),
+        minimumDate: minDateObj,
         onValueChange: (_event, date) => {
           if (date) setWatchDate(date);
         },
@@ -72,8 +88,14 @@ export function WatchRecordModal({ visible, onClose, movieId }: WatchRecordModal
       return;
     }
 
-    const body: CreateRecordRequest = {
-      movieId,
+    // ⚠️ 이전 회차보다 먼저 봤다고 기록할 수 없다 — 피커의 minimumDate가 1차 방어,
+    // 이건 그걸 우회할 수 있는 경로(예: 피커가 막지 못하는 플랫폼 동작)를 위한 2차 방어다.
+    if (watchDate && minDateObj && watchDate < minDateObj) {
+      Alert.alert('날짜를 확인해 주세요', `${toLocalDateString(minDateObj)} 이후로 선택해 주세요 (이전 회차 관람일)`);
+      return;
+    }
+
+    const fields = {
       watchDate: watchDate ? toLocalDateString(watchDate) : undefined,
       watchType: watchType ?? undefined,
       placeDetail: placeDetail.trim() || undefined,
@@ -81,10 +103,21 @@ export function WatchRecordModal({ visible, onClose, movieId }: WatchRecordModal
       note: note.trim() || undefined,
     };
 
-    createRecord.mutate(body, {
-      onSuccess: resetAndClose,
-      onError: (error) => Alert.alert('저장 실패', error.message),
-    });
+    if (editing) {
+      // ⚠️ PATCH /api/records/{id}는 전체 치환이다 — 생략한 필드는 null로 지워진다(B-15).
+      // 위 fields가 이미 폼의 전체 상태이므로 그대로 보내면 된다.
+      const body: UpdateRecordRequest = fields;
+      updateRecord.mutate(
+        { recordId: editing.id!, movieId, body },
+        { onSuccess: onClose, onError: (error) => Alert.alert('저장 실패', error.message) },
+      );
+    } else {
+      const body: CreateRecordRequest = { movieId, ...fields };
+      createRecord.mutate(body, {
+        onSuccess: onClose,
+        onError: (error) => Alert.alert('저장 실패', error.message),
+      });
+    }
   }
 
   const typeOptions: ActionSheetOption[] = [
@@ -95,26 +128,52 @@ export function WatchRecordModal({ visible, onClose, movieId }: WatchRecordModal
     { label: '선택 안 함', onPress: () => setWatchType(null) },
   ];
 
+  const isPending = editing ? updateRecord.isPending : createRecord.isPending;
+
   return (
-    <Modal visible={visible} animationType="slide" onRequestClose={resetAndClose}>
+    <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
       <Screen scroll>
         <Spacer size="lg" />
-        <Txt variant="h3">시청 기록 추가</Txt>
+        <Txt variant="h3">{editing ? '시청 기록 수정' : '시청 기록 추가'}</Txt>
         <Spacer size="lg" />
 
         <Txt variant="caption" color="mutedForeground">
           관람일 (선택)
         </Txt>
         <Spacer size="xs" />
-        <Pressable onPress={openDatePicker} className="h-12 justify-center rounded-md bg-input-background px-3">
-          <Txt variant="body">{watchDate ? toLocalDateString(watchDate) : '기억나지 않아요'}</Txt>
-        </Pressable>
+        <View className="flex-row items-center">
+          <Pressable
+            onPress={openDatePicker}
+            className="h-12 flex-1 justify-center rounded-md bg-input-background px-3"
+          >
+            <Txt variant="body">{watchDate ? toLocalDateString(watchDate) : '기억나지 않아요'}</Txt>
+          </Pressable>
+          {watchDate && (
+            <>
+              <Spacer size="sm" horizontal />
+              <Pressable onPress={() => setWatchDate(null)} hitSlop={8} className="px-2 py-3">
+                <Txt variant="caption" color="primary">
+                  지우기
+                </Txt>
+              </Pressable>
+            </>
+          )}
+        </View>
+        {minDateObj && (
+          <>
+            <Spacer size="xs" />
+            <Txt variant="caption" color="mutedForeground">
+              이전 회차({toLocalDateString(minDateObj)}) 이후만 선택할 수 있어요
+            </Txt>
+          </>
+        )}
         {Platform.OS === 'ios' && showIosPicker && (
           <DateTimePicker
             value={watchDate ?? new Date()}
             mode="date"
             display="inline"
             maximumDate={new Date()}
+            minimumDate={minDateObj}
             onValueChange={(_event, date) => {
               if (date) setWatchDate(date);
             }}
@@ -156,11 +215,11 @@ export function WatchRecordModal({ visible, onClose, movieId }: WatchRecordModal
 
         <Spacer size="xl" />
         <View className="flex-row">
-          <Button variant="secondary" onPress={resetAndClose} className="flex-1">
+          <Button variant="secondary" onPress={onClose} className="flex-1">
             취소
           </Button>
           <Spacer size="md" horizontal />
-          <Button onPress={handleSubmit} loading={createRecord.isPending} className="flex-1">
+          <Button onPress={handleSubmit} loading={isPending} className="flex-1">
             저장
           </Button>
         </View>

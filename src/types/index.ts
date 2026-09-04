@@ -35,6 +35,10 @@ export type OAuthProvider = 'KAKAO';
 // watchType === 'OTT'면 ottPlatformId 필수, 그 외에는 있으면 안 된다(생성 스키마엔 없는 제약).
 export type CreateRecordRequest = S['WatchRecordCreateRequest'];
 
+// ⚠️ PATCH /api/records/{recordId}는 전체 치환이다 — 생략한 필드는 null로 지워진다
+// (B-15). movieId·representative는 이 요청으로 바꿀 수 없다. 항상 전체 필드를 채워 보낸다.
+export type UpdateRecordRequest = S['WatchRecordUpdateRequest'];
+
 // 리뷰 upsert 요청. movieId는 PUT /api/movies/{movieId}/review의 경로 변수라 바디에 없다.
 export type WriteReviewRequest = S['ReviewWriteRequest'];
 

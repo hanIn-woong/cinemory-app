@@ -11,7 +11,13 @@ import {
 import { recordApi } from '../api/record';
 import type { ApiError } from '../api/client';
 import { useAuthStore } from '../store/authStore';
-import type { CreateRecordRequest, PageResponse, UserMovieListItemResponse, WatchRecordResponse } from '../types';
+import type {
+  CreateRecordRequest,
+  PageResponse,
+  UpdateRecordRequest,
+  UserMovieListItemResponse,
+  WatchRecordResponse,
+} from '../types';
 import { queryKeys } from './queryKeys';
 
 // ⚠️ UseInfiniteQueryResult의 TData는 InfiniteData<T>로 감싼 형태다 — 원본 응답 타입을
@@ -46,6 +52,27 @@ export function useCreateRecord(): UseMutationResult<void, ApiError, CreateRecor
       // 시청 기록 생성 → ['records'] · ['movies','detail',movieId] 무효화 (§3.2 무효화 매트릭스)
       queryClient.invalidateQueries({ queryKey: ['records'] });
       queryClient.invalidateQueries({ queryKey: queryKeys.movies.detail(variables.movieId) });
+    },
+  });
+}
+
+interface UpdateRecordVars {
+  recordId: number;
+  movieId: number;
+  body: UpdateRecordRequest;
+}
+
+export function useUpdateRecord(): UseMutationResult<WatchRecordResponse, ApiError, UpdateRecordVars> {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ recordId, body }) => recordApi.update(recordId, body),
+    onSuccess: (_data, { movieId }) => {
+      // 시청 기록 수정 → ['records'] · ['movies','detail',movieId] · ['reviews'] 무효화 (§3.2).
+      // 대표 기록의 rating을 고치면 공개 리뷰에 표시되는 별점도 파생돼서 바뀐다(§7.3) — 리뷰
+      // 쪽을 안 지우면 화면에 옛 별점이 남는다.
+      queryClient.invalidateQueries({ queryKey: ['records'] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.movies.detail(movieId) });
+      queryClient.invalidateQueries({ queryKey: ['reviews'] });
     },
   });
 }

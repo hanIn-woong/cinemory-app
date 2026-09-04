@@ -44,8 +44,16 @@ export function MovieDetailScreen() {
   const setRepresentative = useSetRepresentative();
 
   const [recordModalVisible, setRecordModalVisible] = useState(false);
+  const [editingRecord, setEditingRecord] = useState<WatchRecordResponse | null>(null);
+  const [editingMinDate, setEditingMinDate] = useState<string | null>(null);
   const [reviewModalVisible, setReviewModalVisible] = useState(false);
   const [recordSheet, setRecordSheet] = useState<WatchRecordResponse | null>(null);
+
+  function closeRecordModal() {
+    setRecordModalVisible(false);
+    setEditingRecord(null);
+    setEditingMinDate(null);
+  }
 
   if (detail.isLoading) {
     return (
@@ -68,7 +76,23 @@ export function MovieDetailScreen() {
   const heroUri = tmdbImageUrl(movie.posterPath, BackdropSize.DETAIL);
 
   function recordSheetOptions(record: WatchRecordResponse): ActionSheetOption[] {
-    const options: ActionSheetOption[] = [];
+    const options: ActionSheetOption[] = [
+      {
+        label: '수정',
+        onPress: () => {
+          // 이전 회차들(먼저 본 회차) 중 날짜가 있는 가장 가까운 것보다 앞선 날짜로는
+          // 못 고치게 막는다. 목록은 id DESC(최신 생성 순)라 "이전"은 배열상 뒤쪽이고,
+          // 그 구간에서 날짜 없는 회차는 건너뛰고 날짜 있는 첫 회차를 찾는다.
+          const records = watchLog.data ?? [];
+          const index = records.findIndex((r) => r.id === record.id);
+          const previousWithDate =
+            index >= 0 ? records.slice(index + 1).find((r) => r.watchDate != null) : undefined;
+          setEditingRecord(record);
+          setEditingMinDate(previousWithDate?.watchDate ?? null);
+          setRecordModalVisible(true);
+        },
+      },
+    ];
     if (!record.representative) {
       options.push({
         label: '대표 기록으로 지정',
@@ -150,6 +174,8 @@ export function MovieDetailScreen() {
 
         <Spacer size="lg" />
         <Card>
+          {/* 찜 버튼은 게스트에게도 항상 보인다 — 탭 시 requireAuth가 모달을 띄운다.
+              그 외(컬렉션·기록·리뷰)는 게스트에게 카드 자리에 로그인 유도만 보여준다(§5.4). */}
           <View className="flex-row items-center justify-between">
             <Txt variant="h4">내 기록</Txt>
             <Pressable
@@ -164,76 +190,96 @@ export function MovieDetailScreen() {
               />
             </Pressable>
           </View>
-          <Spacer size="sm" />
-          <Button
-            variant="secondary"
-            onPress={() => Alert.alert('준비 중', '컬렉션 기능은 곧 제공됩니다')}
-          >
-            컬렉션에 추가
-          </Button>
-
-          <Spacer size="md" />
-          <Divider />
-          <Spacer size="md" />
 
           {!isAuthed ? (
-            <Button variant="secondary" onPress={() => requireAuth(() => {})}>
-              로그인하고 시청 기록 남기기
-            </Button>
-          ) : watchLog.isLoading ? (
-            <LoadingState />
-          ) : watchLog.isError ? (
-            <ErrorState message={watchLog.error.message} onRetry={() => watchLog.refetch()} />
-          ) : (
             <>
-              {(watchLog.data ?? []).map((record) => (
-                <Pressable key={record.id} onPress={() => setRecordSheet(record)} className="py-2">
-                  <View className="flex-row items-center justify-between">
-                    <Txt variant="body">
-                      {record.watchDate ?? '날짜 미기록'}
-                      {record.watchType ? ` · ${WATCH_TYPE_LABEL[record.watchType]}` : ''}
-                      {record.representative ? ' · 대표' : ''}
-                    </Txt>
-                  </View>
-                  {record.rating != null && (
-                    <>
-                      <Spacer size="xs" />
-                      <RatingStars rating={record.rating} size={16} />
-                    </>
-                  )}
-                </Pressable>
-              ))}
-              {(watchLog.data ?? []).length === 0 && (
-                <Txt variant="caption" color="mutedForeground">
-                  아직 시청 기록이 없어요
-                </Txt>
-              )}
+              <Spacer size="md" />
+              <Divider />
+              <Spacer size="md" />
+              <Txt variant="body" color="mutedForeground" className="text-center">
+                기록하려면 로그인하세요
+              </Txt>
               <Spacer size="sm" />
-              <Button variant="secondary" onPress={() => setRecordModalVisible(true)}>
-                시청 기록 추가
+              <Button variant="secondary" onPress={() => requireAuth(() => {})}>
+                로그인
               </Button>
             </>
-          )}
-
-          <Spacer size="md" />
-          <Divider />
-          <Spacer size="md" />
-
-          {!isAuthed ? (
-            <Button variant="secondary" onPress={() => requireAuth(() => {})}>
-              로그인하고 리뷰 남기기
-            </Button>
-          ) : myReview.isLoading ? (
-            <LoadingState />
           ) : (
-            <Button variant="secondary" onPress={() => setReviewModalVisible(true)}>
-              {myReview.data ? '내 리뷰 수정' : '리뷰 쓰기'}
-            </Button>
+            <>
+              <Spacer size="sm" />
+              <Button variant="secondary" onPress={() => Alert.alert('준비 중', '컬렉션 기능은 곧 제공됩니다')}>
+                컬렉션에 추가
+              </Button>
+
+              <Spacer size="md" />
+              <Divider />
+              <Spacer size="md" />
+
+              {watchLog.isLoading ? (
+                <LoadingState />
+              ) : watchLog.isError ? (
+                <ErrorState message={watchLog.error.message} onRetry={() => watchLog.refetch()} />
+              ) : (
+                <>
+                  {(watchLog.data ?? []).map((record) => (
+                    <Pressable key={record.id} onPress={() => setRecordSheet(record)} className="py-2">
+                      <View className="flex-row items-center justify-between">
+                        <Txt variant="body">
+                          {record.watchDate ?? '날짜 미기록'}
+                          {record.watchType ? ` · ${WATCH_TYPE_LABEL[record.watchType]}` : ''}
+                          {record.placeDetail ? ` · ${record.placeDetail}` : ''}
+                          {record.representative ? ' · 대표' : ''}
+                        </Txt>
+                      </View>
+                      {record.note && (
+                        <>
+                          <Spacer size="xs" />
+                          <Txt variant="caption" color="mutedForeground">
+                            {record.note}
+                          </Txt>
+                        </>
+                      )}
+                      {record.rating != null && (
+                        <>
+                          <Spacer size="xs" />
+                          <RatingStars rating={record.rating} size={16} />
+                        </>
+                      )}
+                    </Pressable>
+                  ))}
+                  {(watchLog.data ?? []).length === 0 && (
+                    <Txt variant="caption" color="mutedForeground">
+                      아직 시청 기록이 없어요
+                    </Txt>
+                  )}
+                  <Spacer size="sm" />
+                  <Button variant="secondary" onPress={() => setRecordModalVisible(true)}>
+                    시청 기록 추가
+                  </Button>
+                </>
+              )}
+
+              <Spacer size="md" />
+              <Divider />
+              <Spacer size="md" />
+
+              {myReview.isLoading ? (
+                <LoadingState />
+              ) : (
+                <Button variant="secondary" onPress={() => setReviewModalVisible(true)}>
+                  {myReview.data ? '내 리뷰 수정' : '리뷰 쓰기'}
+                </Button>
+              )}
+            </>
           )}
         </Card>
 
         <Spacer size="lg" />
         <Txt variant="h4">리뷰</Txt>
+        <Spacer size="xs" />
+        <Txt variant="caption" color="mutedForeground">
+          별점은 작성자의 대표 시청 기록에서 가져옵니다
+        </Txt>
         <Spacer size="sm" />
         {publicReviews.isLoading ? (
           <LoadingState />
@@ -248,7 +294,8 @@ export function MovieDetailScreen() {
                 <Txt variant="body" className="font-semibold">
                   {review.author?.nickname ?? '알 수 없음'}
                 </Txt>
-                <RatingStars rating={review.rating ?? 0} size={16} />
+                {/* rating은 nullable — 기록이 없거나 별점을 한 번도 안 매긴 경우. null이면 생략한다 */}
+                {review.rating != null && <RatingStars rating={review.rating} size={16} />}
               </View>
               <Spacer size="xs" />
               <Txt variant="body" color="mutedForeground">
@@ -263,8 +310,10 @@ export function MovieDetailScreen() {
 
       <WatchRecordModal
         visible={recordModalVisible}
-        onClose={() => setRecordModalVisible(false)}
+        onClose={closeRecordModal}
         movieId={movieId}
+        editing={editingRecord}
+        minDate={editingMinDate}
       />
       <ReviewModal
         visible={reviewModalVisible}

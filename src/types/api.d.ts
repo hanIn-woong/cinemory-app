@@ -458,6 +458,27 @@ export interface paths {
         patch: operations["changeNickname"];
         trace?: never;
     };
+    "/api/records/{recordId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** 시청 기록 삭제 */
+        delete: operations["deleteWatchRecord"];
+        options?: never;
+        head?: never;
+        /**
+         * 시청 기록 수정
+         * @description 전체 치환 — 요청 바디에서 생략한 필드는 null로 지워진다. movieId·representative는 이 엔드포인트로 바꿀 수 없다.
+         */
+        patch: operations["updateWatchRecord"];
+        trace?: never;
+    };
     "/api/records/{recordId}/representative": {
         parameters: {
             query?: never;
@@ -800,23 +821,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/records/{recordId}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        /** 시청 기록 삭제 */
-        delete: operations["deleteWatchRecord"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/collections/{collectionId}/movies/{movieId}": {
         parameters: {
             query?: never;
@@ -839,8 +843,6 @@ export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
         ReviewWriteRequest: {
-            /** Format: double */
-            rating: number;
             content: string;
         };
         ReviewAuthorResponse: {
@@ -1052,6 +1054,18 @@ export interface components {
         };
         NicknameChangeRequest: {
             nickname: string;
+        };
+        WatchRecordUpdateRequest: {
+            /** Format: date */
+            watchDate?: string;
+            /** @enum {string} */
+            watchType?: "THEATER" | "OTT" | "ETC";
+            placeDetail?: string;
+            /** Format: int64 */
+            ottPlatformId?: number;
+            /** Format: double */
+            rating?: number;
+            note?: string;
         };
         CommentUpdateRequest: {
             content: string;
@@ -2086,6 +2100,52 @@ export interface operations {
             };
         };
     };
+    deleteWatchRecord: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                recordId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    updateWatchRecord: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                recordId: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WatchRecordUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["WatchRecordResponse"];
+                };
+            };
+        };
+    };
     setRepresentative: {
         parameters: {
             query?: never;
@@ -2586,26 +2646,6 @@ export interface operations {
                 content: {
                     "*/*": components["schemas"]["BoxOfficeResponse"];
                 };
-            };
-        };
-    };
-    deleteWatchRecord: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                recordId: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
             };
         };
     };
