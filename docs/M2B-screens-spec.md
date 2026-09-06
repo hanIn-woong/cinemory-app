@@ -267,13 +267,29 @@ export const starsToApi = (s: number) => s * 2;   // 4.5 → 9.0
 
 **카카오 로그인은 버튼만 두고 비활성**으로 둔다 — prebuild가 필요하다(상위 §11.1).
 
-### 5.2 `Home`
+### 5.2 `Home` — 2026-09-06 디자인 고도화
 
-- 검색 `TextInput` + `onSubmitEditing` → `navigate('SearchResult', { query })`
-- 배경 포스터는 `GET /api/box-office`(DAILY)로 채울 수 있다
-  ⚠️ **`linked === false`인 항목은 `posterPath`가 `null`이다**(현재 매칭률 90.7%).
-  `PosterImage` 폴백이 자동 처리하지만, 배경이 그라데이션 투성이면 `linked === true`만 거른다
-- 배경 애니메이션(60초 루프)은 **우선순위 낮음.** 정적 그리드로 시작해도 된다
+**요구사항은 상위 §9.1이 단일 출처다** (배경 소스 분기 표·아웃라인 5겹·60초 루프 등). 여기엔
+구현 시 걸린 것만 적는다.
+
+- 컴포넌트 3분할 — `src/components/home/PosterBackdrop.tsx`(① 그리드+루프+소스 분기),
+  `src/components/common/OutlinedText.tsx`(② 5겹 아웃라인, 스플래시·로그인 재사용 가능),
+  `src/screens/home/HomeScreen.tsx`(③ 조립)
+- 소스 분기는 `useHomeBackground` 훅(신규)이 맡는다 — 로그인 + 기록 12편 이상이면
+  `useMyRecords`의 첫 페이지, 아니면 `useRandomMovies`(B-17, `GET /api/movies/random`) 폴백.
+  ⚠️ **로그인 사용자의 기록이 충분한지 알기 전엔 랜덤을 같이 부르지 않는다** — `enabled`로
+  순차 게이팅해서 낭비 호출을 없앴다
+- ⚠️ **`useMyRecords`에 `enabled: isAuthed`가 빠져 있던 걸 이번에 발견해 추가했다** — 상위
+  §3.4 표에 이미 있던 요구사항인데 구현이 누락돼 있었다. 게스트가 `Home`에 들어오는 것만으로
+  `/api/users/0/records`에 불필요한 401 요청이 나가고 있었다(§7.3 로그에서 실제로 관측됨)
+- `PosterSize`에 `BACKDROP_TILE: 'w92'` 추가 — blur 없이 업스케일로 뭉개는 용도
+  (`expo-blur`는 Android 성능 이슈로 마지막 수단, 상위 §9.1)
+- **이 화면만 `Screen` 프리미티브를 쓰지 않는다.** `Screen`의 루트가 `SafeAreaView`라 배경까지
+  안전영역 안쪽으로 잘려서 노치 위아래에 여백이 생긴다 — `<View>` 루트 + 배경은 `absolute
+  inset-0`로 꽉 채우고, 로고·검색바만 안쪽 `SafeAreaView`로 감싼다
+- 검색바는 `TextField` 프리미티브 대신 `TextInput`을 직접 썼다 — 좌측 아이콘·반투명
+  배경(`bg-card/90`)·플랫폼별 그림자(`iOS shadow*` / `Android elevation`) 조합이 프리미티브
+  범위를 벗어난다
 
 ### 5.3 `SearchResult` ★ 2섹션이 핵심
 
@@ -636,6 +652,8 @@ M2-B가 끝나면 2군으로 간다. 미리 알아둘 것.
 
 | 날짜 | 내용 |
 |---|---|
+| 2026-09-06 (이어서 2) | **§5.2 `Home` 배경 실기기 검증 — 4열이 3열로 보이는 레이아웃 버그 발견·수정.** 애니메이션·검색바 그림자·로그인/로그아웃 크로스페이드·로고 디자인은 전부 정상. ① 포스터 로딩이 느리다는 지적은 백엔드 문제가 아니었다 — `GET /api/movies/random`은 30~40ms로 즉시 응답하고, 지연은 TMDB CDN에서 이미지(`w92`, 5KB)를 내려받는 자체 왕복 시간(~700ms 측정)이라 프론트·백엔드 어느 쪽에서도 줄일 수 없다(이미 최소 크기·최대 20장 중복 없음 상태). ② "4열 그리드인데 포스터는 3열만" — 실제 버그였다. `PosterBackdrop`이 **마지막 열에도 `marginRight: GAP`을 걸어서** 한 행의 실제 너비가 컨테이너보다 정확히 `GAP`만큼 커졌고, RN Yoga가 고정폭 자식의 사소한 초과도 봐주지 않고 4번째 셀을 다음 줄로 밀어내 3열처럼 보였다. 마지막 열엔 `marginRight: 0`으로 수정. `tsc --noEmit` 통과. 상세는 `docs/DevLog.md` 2026-09-06 "이어서 2" 항목 |
+| 2026-09-06 (이어서) | **§5.2 `Home` 디자인 고도화 구현 — M2-B 완료 이후 사용자 요청.** 상위 §9.1(2026-09-06 신설)을 따라 3개 파일로 분할 구현 — `PosterBackdrop`(배경 그리드+60초 루프+소스 분기) · `OutlinedText`(5겹 아웃라인, 공용 컴포넌트로 승격) · `HomeScreen`(조립). 소스 분기용 `useHomeBackground` 훅과 `B-17`(`GET /api/movies/random`) 연동용 `useRandomMovies` 훅을 신규 추가했고, 백엔드에 이미 구현돼 있던 `/api/movies/random`을 확인해(`npm run gen:api`로 타입 재생성, 39줄 추가) 붙였다. **구현 중 §3.4 위반 1건 발견** — `useMyRecords`에 `enabled: isAuthed`가 누락돼 있어 게스트가 어떤 화면에서든 이 훅을 타면 불필요한 401 요청이 나가고 있었다(§7.3 로그의 `GET /api/users/0/records` 404가 실은 이 버그의 증거였다 — 당시엔 대수롭지 않게 넘겼다). 추가하며 수정. `Home`은 스펙 지시대로 `Screen` 프리미티브를 쓰지 않고 `<View>` + 안쪽 `SafeAreaView`로 직접 구성해 배경이 노치까지 꽉 차게 했다. `npx tsc --noEmit` 통과. **실기기 검증 전이다** — 애니메이션 부드러움·크로스페이드·안전영역 처짐 여부는 번들 확인만으로는 알 수 없다 |
 | 2026-09-06 | **§7.3 동시 401 실전 재확인 — 통과. M2-B 검증 완료.** `access-token-ttl`을 `PT10S`로 임시 낮추고, 백엔드가 기본으로는 요청을 콘솔에 안 남겨서(access log 없음) `DispatcherServlet` DEBUG 로깅을 같이 켜 `reissue` 수신 횟수를 직접 셌다(백엔드도 Claude Code가 배경 기동해 콘솔을 직접 관찰 — 사용자가 로그를 읽어 전달할 필요 없었다). `MovieDetail` 진입 시 5개 병렬 호출이 11ms 창 안에 전부 발사됐고 그 직전 `reissue`가 정확히 1회만 발생, 5개 전부 200/204로 성공했다. `REFRESH_TOKEN_REUSED`·로그아웃 흔적 없음. 세션 전체로는 `reissue`가 5회 찍혔지만 전부 **서로 다른 시점의 독립된 요청 묶음**이 각자 한 번씩 트리거한 것이었다(`access-token-ttl=10s`가 60초 선제 갱신 버퍼보다 짧아 발급 직후부터 항상 "곧 만료" 조건을 만족하는 테스트 환경의 특성) — 같은 배치 안에서 중복 갱신된 사례는 없었다. 검증 직후 `application.yml`을 원상 복구(`git diff` 무변경 확인)했다. **§1(0~10번)·§7.1·§7.2·§7.3 전부 통과로 M2-B 완료.** 상세는 `docs/DevLog.md` 2026-09-06 항목 |
 | 2026-09-05 | **§7.2 경계 케이스 진행 중 — 무한스크롤 풋터 점프 버그 발견·수정, G-5 재해석.** E-10(무한스크롤) 검증 중 "스크롤하면 화면이 순간적으로 튐"이라는 실기기 피드백을 받고 처음엔 페이지네이션 데이터 버그(항목 건너뜀)를 의심했으나, 백엔드 curl 직접 대조(겹치는 id 없음)와 사용자 확인(동시 sync 없이 스크롤만 함)으로 데이터 문제가 아님을 좁혔다. 실제 원인은 `SearchResultScreen`·`MyRecordsScreen` 둘 다 `ListFooterComponent={isFetchingNextPage ? <LoadingState /> : null}` 패턴이라, 페이지를 불러올 때마다 로딩 풋터가 통째로 마운트/언마운트되며 콘텐츠 높이가 출렁인 것 — 사용자가 본 "튐"과 정확히 일치했다. `src/components/common/InfiniteScrollFooter.tsx` 신규 — `hasNextPage`인 동안 항상 같은 높이를 차지하고 그 안에서 스피너만 켜고 꺼서 높이 변화를 리스트 끝 한 번으로 줄였다. 두 화면 모두 교체, `tsc --noEmit` 통과. 같은 세션에서 **G-5도 재해석** — `MyRecords`에 있는 채로 `Settings`(로그아웃 버튼 위치)로 갈 수 없는 스택 토폴로지를 사용자가 지적해 확인, `Settings` 자신을 대상으로 검증하는 것으로 대체(§7.2 표에 반영). 상세는 `docs/DevLog.md` 2026-09-05 "이어서 2" 항목. **§7.3은 사용자 요청으로 이번엔 보류** |
 | 2026-09-05 | **§7.1 핵심 동선 완주 — M2-B 완료 판정 기준 충족.** 앱 재시작 없이 0번(게스트 홈)~8번(리뷰 upsert 중복 없음)을 한 번에 이어서 검증, 전 항목 1차 통과. 검증 중 공용 컴포넌트 버그 1건 발견 — `src/components/primitives/TextField.tsx`가 `multiline` 여부와 무관하게 고정 `h-12`(48px)를 걸어서 `ReviewModal`(리뷰, `numberOfLines=6`)과 `WatchRecordModal`(메모, `numberOfLines=3`) 둘 다 입력칸이 48px로 눌려 있었다. `multiline`이면 `numberOfLines` 기반 `minHeight`를 쓰도록 수정(단일 줄 입력은 회귀 없음). 상세는 `docs/DevLog.md` 2026-09-05 "이어서" 항목. **§7.2(경계 케이스)·§7.3(동시 401 재확인)은 아직 남아 있다** |

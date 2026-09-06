@@ -41,9 +41,9 @@ M2-A 기반 ✅ ──► M2-B 1군 화면 ✅ ──► M2-C 2군 화면 ⬜ �
 시청 기록 저장 → 내 기록 반영, 0~8번 전 항목) · **§7.2 경계 케이스**(E-1~E-10 · G-1~G-6,
 G-5는 스택 토폴로지상 `Settings` 자신으로 대체 검증) · **§7.3 동시 401**(`MovieDetail`의
 실제 5개 병렬 호출에서 `reissue` 정확히 1회, `access-token-ttl` 임시값은 검증 직후 원복
-확인). 과정에서 발견한 버그(비밀번호 변경 시 인터셉터 오판 강제 로그아웃 · `TextField`
+확인). 과정에서 발견한 버그 4건(비밀번호 변경 시 인터셉터 오판 강제 로그아웃 · `TextField`
 multiline 높이 고정 · 무한스크롤 풋터 마운트/언마운트로 인한 스크롤 점프 · G-5 시나리오
-자체의 네비게이션 토폴로지 문제)는 전부 그 자리에서 수정·재검증했다. 상세는
+자체의 네비게이션 토폴로지 문제)은 전부 그 자리에서 수정·재검증했다. 상세는
 `M2B-screens-spec.md` 변경 이력과 `docs/DevLog.md` 2026-09-05·09-06.
 **B-4(상세 평점)만 의도적으로 미해소 상태로 남기고 진행했다** — 화면 자리만 비워 뒀다(§6).
 
@@ -274,6 +274,7 @@ export type TokenResponse   = S['TokenResponse'];
 | GET | `/api/movies/{movieId}` | `MovieDetailResponse` | search 상세 |
 | GET | `/api/movies/{movieId}/cast?page=` | `PageResponse<ActorResponse>` (size 50) | 상세 더보기 |
 | POST | `/api/movies/sync` **(인증)** | `{ movieId }` ← body `{ tmdbId }` | search |
+| GET | `/api/movies/random?size=` | **`List<MovieSummaryResponse>`** (페이징 아님) | home 배경. ⚠️ **미구현 — B-17** |
 
 **검색 응답이 2섹션인 것이 핵심 설계다.**
 
@@ -875,15 +876,49 @@ export type MyPageStackParamList = {
 
 #### 9.1 HomeScreen
 
-- 배경: 4열 포스터 그리드 60초 상향 루프 → `react-native-reanimated`
-  `withRepeat(withTiming(-h, { duration: 60000, easing: Easing.linear }), -1)`.
-  성능 이슈 시 정적 그리드로 대체 가능(우선순위 낮음).
-- 로고 `fontSize: 56, fontWeight: '700', color: colors.primary`. 와이어프레임의 4방향
-  `textShadow` 아웃라인은 RN이 단일 그림자만 지원 → 동일 텍스트 4회 오프셋 렌더 또는 단순화.
-- 검색: `TextInput` + `returnKeyType="search"` + `onSubmitEditing`
-  → `navigate('SearchResult', { query })`. `showSearchResult` 불린 state 제거.
-- 배경 포스터는 `GET /api/box-office`(DAILY)의 `posterPath`로 채울 수 있다.
-  **`linked === false`인 항목은 `posterPath`가 null**이므로 폴백 필요.
+**3개 레이어다.** 와이어프레임 구조를 그대로 옮기되 RN 제약에 맞춰 변환한다.
+
+```
+① 배경   4열 포스터 그리드 · 60초 무한 상향 루프 · opacity 0.2
+② 로고   56px / 700 / 시안 + 4방향 아웃라인
+③ 검색바 반투명 흰 배경 · rounded-xl · shadow · 좌측 아이콘
+```
+
+**① 배경 — 포스터 소스는 로그인 여부로 갈린다** (2026-09-06 확정)
+
+| 조건 | 소스 |
+|---|---|
+| 로그인 + 기록 **12편 이상** | `GET /api/users/{myId}/records`의 `posterPath` (클라이언트 셔플) |
+| 그 외 (게스트 · 기록 부족 · 0건) | **`GET /api/movies/random?size=20`** (B-17) |
+
+- ⚠️ **기록 0건인 신규 가입자를 반드시 폴백시킨다.** 가입 직후가 인상이 가장 중요한 순간인데
+  배경이 비어버린다.
+- ⚠️ **12편 임계값의 이유** — 80칸을 5장으로 채우면 같은 포스터 반복이 눈에 띈다.
+- 두 소스 모두 **정렬이 고정**(`OrderBy` 없음)이므로 클라이언트에서 셔플한다.
+- **로그인/로그아웃 시 배경이 교체된다** → 크로스페이드(200~300ms). 게스트 우선 구조에서
+  모달만 닫히고 홈이 남는 것이 장점인데, 배경만 뚝 바뀌면 어색하다.
+- 애니메이션: `withRepeat(withTiming(-CYCLE_H, { duration: 60000, easing: Easing.linear }), -1, false)`.
+  ⚠️ 세 번째 인자가 `true`면 위아래로 왕복한다. 같은 세트를 두 번 깔고 한 세트 높이만큼 올려
+  이음매를 없앤다(CSS `translateY(-50%)`와 같은 기법).
+- ⚠️ **탭을 떠나면 애니메이션을 멈춘다** — `useFocusEffect`로 `cancelAnimation`. 안 하면 다른
+  탭에 있는 동안에도 60초 루프가 계속 돈다.
+- **blur는 라이브러리 없이 해결한다** — `PosterSize`에 **`BACKDROP_TILE: 'w92'`** 를 추가하고
+  작은 이미지를 큰 셀에 넣으면 업스케일되며 뭉개진다. `opacity 0.2`와 합쳐 배경으로 충분히
+  물러난다. `expo-blur`는 Android 성능 이슈가 있어 마지막 수단이다.
+
+**② 로고 — 4방향 아웃라인은 텍스트를 5겹으로 겹친다**
+
+RN `Text`는 `textShadowOffset`이 하나뿐이라 와이어프레임의 4방향 그림자를 낼 수 없다.
+배경 4겹(오프셋 `±2`) + 본체 1겹으로 렌더한다.
+⚠️ **배경 4겹에 `importantForAccessibility="no"` / `accessibilityElementsHidden`을 건다** —
+안 걸면 스크린 리더가 "CineMory"를 다섯 번 읽는다.
+로고 크기는 **홈 전용 스타일**로 둔다(`Txt`의 `h1`은 32px이고 토큰을 바꾸면 다른 화면이 전부 영향받는다).
+
+**③ 검색바 — `backdrop-blur`는 뺀다**
+
+배경이 이미 `opacity 0.2`로 물러나 있어 반투명 흰 배경만으로 충분하다. `BlurView`는 Android
+성능만 먹는다. 그림자는 iOS `shadow*` / Android `elevation`으로 분기한다.
+동작은 기존과 동일 — `onSubmitEditing` → `navigate('SearchResult', { query })`.
 
 #### 9.2 SearchResultScreen ★ 2섹션 구조가 핵심
 
@@ -1105,6 +1140,7 @@ npm i nativewind && npm i -D tailwindcss
 | B-12 | 검색 정렬·필터 | `query`/`year`만 지원 (잔여 #22) | 장르 필터·정렬 UI는 불가 | 낮음 |
 | **B-13** | **OTT 플랫폼 목록 조회 API 없음** | `WatchRecordCreateRequest.ottPlatformId`는 필수인데 유효 ID를 얻을 방법이 없다 | `OttPlatformResponse`를 반환하는 목록 엔드포인트 추가 | 1군 (상세 화면 — 지금은 `watchType=OTT` 저장을 막고 THEATER/ETC만 지원) |
 | B-14 | 상세 히어로 배경 | `MovieDetailResponse`에 `backdropPath` 없음(`posterPath`만) | 필요하면 필드 추가 — 없어도 `posterPath`로 우회 가능 | 낮음 |
+| **B-17** | **랜덤 영화 조회 API 없음** | `GET /api/movies`는 `findAll(pageable)`이 정렬 미지정이라 **매번 같은 목록**이 나온다(5-0-D가 클라이언트 `sort`를 의도적으로 미지원) | **`GET /api/movies/random?size=`** 신설 — `poster_path IS NOT NULL` 필터 포함. 설계 확정본은 **백엔드 docs**(`controller-layer-spec.md` 5-2 · `service-layer-spec.md` 4-2) | **1군 (홈 배경).** 없으면 게스트 배경이 **항상 같은 영화**가 된다 |
 | ~~B-15~~ | ~~시청 기록 수정 API 없음~~ | ✅ **백엔드 완료(`PATCH /api/records/{recordId}`), 프론트 연동 완료** — `gen:api` 재생성 확인(2026-09-04) | 없음 | — |
 | ~~B-16~~ | ~~`review.rating` 제거 + 별점 파생~~ | ✅ **백엔드 완료(`ReviewWriteRequest`에서 `rating` 제거 확인), 프론트 연동 완료**(`ReviewModal` 별점 입력 제거) — `gen:api` 재생성 확인(2026-09-02) | 없음 | — |
 
@@ -1298,8 +1334,9 @@ export { CineMapWebView as CineMapView } from './CineMapWebView';
 
 | 날짜 | 내용 |
 |---|---|
-| 2026-09-06 | **「📍 진행 현황」·§12 갱신 — M2-B 완료, M2-C 착수 대기로 전환.** `M2B-screens-spec.md` §7(§7.1·§7.2·§7.3) 실기기 검증이 전부 끝나 현재 위치 마커·단계 표·§12 색인을 갱신했다. B-4(상세 평점)는 여전히 미해소임을 명시해 뒀다 — M2-B가 "완료"인 것은 B-4를 화면 자리 비움으로 우회했기 때문이지 B-4 자체가 해소된 게 아니다. 근거는 M2-B 완료 근거 절 신설로 §7 결과 요약(§6.3 갱신 포함)을 남겼다 |
+| 2026-09-06 | **「📍 진행 현황」·§12 갱신 — M2-B 완료, M2-C 착수 대기로 전환.** `M2B-screens-spec.md` §7(§7.1·§7.2·§7.3) 실기기 검증이 전부 끝나 현재 위치 마커·단계 표·§12 색인을 갱신했다. B-4(상세 평점)는 여전히 미해소임을 명시해 뒀다 — M2-B가 "완료"인 것은 B-4를 화면 자리 비움으로 우회했기 때문이지 B-4 자체가 해소된 게 아니다. 근거는 M2-B 완료 근거 절 신설로 §7 결과 요약(§6.3 갱신 2건 포함 버그 4건)을 남겼다 |
 | 2026-09-05 | **§6.3 에러 코드 표 정정 — `UNAUTHORIZED` 추가 + "표에 없으면 개입 없음" 명시.** `Settings`(§5.6, M2-B) 실기기 검증 중 `src/api/client.ts`의 401 인터셉터가 이 표와 **정반대로 구현돼 있던 것**을 발견했다 — "표에 있는 코드만 로그아웃"이 아니라 "`TOKEN_EXPIRED`가 아니면 전부 로그아웃"으로 짜여 있어, 비밀번호 변경 폼에서 현재 비밀번호를 틀리면(`401 INVALID_CREDENTIALS`) 폼 에러 대신 강제 로그아웃됐다. `/api/auth/login`의 `INVALID_CREDENTIALS`는 애초에 `/api/auth/` 접두사 예외로 인터셉터를 안 타서 이 표가 처음 작성됐을 때는 이 구현 오류가 드러나지 않았다. 코드를 표에 맞게 수정하면서(`SESSION_INVALID_CODES` 허용목록으로 전환), 표에 없던 `UNAUTHORIZED`(백엔드 `requireAuthenticated` 이중 방어 코드 — 정상 흐름에선 도달하지 않음)도 토큰 문제로 판단해 로그아웃 대상에 추가했다. 상세 경위는 `docs/DevLog.md` 2026-09-05 항목 |
+| 2026-09-06 | **§9.1 홈 화면 배경 설계 확정 + B-17 등록.** M2-B 검증 완료 후 홈 화면을 와이어프레임에 맞춰 보완하기로 하면서 배경 포스터의 **소스를 로그인 여부로 나누기로** 확정했다 — 로그인 + 기록 12편 이상이면 내 기록, 그 외(게스트·기록 부족·0건)는 랜덤 영화. **12편 임계값은 80칸을 5장으로 채우면 반복이 눈에 띄기 때문**이고, **기록 0건 폴백은 가입 직후가 인상이 가장 중요한 순간인데 배경이 비어버리는 것**을 막기 위해서다. ⚠️ **게스트 소스에서 막혔다 — 랜덤 정렬 수단이 없다.** `getMovieList`가 `findAll(pageable)`이고 정렬을 지정하지 않아 사실상 PK 순으로 고정되며 5-0-D가 클라이언트 `sort`를 의도적으로 미지원으로 확정했다. 즉 그대로 쓰면 *"무작위"* 가 아니라 **"항상 같은 20편"** 이 된다. 검토한 우회 넷(A 클라이언트 랜덤 페이지 / B `size=100` 셔플 / C 백엔드 엔드포인트 / D 박스오피스 대체) 중 **C를 채택**했고, 결정적 이유는 **`poster_path IS NOT NULL` 필터가 서버에서만 가능**하다는 점이다 — A는 백엔드 변경이 0이지만 포스터 없는 영화가 섞여 배경에 빈칸이 생긴다. **D는 폴백으로 보류 기록**했다(변경 0이고 *"오늘의 박스오피스"* 라는 의미도 있으나 매칭률 90.7%라 `linked == false` 항목의 `posterPath`가 null이다). 설계 확정본은 백엔드 docs에 두고 여기엔 화면 요구사항만 남겼다. 함께 정한 것 셋 — **blur를 라이브러리 없이 해결**(`w92` 타일을 큰 셀에 넣어 업스케일로 뭉갠다. `expo-blur`는 Android 성능 이슈로 마지막 수단), **4방향 아웃라인은 텍스트 5겹**(RN `Text`는 `textShadowOffset`이 하나뿐), **배경 4겹의 접근성 숨김**(안 걸면 스크린 리더가 로고를 다섯 번 읽는다). 탭 이탈 시 애니메이션 정지와 로그인/로그아웃 시 배경 크로스페이드도 명시했다 |
 | 2026-09-04 | **B-15·B-16 해소 확인.** 백엔드가 `PATCH /api/records/{recordId}`를 구현했다는 보고를 받고 `npm run gen:api`로 확인 — `WatchRecordUpdateRequest`(전체 치환, `movieId`·`representative` 제외)와 `updateWatchRecord` 오퍼레이션이 §11.2 설계 확정본 그대로 반영돼 있었다. 프론트도 연동 완료(실행 내역은 `M2B-screens-spec.md` 변경 이력 참고). 둘 다 §11 표에서 ✅ 완료로 갱신 |
 | 2026-09-04 | **§11에 B-15 추가.** `MovieDetail` 실기기 재검증 중 발견 — 시청 기록에 update API가 없다. `POST /api/records`·`DELETE /api/records/{id}`·`PATCH .../representative`뿐이라 잘못 기록한 시청 기록(날짜·방식·장소·별점·메모)을 고칠 방법이 없다. 삭제 후 재생성하는 우회안을 검토했으나, §7.3의 "새 기록 INSERT 시 대표 자동 승격" 규칙 때문에 대표가 아니던 기록을 이 방식으로 "수정"해도 재생성 순간 대표로 바뀌는 부작용이 있어 채택하지 않고 백엔드에 `PATCH /api/records/{recordId}` 신설을 요청하기로 했다. 항목 수 표기를 14건→15건으로 갱신(§0) |
 | 2026-08-31 | **§11에 B-13·B-14 추가.** `MovieDetail` 구현 중 새로 드러난 백엔드 갭 2건. **B-13(1군, 상세 화면 블로커)** — OTT 플랫폼 목록을 조회하는 엔드포인트가 없다. `WatchRecordCreateRequest.ottPlatformId`는 `watchType=OTT`일 때 필수인데 유효한 ID를 얻을 방법이 없어, 지금은 프론트에서 `watchType=OTT` 저장 자체를 막고 안내만 띄운다(THEATER/ETC만 동작). **B-14(낮음)** — `MovieDetailResponse`에 `backdropPath`가 없다(`posterPath`만 있음). 상세 화면 히어로 배경은 `posterPath`로 대신 렌더한다. 항목 수 표기를 12건→14건으로 갱신(§0) |

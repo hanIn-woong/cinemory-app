@@ -5,12 +5,15 @@ export const queryKeys = {
     search: (query: string, year?: number) => ['movies', 'search', { query, year }] as const,
     detail: (movieId: number) => ['movies', 'detail', movieId] as const,
     cast: (movieId: number) => ['movies', 'cast', movieId] as const,
+    random: (size: number) => ['movies', 'random', size] as const,
   },
   records: {
     ofUser: (userId: number) => ['records', 'ofUser', userId] as const,
     ofUserMovie: (userId: number, movieId: number) => ['records', 'ofUserMovie', userId, movieId] as const,
     // "N편 관람" 표시용 — size=1 조회. ofUser(무한스크롤)와 캐시 모양이 달라 키를 분리한다.
     count: (userId: number) => ['records', 'count', userId] as const,
+    // 홈 배경용 — size가 화면 격자 크기에 따라 달라져 ofUser(무한스크롤)와 캐시 모양이 다르다.
+    homeBackground: (userId: number, size: number) => ['records', 'homeBackground', userId, size] as const,
   },
   reviews: {
     me: (movieId: number) => ['reviews', 'me', movieId] as const,

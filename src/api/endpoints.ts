@@ -17,6 +17,7 @@ export const EP = {
   movies: {
     list: '/api/movies',
     search: '/api/movies/search',
+    random: '/api/movies/random',
     detail: (movieId: number) => `/api/movies/${movieId}`,
     cast: (movieId: number) => `/api/movies/${movieId}/cast`,
     sync: '/api/movies/sync',

@@ -10,7 +10,7 @@ import {
 } from '@tanstack/react-query';
 import { movieApi } from '../api/movie';
 import type { ApiError } from '../api/client';
-import type { MovieDetailResponse, MovieSearchResponse } from '../types';
+import type { MovieDetailResponse, MovieSearchResponse, MovieSummary } from '../types';
 import { queryKeys } from './queryKeys';
 
 // ⚠️ UseInfiniteQueryResult의 TData는 InfiniteData<T>로 감싼 형태다 — 원본 응답 타입을
@@ -28,6 +28,16 @@ export function useMovieSearch(
     getNextPageParam: (lastPage, allPages) =>
       lastPage.registered?.last ?? true ? undefined : allPages.length + 1,
     enabled: query.trim().length > 0,
+  });
+}
+
+// 홈 배경 폴백 소스(B-17) — permitAll이라 게스트도 그대로 쓴다. `enabled`는 로그인 사용자의
+// 기록이 충분한지 알기 전까지 낭비 호출을 미루는 용도다(useHomeBackground).
+export function useRandomMovies(size: number, enabled = true): UseQueryResult<MovieSummary[], ApiError> {
+  return useQuery({
+    queryKey: queryKeys.movies.random(size),
+    queryFn: () => movieApi.random(size),
+    enabled,
   });
 }
 

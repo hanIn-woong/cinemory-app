@@ -6,6 +6,110 @@ narrative로 남긴다.
 
 ---
 
+## 2026-09-06 (이어서 4) — 홈 배경 첫 행·마지막 행 중복 출력 버그 발견·수정
+
+- **증상(사용자 보고)**: "반복되는 4열 그리드의 첫 행과 마지막 행이 중복 출력" — 같은
+  포스터 배열이 두 번 보인다.
+- **원인**: `useHomeBackground`가 포스터를 고정 20장(`RANDOM_SIZE`)만 받아 왔는데,
+  `PosterBackdrop`은 화면을 채우려고 `cellsPerSet`(보통 24~28, 기기 높이에 따라 다름)개
+  셀에 `posters[i % posters.length]`로 순환시켰다. `COLUMNS=4`라 `cellsPerSet`도 포스터
+  개수(20)도 전부 4의 배수였던 탓에, **20을 넘는 지점부터의 순환이 정확히 행 경계에서
+  다시 인덱스 0으로 돌아갔다** — 예: `cellsPerSet=24`면 마지막 행(인덱스 20~23)이
+  `% 20`으로 0~3이 되어 **첫 행과 완전히 같은 포스터 4장**이 그대로 반복됐다. 우연이 아니라
+  4의 배수끼리 나눈 구조상 항상 재현되는 문제였다.
+- **수정**: `useHomeBackground(minCount)`로 시그니처를 바꿔 **한 세트를 채우는 데 필요한
+  셀 수(`cellsPerSet`)만큼은 반드시 받아 오도록** 했다 — `PosterBackdrop`이 자신이 계산한
+  `cellsPerSet`을 훅에 그대로 넘긴다. 요청 크기는 `RECORDS_THRESHOLD`(12)~`MAX_POOL`(50,
+  백엔드 `cinemory.movie.random.max-size`와 동일)로 clamp. 포스터 수가 `cellsPerSet` 이상이면
+  한 세트 안에서 인덱스가 절대 겹치지 않아 행 반복 자체가 구조적으로 불가능해진다.
+  `useMyRecords`(무한스크롤용, 캐시 모양이 다름)를 재사용하는 대신 홈 전용
+  `queryKeys.records.homeBackground(userId, size)` 키로 별도 `useQuery`를 뽑아냈다.
+- 전형적인 폰 화면 기준 요청 개수가 20 → 24 안팎으로 소폭 늘었다(포스터 1~2장 추가 다운로드
+  정도) — 어제 지적된 로딩 지연(TMDB CDN 자체 지연)에 미미하게 더할 수는 있지만, 화면을
+  가득 채우는 데 필요한 최소량이라 더 줄이면 다시 반복 문제로 돌아간다.
+- `tsc --noEmit` 통과. 재검증은 다음 실기기 확인 때.
+
+---
+
+## 2026-09-06 (이어서 3) — `OutlinedText` 겹침 순서 수정 — 로고 디자인 미세 조정
+
+사용자가 로고를 보다가 지적 — 좌상단(`brandDeep`) 겹침 부위가 `brandLight`에 덮여 있었다.
+`OutlinedText`가 `CORNERS` 배열 순서(좌상→우상→좌하→우하)대로 그렸는데, RN은 나중에 그린
+형제가 위에 쌓이는 구조라 **배열 뒤쪽(우하단)이 항상 위로** 올라오고 있었다 — CSS
+`text-shadow`가 "목록의 첫 그림자가 가장 위" 규칙인 것과 정반대였다. 배경 4겹을 `CORNERS`
+역순으로 그리도록 뒤집어서, `outlineColor` 배열의 **앞쪽(기본 배치의 좌상단)이 겹침에서
+항상 위로 오도록** 통일했다 — CSS 규칙과 동작이 같아져서 향후 스플래시·로그인에서 재사용할
+때도 직관을 그대로 옮길 수 있다. `tsc --noEmit` 통과.
+
+---
+
+## 2026-09-06 (이어서 2) — `Home` 배경 실기기 검증: 4열이 3열로 보이는 레이아웃 버그 발견·수정
+
+애니메이션·검색바 그림자·로그인/로그아웃 크로스페이드·로고 디자인은 전부 정상. 이슈 둘.
+
+- **포스터 로딩이 느리다 — 백엔드 한계 아님.** `GET /api/movies/random`을 curl로 3회 재보니
+  30~40ms로 즉시 응답한다. curl로 `w92` 포스터 1장을 직접 받아보니 5KB짜리 이미지에도
+  **~700ms**가 걸렸다 — TMDB CDN 왕복 자체의 지연이라 우리 백엔드·프론트 코드로 줄일 수
+  있는 종류가 아니다. 이미 가장 작은 이미지 크기(`w92`)를 쓰고 있고, 배경엔 최대 20장만
+  필요해 중복 다운로드도 없다 — 할 수 있는 최적화는 이미 돼 있는 상태.
+- **4열 그리드인데 포스터가 3열만 보인다 — 실제 레이아웃 버그였다.** 원인은
+  `PosterBackdrop.tsx`의 셀 스타일이 **마지막 열에도 `marginRight: GAP`을 걸고 있던 것.**
+  `cellWidth` 계산식(`(width - GAP*(COLUMNS+1))/COLUMNS`)은 "열 *사이*에만 gap이 있다"는
+  전제였는데, 렌더링은 모든 셀(4번째 포함)에 오른쪽 마진을 줘서 **한 행의 실제 너비가
+  컨테이너보다 정확히 `GAP`(4px)만큼 커졌다.** RN Yoga는 고정 너비 자식에 `flexShrink`가
+  없으면 아주 작은 초과에도 관대하게 봐주지 않고 곧바로 다음 셀을 다음 줄로 밀어낸다 —
+  그 결과 4번째 셀이 항상 다음 행으로 밀려 시각적으로 3열처럼 보였다(그리드 자체 크기가
+  균일해 "그리드는 4열 같은데 포스터만 3열"로 보인 이유). 마지막 열엔 `marginRight: 0`을
+  주도록 고쳐 해결. `tsc --noEmit` 통과. 재검증은 다음 실기기 확인 때.
+
+---
+
+## 2026-09-06 (이어서) — `Home` 화면 디자인 고도화 (M2-B 완료 후 사용자 요청)
+
+- 사용자가 `M2-frontend-spec.md` §9.1에 직접 스펙(배경 소스 분기 표, 5겹 아웃라인, 60초 루프,
+  blur 대체 기법 등, 2026-09-06 신설분)을 채워 넣고, 컴포넌트 분할까지 지정해서 요청했다 —
+  `src/components/home/PosterBackdrop.tsx`(그리드+루프+소스 분기) · `src/components/common/
+  OutlinedText.tsx`(5겹, 스플래시·로그인 재사용 가능) · `src/screens/home/HomeScreen.tsx`(조립).
+- **배경 소스 분기(`useHomeBackground` 훅, 신규)**: 로그인 + 기록 12편 이상이면
+  `useMyRecords`(이미 있는 훅, `MyRecordsScreen`과 캐시 공유)의 첫 페이지에서 `posterPath`를
+  뽑고, 그 외(게스트·기록 부족·0건)는 `useRandomMovies`(신규, `GET /api/movies/random` = B-17)
+  로 폴백한다. 로그인 사용자는 기록이 12편 이상인지 알기 전엔 `useRandomMovies`를 `enabled`로
+  묶어 미뤄서, 어차피 안 쓸 랜덤 호출을 낭비하지 않게 했다.
+- **B-17이 이미 백엔드에 구현돼 있었다** — `cinemory-backend`의 `MovieController`·
+  `MovieQueryService`·`application.yml`(`cinemory.movie.random.*`)에 전부 반영돼 있었는데,
+  정작 `GET /api/movies/random`을 curl로 처음 때렸을 때 `INVALID_TYPE_VALUE`(마치
+  `/{movieId}`로 라우팅된 것 같은 에러)가 났다. 원인은 라우팅 버그가 아니라 **§7.3 검증용으로
+  띄워 둔 백엔드 프로세스가 이 엔드포인트가 소스에 추가되기 *전* 시점(15:54)에 이미 떠 있던
+  것**이었다 — 컴파일된 `.class`는 16:30로 최신이었지만 실행 중인 JVM은 여전히 구버전을
+  메모리에 들고 있었다. 백엔드를 재기동하니 바로 정상 동작했다. `npm run gen:api`로
+  `api.d.ts`에 `getRandomMovies` 오퍼레이션을 추가 생성(39줄, 순수 추가— 기존 타입 변경 없음).
+- **구현 중 §3.4 위반 1건 발견 — `useMyRecords`에 `enabled: isAuthed` 누락.** 상위 문서 §3.4
+  표에 `useMyRecords`가 이미 "필수" 항목으로 올라가 있었는데 실제 구현엔 빠져 있었다.
+  `useHomeBackground`가 게스트에서도 이 훅을 호출하게 되면서 처음 눈에 띄었지만, **어제(§7.3)
+  로그의 `GET /api/users/0/records` 404가 실은 이 버그가 이미 새고 있었다는 증거**였다는 것도
+  뒤늦게 확인했다 — 당시엔 로그인 직후의 사소한 타이밍 이슈로 넘겼었다. `enabled: isAuthed`를
+  추가해 막았다.
+- **레이아웃 — `Home`만 `Screen` 프리미티브를 쓰지 않는다.** `Screen`의 루트가
+  `SafeAreaView`라 배경(포스터 그리드)까지 안전영역 안쪽으로 잘려 노치 위아래에 어색한 여백이
+  생긴다는 걸 사용자가 미리 지적했다. `<View className="flex-1">` 루트에 `PosterBackdrop`을
+  `absolute inset-0`로 꽉 채우고, 로고·검색바만 안쪽 `SafeAreaView`(`edges: ['top','left',
+  'right']`)로 감쌌다 — 어제(§7.2) `Screen` 기본 `edges`로 겪은 것과 정반대 방향의 같은 종류
+  문제라 바로 적용할 수 있었다.
+- `OutlinedText`는 배경 4겹(코너별 다른 색 지원 — 좌상단만 `brandDeep`, 나머지 3방향은
+  `brandLight`, 와이어프레임 그대로) + 본체 1겹으로 구현하고 배경 4겹엔
+  `accessibilityElementsHidden`을 걸었다. 홈 전용 색을 하드코딩하지 않아 스플래시·로그인에서도
+  그대로 재사용 가능하다.
+- `PosterBackdrop`은 같은 세트를 두 번 쌓고 한 세트 높이만큼 `translateY`로 올리는 방식으로
+  이음매를 없앴다(`withRepeat(withTiming(-setHeight, {duration:60000}), -1, false)` — 세
+  번째 인자 `false` 필수, `true`면 왕복해서 튄다). 탭을 벗어나면 `useFocusEffect` +
+  `cancelAnimation`으로 멈춘다. 로그인/로그아웃으로 소스가 바뀌면(포스터 id 시그니처 변경)
+  같은 opacity 채널로 0→0.2 페이드를 다시 태워 크로스페이드를 흉내냈다(진짜 2겹 크로스디졸브
+  대신 페이드아웃 없는 단순 페이드인 — 배경용으로는 충분하다고 판단).
+- `tsc --noEmit` 통과. **실기기 검증 전이다** — 특히 애니메이션이 부드러운지, 크로스페이드가
+  자연스러운지, 검색바 그림자가 두 플랫폼에서 다 보이는지는 다음에 확인해야 한다.
+
+---
+
 ## 2026-09-06 — §7.3 동시 401 실전 재확인 통과 — M2-B 검증 완료
 
 - **환경 준비**: `cinemory-backend/src/main/resources/application.yml`의
