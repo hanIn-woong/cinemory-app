@@ -2,7 +2,7 @@
 
 > 상위 문서: `docs/M2-frontend-spec.md` — 계약과 사실은 그쪽, 실행과 검증은 여기
 > (분담 기준은 상위 문서의 「📚 문서 구성」)
-> 대상: `cinemory-app` — Expo SDK 56 / RN 0.85 / React 19.2 / TypeScript
+> 대상: `cinemory-app` — **Expo SDK 57 / RN 0.86 / React 19.2** / TypeScript (2026-09-06 업그레이드)
 > 이 문서는 **Claude Code가 그대로 구현할 수 있는 수준의 파일 단위 스펙**이다.
 
 **M2-A 완료 판정** — 앱을 켰을 때
@@ -14,32 +14,42 @@
 
 ## 0. 패키지 호환성 사전 확인 결과 (2026-08-28 npm 레지스트리 실측)
 
-### 0.1 Expo 56이 버전을 관리하는 것 — `npx expo install`로 설치
+### 0.1 Expo가 버전을 관리하는 것 — `npx expo install`로 설치
 
 전부 `expo/bundledNativeModules.json`에 있으므로 **버전을 직접 적지 않는다.**
 
-| 패키지 | Expo 56 지정 |
-|---|---|
-| `expo-secure-store` | `~56.0.4` |
-| `expo-splash-screen` | `~56.0.10` |
-| `expo-linear-gradient` | `~56.0.4` |
-| `expo-blur` | `~56.0.3` |
-| `expo-asset` | `~56.0.17` |
-| `expo-location` | `~56.0.18` |
-| `react-native-reanimated` | `4.3.1` |
-| `react-native-svg` | `15.15.4` |
-| `react-native-webview` | `13.16.1` |
-| `@react-native-community/datetimepicker` | `9.1.0` |
-| `react-native-screens` / `safe-area-context` | 설치 완료 |
+**2026-09-06 SDK 56 → 57 업그레이드 완료** (실기기 검증 통과). 실제 설치 버전:
 
-✅ `lucide-react-native`의 `react-native-svg` peer는 `^15`이고 Expo 56이 `15.15.4`를 지정하므로 **충돌 없음.**
+| 패키지 | SDK 56 | **SDK 57** |
+|---|---|---|
+| `expo` | 56.0.21 | **57.0.20** |
+| `react-native` | 0.85.3 | **0.86.3** |
+| `react` | 19.2.3 | **19.2.3** (변화 없음) |
+| `react-native-reanimated` | 4.3.1 | **4.5.1** |
+| `react-native-worklets` | 0.8.3 | **0.10.1** |
+| `expo-secure-store` | ~56.0.4 | ~57.0.3 |
+| `expo-splash-screen` | ~56.0.10 | ~57.0.8 |
+| `expo-linear-gradient` | ~56.0.4 | ~57.0.1 |
+| `react-native-screens` | ~4.26.0 | ~4.26.0 (동일) |
+| `react-native-safe-area-context` | ~5.7.0 | ~5.7.0 (동일) |
+| `react-native-svg` | 15.15.4 | **15.15.4 (동일)** |
+| `react-native-webview` | 13.16.1 | **13.16.1 (동일)** |
+| `@react-native-community/datetimepicker` | 9.1.0 | **9.1.0 (동일)** |
+| `nativewind` | 4.2.6 | **4.2.6 (동일)** |
+
+✅ `lucide-react-native`의 `react-native-svg` peer는 `^15`이고 Expo가 `15.15.4`를 지정하므로 **충돌 없음**(56·57 동일).
+
+> ⚠️ **SDK 57은 `57.0.9` 이상이어야 한다.** 초기 릴리스에 **Hermes V1 메모리 회귀**가 있었고
+> **`worklets`/`reanimated`를 쓰는 앱이 영향**받았다(57.0.9에서 해결). 이 프로젝트는 둘 다
+> 쓴다 — reanimated(홈 배경 루프·MyRecords 툴바 접기)와 worklets(NativeWind가 요구).
+> 업그레이드 후 `node -p "require('./node_modules/expo/package.json').version"`으로 확인할 것.
 
 ### 0.2 스타일링 — 실측으로 갈렸다
 
 | | `nativewind@4.2.6` | `uniwind@1.11.0` |
 |---|---|---|
 | `peerDependencies` | **`{ tailwindcss: '>3.3.0' }` 뿐** | `react >=19.0.0`, **`react-native >=0.81.0`**, `tailwindcss >=4`, metro 계열 |
-| RN 0.85 지원 선언 | ❌ **아무 선언이 없다**(침묵) | ✅ **명시적으로 포함** |
+| RN 0.85/0.86 지원 선언 | ❌ **아무 선언이 없다**(침묵) | ✅ **명시적으로 포함** |
 | React 19.2 지원 선언 | ❌ 없음 | ✅ 포함 |
 | Tailwind 세대 | **v3 기반** (v5가 v4 대응이나 `preview` 단계) | **v4 전용** |
 | dist-tags | `latest 4.2.6` / `preview 5.0.0-preview.4` | `latest 1.11.0` |
@@ -117,6 +127,12 @@ Uniwind는 **Babel 프리셋이 필요 없고 Metro 플러그인만** 쓴다. Ta
 - **NativeWind v4는 애니메이션을 쓰지 않아도 `react-native-worklets`를 요구한다** → 명시 설치
 - `openapi-typescript@7`의 `typescript@^5` peer가 이 프로젝트의 `typescript@~6`과 충돌 →
   `.npmrc`의 `legacy-peer-deps=true`로 해소 (§11의 주의 참고)
+
+**3번(실기기 육안 확인)은 2026-08-31 §12-A에서 통과**했고, **2026-09-06 SDK 57 업그레이드
+후 재확인도 통과**했다. NativeWind는 `4.2.6`, `tailwindcss`는 `^3.4.19`로 **버전 변경 없이**
+SDK 57 / RN 0.86에서 그대로 동작한다 — §1-C(Uniwind)·§1-D(StyleSheet) 폴백은 발동하지
+않았다. 이는 §0.1의 근거와 일치한다: `nativewind@4.2.6`의 peer는 `{ tailwindcss: '>3.3.0' }`
+하나뿐이라 RN·React 버전에 대해 아무 제약을 걸지 않는다.
 
 > **결론을 아래 변경 이력에 기록한다** — 어떤 라이브러리를,
 > 어떤 근거로 채택했는지. 나중에 "왜 이걸 쓰지?"가 반드시 나온다.
@@ -1001,6 +1017,7 @@ D 검증의 계측 지점이다.
 
 | 날짜 | 내용 |
 |---|---|
+| 2026-09-06 | **Expo SDK 56 → 57 업그레이드 확정 — §0.1 표를 57 기준으로 갱신하고 §1 채택 결과에 재확인 결과를 명시.** 계기는 기술적 필요가 아니라 **Expo Go의 SDK 1:1 고정**이었다 — 스토어의 Expo Go는 항상 최신 SDK 하나만 번들하므로 프로젝트를 56으로 되돌려도 기기 쪽이 57이면 열리지 않는다. **프로젝트 롤백으로는 원천적으로 해결되지 않는 문제**라 업그레이드가 유일한 정공법이었다(다른 길은 dev client 빌드뿐인데, 그건 B-1 prebuild와 묶여 있어 지금 하면 미지수가 겹친다). 실측 결과 변경은 좁았다 — **React는 19.2 그대로**라 타입·API 변동이 없었고, `react-native-svg 15.15.4` · `@react-native-community/datetimepicker 9.1.0` · `nativewind 4.2.6` · `tailwindcss ^3.4.19`는 **56과 완전히 동일**하다. 실제로 오른 것은 `react-native 0.85→0.86.3`, `reanimated 4.3.1→4.5.1`, `worklets 0.8→0.10.1`, `screens ~4.26`, `safe-area-context ~5.7`, `expo-secure-store ~57.0.3`이다. ⚠️ **`expo`는 `57.0.9` 이상이어야 한다** — 초기 57 릴리스에 Hermes V1 메모리 회귀가 있었고 **`worklets`/`reanimated`를 쓰는 앱이 영향**을 받았는데, 이 프로젝트는 둘 다 쓴다(홈 배경 루프·MyRecords 툴바 접기 = reanimated, NativeWind v4가 요구 = worklets). 현재 `^57.0.20`이라 해당 없음. **순서를 SDK 업그레이드 → prebuild로 잡은 것은 의도적**이다(기획노트의 *"미지수를 한 시점에 몰지 않는다"*) — 둘을 같이 하면 깨졌을 때 원인이 SDK인지 네이티브 빌드인지 분리되지 않는다. `feature/expo-57` 브랜치에서 실기기(Expo Go) 검증 전 항목 정상 확인 |
 | 2026-08-31 | **D 최종 확인(4/4 성공·로그인 유지) 완료 — M2-A 실기기 검증(§12 A·B·C·D) 전부 통과.** §9 체크리스트 8번을 ✅로 갱신했다. 이어서 §E 되돌리기 체크리스트 중 코드에 남아 있던 2건을 정리했다 — `src/screens/_debugProbe.tsx` 삭제, `AuthNavigator`/`HomeStack`의 `Login`/`Home`을 원래 플레이스홀더(`makePlaceholder`)로 되돌림, `client.ts`의 임시 `console.log('[reissue]', ...)` 제거. `tsc --noEmit` 통과 확인. **`access-token-ttl` → `PT30M` 원복은 백엔드 쪽 작업이라 사용자가 별도로 진행 중**이고, `api.d.ts` 커밋 여부만 사용자가 git을 직접 관리하므로 미확인으로 남아 있다 — 이 둘만 끝나면 M2-A 완료 |
 | 2026-08-31 | **실기기 검증(§12 A·B·C·D) 수행 및 §9/§12-0/E 체크리스트에 결과 반영.** A(스타일 육안 확인) 통과 — `bg-primary` 시안 배경·`text-muted-foreground` 회색·`text-primary-foreground` 흰 글자·`rounded-lg`/`rounded-md` 모서리 전부 확인. B-1·B-2·B-3 전부 통과 — 특히 B-2에서 Login과 Home에 **동일한 DebugProbe 컴포넌트**를 걸어 둔 탓에 네이티브 헤더가 콘텐츠보다 한 프레임 늦게 붙는 현상이 있었는데, `App.tsx`가 `status==='loading'`일 때 `return null`이라 `status`가 정해지기 전엔 아무 네비게이터도 마운트되지 않는 구조상 실제로 `Login`이 그려질 경로가 없음을 코드로 확인해 **버그가 아니라 두 라우트에 같은 프로브를 쓴 데서 오는 시각적 착시**로 판정했다. C 검증 중 **C-3(탭 간 스택 깊이 유지)은 모든 화면이 플레이스홀더라 실제로 눌러서 깊이 들어갈 방법이 없었다** — DebugProbe에 `status==='authenticated'`일 때만 보이는 임시 버튼(`navigation.navigate('MovieDetail', { movieId: 1 })`)을 추가해 Home 탭에서 깊이 들어간 뒤 다른 탭↔Home 탭을 오가도 스택이 유지되는지 확인했고 통과했다. D는 `[reissue]` 로그가 1회만 찍히는 것까지 확인했으나 **4/4 성공·로그인 유지·`access-token-ttl` 원복은 아직 최종 확인 전**이라 §9 체크리스트에 ⏳로 남겨뒀다. §12-0의 gen:api 완료 확인 4개 중 3개(`PageResponse<T>` 단일화, `tsc` 통과, `viewerId` 없음)를 체크했고 `api.d.ts` 커밋 여부는 사용자가 git을 직접 관리하므로 미확인으로 남겼다. **§E 되돌리기 체크리스트 중 아직 안 끝난 것 2개** — `src/screens/_debugProbe.tsx`와 `client.ts`의 임시 `console.log('[reissue]', ...)`가 아직 코드에 남아 있다(둘 다 `__DEV__` 가드는 걸려 있지만, D 최종 확인과 `access-token-ttl` 원복이 끝나야 지울 수 있다) |
 | 2026-08-30 | **§11 "남은 구멍 1건"을 코드에 반영.** `authStore.restore()`의 catch 블록 안 `deleteItemAsync` ×3을 내부 try/catch로 한 번 더 감싸 삭제 자체가 실패해도 아래 `set({ status: 'anonymous', ... })`이 항상 실행되도록 고쳤다. `App.tsx`의 `restore().catch(...)`도 빈 콜백(`() => {}`)이 아니라 `useAuthStore.setState({ status: 'anonymous' })`로 바꿔, 미지의 예외가 뚫고 올라와도 실제로 스플래시가 풀리도록 했다 — 기존 `.catch(() => {})`는 겉보기 안전망일 뿐 상태를 바꾸지 않아 조용히 `'loading'`에 갇히는 구조였다. **같은 세션에서 §11의 8건(색상 키 kebab화, `typography` 중복 제거, 카카오 패키지 제거, 요청 인터셉터 갱신 실패 시 재시도 중단, `ApiError`의 `Error` 상속화, `UserResponse`/`WriteReviewRequest` 계약 정정)도 전부 코드에 반영하고 `tsc --noEmit` 통과를 확인했다.** |

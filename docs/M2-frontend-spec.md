@@ -1,6 +1,6 @@
 # CineMory M2 — 프론트엔드 설계 스펙
 
-> 대상 리포: `cinemory-app` (Expo SDK 56 / RN 0.85 / React 19.2 / TypeScript)
+> 대상 리포: `cinemory-app` (**Expo SDK 57 / RN 0.86 / React 19.2** / TypeScript — 2026-09-06 업그레이드)
 > 시각 기준: `cinemory-wireframe` (Figma Make 산출물, React + Vite + Tailwind v4)
 > API 기준: `cinemory-backend` — **`docs/controller-layer-spec.md`가 API 표면의 단일 출처**
 > 우선순위 기준: `CineMory_기획노트.md` **4-M2절**
@@ -113,7 +113,7 @@ M2 문서는 **우산 문서 1개 + 단계 문서 N개**로 나눈다. 백엔드
 
 | 항목 | 결정 | 근거 |
 |---|---|---|
-| 스타일링 | **NativeWind v4** (Expo 56 빌드 실패 시 **Uniwind**) | 와이어프레임 Tailwind 클래스 이식. 토큰+프리미티브로 격리 |
+| 스타일링 | **NativeWind v4.2.6** + `tailwindcss@^3.4` (✅ SDK 57 / RN 0.86 검증 완료 — Uniwind 폴백 불요) | 와이어프레임 Tailwind 클래스 이식. 토큰+프리미티브로 격리 |
 | 네비게이션 | `@react-navigation/native-stack` + `bottom-tabs` (설치 완료) | 와이어프레임의 `useState` 조건부 렌더링을 스택으로 평탄화 |
 | 타입 | **`openapi-typescript`로 `/v3/api-docs`에서 생성** | 5-7 D에서 검증된 경로. 손으로 쓰면 즉시 어긋난다 |
 | 서버 상태 | `@tanstack/react-query` v5 | 기획노트 6절이 이미 지정 |
@@ -1058,7 +1058,7 @@ npm i react-native-gifted-charts
 npm i nativewind && npm i -D tailwindcss
 ```
 
-> ⚠️ Expo SDK 56 / RN 0.85 / React 19.2는 최신이다. **`npx expo install`로 SDK 호환 버전이
+> ⚠️ Expo SDK 57 / RN 0.86 / React 19.2는 최신이다. **`npx expo install`로 SDK 호환 버전이
 > 선택되게** 하고 `npx expo-doctor`로 검증한다. `AGENTS.md` 지침대로
 > https://docs.expo.dev/versions/v56.0.0/ 를 확인한 뒤 코드를 작성한다.
 
@@ -1262,7 +1262,7 @@ export { CineMapWebView as CineMapView } from './CineMapWebView';
 |---|---|---|
 | 한국 지도 품질 | 최상 | 구글 지도는 국내 데이터 반출 규제로 상세도 낮음. iOS `PROVIDER_DEFAULT`(Apple Maps)는 상대적으로 나음 |
 | 생태계 | 커뮤니티 래퍼 (비공식). 착수 전 다운로드 수·최근 커밋·이슈 확인 필요 | 표준, 문서 풍부 |
-| Expo SDK 56 | 확인 필요 | ⚠️ config plugin이 SDK 56에서 깨짐 (`@expo/config-plugins` 경로 문제, 미해결). 워크어라운드: `npx expo install @expo/config-plugins` |
+| Expo SDK 호환 | 확인 필요 | ⚠️ SDK 56 시점에 config plugin이 깨짐 (`@expo/config-plugins` 경로 문제). 워크어라운드: `npx expo install @expo/config-plugins`. **현재 스택은 SDK 57이므로 착수 시 재확인 필요** |
 
 > 좌표를 백엔드가 공급하므로 앱의 지도는 "아는 좌표에 마커 찍기"만 합니다. 카카오의 POI 검색 정확도는 이미 백엔드에서 확보된 상태라, 렌더링 레이어 선택은 **지도 배경 품질**과 **Expo 호환성**만 보고 판단하면 됩니다.
 
@@ -1278,6 +1278,7 @@ export { CineMapWebView as CineMapView } from './CineMapWebView';
 
 | 날짜 | 내용 |
 |---|---|
+| 2026-09-06 | **문서 전체의 스택 표기를 Expo SDK 57 / RN 0.86 / React 19.2로 갱신**(헤더 · §10 설치 주의). 업그레이드의 계기는 성능·기능이 아니라 **Expo Go가 SDK를 1:1로 고정**한다는 점이었다 — 프로젝트를 56으로 되돌려도 기기의 Expo Go가 57이면 열리지 않으므로 롤백은 해결책이 되지 못한다. **React가 19.2에서 움직이지 않았고** `svg`·`datetimepicker`·`nativewind`·`tailwindcss` 버전이 56과 동일해 화면 코드에 미친 영향은 없었다. 상세 근거와 버전 대조표는 `M2A-foundation-spec.md` §0.1 · §1 채택 결과 · 변경 이력 2026-09-06, 경위는 `docs/DevLog.md` 2026-09-06(이어서 5) |
 | 2026-09-04 | **B-15·B-16 해소 확인.** 백엔드가 `PATCH /api/records/{recordId}`를 구현했다는 보고를 받고 `npm run gen:api`로 확인 — `WatchRecordUpdateRequest`(전체 치환, `movieId`·`representative` 제외)와 `updateWatchRecord` 오퍼레이션이 §11.2 설계 확정본 그대로 반영돼 있었다. 프론트도 연동 완료(실행 내역은 `M2B-screens-spec.md` 변경 이력 참고). 둘 다 §11 표에서 ✅ 완료로 갱신 |
 | 2026-09-04 | **§11에 B-15 추가.** `MovieDetail` 실기기 재검증 중 발견 — 시청 기록에 update API가 없다. `POST /api/records`·`DELETE /api/records/{id}`·`PATCH .../representative`뿐이라 잘못 기록한 시청 기록(날짜·방식·장소·별점·메모)을 고칠 방법이 없다. 삭제 후 재생성하는 우회안을 검토했으나, §7.3의 "새 기록 INSERT 시 대표 자동 승격" 규칙 때문에 대표가 아니던 기록을 이 방식으로 "수정"해도 재생성 순간 대표로 바뀌는 부작용이 있어 채택하지 않고 백엔드에 `PATCH /api/records/{recordId}` 신설을 요청하기로 했다. 항목 수 표기를 14건→15건으로 갱신(§0) |
 | 2026-08-31 | **§11에 B-13·B-14 추가.** `MovieDetail` 구현 중 새로 드러난 백엔드 갭 2건. **B-13(1군, 상세 화면 블로커)** — OTT 플랫폼 목록을 조회하는 엔드포인트가 없다. `WatchRecordCreateRequest.ottPlatformId`는 `watchType=OTT`일 때 필수인데 유효한 ID를 얻을 방법이 없어, 지금은 프론트에서 `watchType=OTT` 저장 자체를 막고 안내만 띄운다(THEATER/ETC만 동작). **B-14(낮음)** — `MovieDetailResponse`에 `backdropPath`가 없다(`posterPath`만 있음). 상세 화면 히어로 배경은 `posterPath`로 대신 렌더한다. 항목 수 표기를 12건→14건으로 갱신(§0) |
