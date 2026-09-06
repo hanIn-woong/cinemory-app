@@ -23,6 +23,11 @@ export type ReissueRequest = S['ReissueRequest'];
 export type LogoutRequest = S['LogoutRequest'];
 
 export type PrivacySetting = NonNullable<S['UserResponse']['privacySetting']>;
+
+// 마이페이지/설정 — MyPage §5.6.
+export type NicknameChangeRequest = S['NicknameChangeRequest'];
+export type PrivacyChangeRequest = S['PrivacyChangeRequest'];
+export type PasswordChangeRequest = S['PasswordChangeRequest'];
 export type WatchType = NonNullable<S['WatchRecordCreateRequest']['watchType']>;
 export type RankType = NonNullable<S['BoxOfficeResponse']['rankType']>;
 export type TargetType = S['CommentCreateRequest']['targetType'];

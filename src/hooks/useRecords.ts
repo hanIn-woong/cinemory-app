@@ -25,11 +25,26 @@ import { queryKeys } from './queryKeys';
 export function useMyRecords(
   userId: number,
 ): UseInfiniteQueryResult<InfiniteData<PageResponse<UserMovieListItemResponse>>, ApiError> {
+  // 인증 전용 화면 — enabled 게이팅 필수(docs/M2B-screens-spec.md §3.4). 빠져 있으면
+  // 게스트가 이 훅을 쓰는 화면에 들어오는 것만으로 불필요한 401 요청이 나간다.
+  const isAuthed = useAuthStore((s) => s.status === 'authenticated');
   return useInfiniteQuery({
     queryKey: queryKeys.records.ofUser(userId),
     queryFn: ({ pageParam }) => recordApi.ofUser(userId, pageParam),
     initialPageParam: 0,
     getNextPageParam: (lastPage, allPages) => (lastPage.last ? undefined : allPages.length),
+    enabled: isAuthed,
+  });
+}
+
+// "N편 관람" — UserProfileResponse에 watchedCount가 없어 size=1 조회의 totalElements로 얻는다
+// (docs/M2B-screens-spec.md §5.6).
+export function useMyRecordsCount(userId: number): UseQueryResult<number, ApiError> {
+  const isAuthed = useAuthStore((s) => s.status === 'authenticated');
+  return useQuery({
+    queryKey: queryKeys.records.count(userId),
+    queryFn: () => recordApi.ofUser(userId, 0, 1).then((p) => p.totalElements),
+    enabled: isAuthed,
   });
 }
 

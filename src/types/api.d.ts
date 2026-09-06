@@ -804,6 +804,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/movies/random": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 홈 화면 배경용 랜덤 영화 조회 */
+        get: operations["getRandomMovies"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/box-office": {
         parameters: {
             query?: never;
@@ -2622,6 +2639,28 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["MovieSearchResponse"];
+                };
+            };
+        };
+    };
+    getRandomMovies: {
+        parameters: {
+            query?: {
+                size?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["MovieSummaryResponse"][];
                 };
             };
         };

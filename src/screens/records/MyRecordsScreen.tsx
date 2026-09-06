@@ -4,7 +4,7 @@ import { LayoutGrid, List } from 'lucide-react-native';
 import { useEffect, useState } from 'react';
 import { Pressable, useWindowDimensions, View } from 'react-native';
 import Animated from 'react-native-reanimated';
-import { AuthRequired, EmptyState, ErrorState, LoadingState } from '../../components/common';
+import { AuthRequired, EmptyState, ErrorState, InfiniteScrollFooter, LoadingState } from '../../components/common';
 import { MovieGridItem } from '../../components/movie/MovieGridItem';
 import { MovieListItem } from '../../components/movie/MovieListItem';
 import { Screen } from '../../components/primitives';
@@ -127,7 +127,9 @@ export function MyRecordsScreen() {
               if (records.hasNextPage && !records.isFetchingNextPage) records.fetchNextPage();
             }}
             onEndReachedThreshold={0.5}
-            ListFooterComponent={records.isFetchingNextPage ? <LoadingState /> : null}
+            ListFooterComponent={
+              <InfiniteScrollFooter visible={records.hasNextPage ?? false} loading={records.isFetchingNextPage} />
+            }
           />
         )}
       </View>

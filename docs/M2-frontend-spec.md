@@ -9,23 +9,23 @@
 
 ---
 
-## 📍 진행 현황 (최종 갱신 2026-08-30)
+## 📍 진행 현황 (최종 갱신 2026-09-06)
 
 > **번호 없는 섹션이다.** 아래 §0~§13의 번호는 다른 문서가 참조하고 있어 바꾸지 않는다.
 > **이 표는 작업이 끝날 때마다 갱신한다.**
 
-### 현재 위치 — **M2-A 완료 → M2-B 착수 대기**
+### 현재 위치 — **M2-B 완료 → M2-C 착수 대기**
 
 ```
-M2-A 기반 ✅ ──► M2-B 1군 화면 ⬜ ──► M2-C 2군 화면 ⬜ ──► M2-D 3군 화면 🔒
-   (완료)          (다음)              (10월)             (백엔드 차단)
+M2-A 기반 ✅ ──► M2-B 1군 화면 ✅ ──► M2-C 2군 화면 ⬜ ──► M2-D 3군 화면 🔒
+   (완료)          (완료)              (다음)             (백엔드 차단)
 ```
 
 | 단계 | 범위 | 상태 | 백엔드 의존 | 상세 |
 |---|---|---|---|---|
 | **M2-A**<br>기반 | 디자인 토큰 · 프리미티브 · API 클라이언트(단일 비행 인터셉터) · `authStore` · 부팅 시퀀스 · 네비게이션 골격 · 생성 타입 | ✅ **완료**<br>(실기기 검증 통과 2026-08-30) | 없음 | **`M2A-foundation-spec.md`** |
-| **M2-B**<br>1군 화면 (9월) | `Login` · `SignUp` · `Home` · `SearchResult` · `MovieDetail` · `MyRecords` · `MyPage`/`Settings` | ⬜ **착수 대기**<br>(스펙 작성 완료) | ⚠️ **B-4**(상세 평점 필드) — **병렬 가능**<br>그 외 API 완비 | **`M2B-screens-spec.md`**<br>요구사항은 §9.1~9.5 · §6 |
-| **M2-C**<br>2군 화면 (10월) | `Wishlist` · `CollectionList`/`Detail` · `Report` | ⬜ 대기 | 위시·컬렉션 ✅<br>⚠️ **B-8**(리포트 API) 미구현 → `Report`는 백엔드 M3-a와 동반 진행 | §9.6~9.8 |
+| **M2-B**<br>1군 화면 (9월) | `Login` · `SignUp` · `Home` · `SearchResult` · `MovieDetail` · `MyRecords` · `MyPage`/`Settings` | ✅ **완료**<br>(실기기 검증 통과 2026-09-06 — §7.1·§7.2·§7.3 전부) | ⚠️ **B-4**(상세 평점 필드)는 여전히 미해소 — 평점 블록만 자리를 비워 두고 진행했다 | **`M2B-screens-spec.md`**<br>요구사항은 §9.1~9.5 · §6 |
+| **M2-C**<br>2군 화면 (10월) | `Wishlist` · `CollectionList`/`Detail` · `Report` | ⬜ **다음** | 위시·컬렉션 ✅<br>⚠️ **B-8**(리포트 API) 미구현 → `Report`는 백엔드 M3-a와 동반 진행 | §9.6~9.8 |
 | **M2-D**<br>3군 화면 (여유 시) | `Social` · `CineMap` · `Recommend` | 🔒 **차단** | **B-9**(`theater` 테이블 비어 있음)<br>**B-10**(활동 피드 API 없음)<br>**B-11**(M3-b 설계 백지) | §9.9~9.11 · §13 |
 
 ### M2-A 완료 근거
@@ -35,11 +35,22 @@ M2-A 기반 ✅ ──► M2-B 1군 화면 ⬜ ──► M2-C 2군 화면 ⬜ �
 프로브 화면·임시 로그 제거, 로그 레벨)도 확인 완료. 절차와 결과는
 `M2A-foundation-spec.md` §9·§11·§12.
 
+### M2-B 완료 근거
+
+`M2B-screens-spec.md` §7 전부 실기기 통과 — **§7.1 핵심 동선**(로그인 → 검색 → 영화 선택 →
+시청 기록 저장 → 내 기록 반영, 0~8번 전 항목) · **§7.2 경계 케이스**(E-1~E-10 · G-1~G-6,
+G-5는 스택 토폴로지상 `Settings` 자신으로 대체 검증) · **§7.3 동시 401**(`MovieDetail`의
+실제 5개 병렬 호출에서 `reissue` 정확히 1회, `access-token-ttl` 임시값은 검증 직후 원복
+확인). 과정에서 발견한 버그 4건(비밀번호 변경 시 인터셉터 오판 강제 로그아웃 · `TextField`
+multiline 높이 고정 · 무한스크롤 풋터 마운트/언마운트로 인한 스크롤 점프 · G-5 시나리오
+자체의 네비게이션 토폴로지 문제)은 전부 그 자리에서 수정·재검증했다. 상세는
+`M2B-screens-spec.md` 변경 이력과 `docs/DevLog.md` 2026-09-05·09-06.
+**B-4(상세 평점)만 의도적으로 미해소 상태로 남기고 진행했다** — 화면 자리만 비워 뒀다(§6).
+
 ### 각 단계 진입 조건
 
 | | 조건 |
 |---|---|
-| **M2-B** | 백엔드에 **B-4** 요청(`MovieDetailResponse`에 `voteAverage`/`voteCount` + `AVG(review.rating)` 집계). 화면 작업과 **병렬 가능**하므로 착수를 막지는 않는다 |
 | **M2-C** | `Report`만 **B-8**(백엔드 M3-a)에 묶인다. `Wishlist`·`Collection`은 바로 가능 |
 | **M2-D** | **셋 다 백엔드 선행이 필요하다.** 지금 만들면 빈 화면이 나온다(§2·§11) |
 
@@ -263,6 +274,7 @@ export type TokenResponse   = S['TokenResponse'];
 | GET | `/api/movies/{movieId}` | `MovieDetailResponse` | search 상세 |
 | GET | `/api/movies/{movieId}/cast?page=` | `PageResponse<ActorResponse>` (size 50) | 상세 더보기 |
 | POST | `/api/movies/sync` **(인증)** | `{ movieId }` ← body `{ tmdbId }` | search |
+| GET | `/api/movies/random?size=` | **`List<MovieSummaryResponse>`** (페이징 아님) | home 배경. ⚠️ **미구현 — B-17** |
 
 **검색 응답이 2섹션인 것이 핵심 설계다.**
 
@@ -455,10 +467,19 @@ async function refreshOnce(): Promise<string> {
 | `code` | 처리 |
 |---|---|
 | `TOKEN_EXPIRED` | `refreshOnce()` 후 재시도 |
-| `INVALID_TOKEN` · `REFRESH_TOKEN_NOT_FOUND` · `REFRESH_TOKEN_REUSED` | **즉시 로그아웃** |
-| `INVALID_CREDENTIALS` | 로그인 폼에 표시 (인터셉터 개입 없음) |
+| `INVALID_TOKEN` · `REFRESH_TOKEN_NOT_FOUND` · `REFRESH_TOKEN_REUSED` · `UNAUTHORIZED` | **즉시 로그아웃** |
+| `INVALID_CREDENTIALS` | 호출부(폼)에 표시 — **인터셉터 개입 없음** |
 | `INVALID_NONCE` | nonce 재발급 후 카카오 로그인 재시도 |
 | `INVALID_OAUTH_TOKEN` | §6.5 참고 |
+
+⚠️ **이 표에 없는 401 코드는 전부 "인터셉터 개입 없음" 쪽이다.** `TOKEN_EXPIRED`가 아니라고
+곧바로 로그아웃 처리하면 안 된다 — `INVALID_CREDENTIALS`가 `/api/auth/login`(인터셉터 대상
+밖)에서만 나온다고 가정하고 짰다가, **인증된 요청 안에서 입력값이 틀려서 401을 반환하는
+엔드포인트**(예: `PATCH /api/users/me/password`의 현재 비밀번호 불일치)가 처음 생겼을 때
+실기기에서 "틀린 값 입력 → 강제 로그아웃"으로 터진 적이 있다(M2B-screens-spec.md §5.6
+변경 이력 2026-09-05). `UNAUTHORIZED`는 백엔드의 `requireAuthenticated`(viewerId null
+방어 코드, 정상 흐름에선 SecurityFilterChain이 먼저 막아 도달하지 않는 이중 방어)에서만
+나와 토큰 문제와 동치로 보고 로그아웃 대상에 포함했다.
 
 ### 6.4 저장과 부팅 시퀀스
 
@@ -855,15 +876,49 @@ export type MyPageStackParamList = {
 
 #### 9.1 HomeScreen
 
-- 배경: 4열 포스터 그리드 60초 상향 루프 → `react-native-reanimated`
-  `withRepeat(withTiming(-h, { duration: 60000, easing: Easing.linear }), -1)`.
-  성능 이슈 시 정적 그리드로 대체 가능(우선순위 낮음).
-- 로고 `fontSize: 56, fontWeight: '700', color: colors.primary`. 와이어프레임의 4방향
-  `textShadow` 아웃라인은 RN이 단일 그림자만 지원 → 동일 텍스트 4회 오프셋 렌더 또는 단순화.
-- 검색: `TextInput` + `returnKeyType="search"` + `onSubmitEditing`
-  → `navigate('SearchResult', { query })`. `showSearchResult` 불린 state 제거.
-- 배경 포스터는 `GET /api/box-office`(DAILY)의 `posterPath`로 채울 수 있다.
-  **`linked === false`인 항목은 `posterPath`가 null**이므로 폴백 필요.
+**3개 레이어다.** 와이어프레임 구조를 그대로 옮기되 RN 제약에 맞춰 변환한다.
+
+```
+① 배경   4열 포스터 그리드 · 60초 무한 상향 루프 · opacity 0.2
+② 로고   56px / 700 / 시안 + 4방향 아웃라인
+③ 검색바 반투명 흰 배경 · rounded-xl · shadow · 좌측 아이콘
+```
+
+**① 배경 — 포스터 소스는 로그인 여부로 갈린다** (2026-09-06 확정)
+
+| 조건 | 소스 |
+|---|---|
+| 로그인 + 기록 **12편 이상** | `GET /api/users/{myId}/records`의 `posterPath` (클라이언트 셔플) |
+| 그 외 (게스트 · 기록 부족 · 0건) | **`GET /api/movies/random?size=20`** (B-17) |
+
+- ⚠️ **기록 0건인 신규 가입자를 반드시 폴백시킨다.** 가입 직후가 인상이 가장 중요한 순간인데
+  배경이 비어버린다.
+- ⚠️ **12편 임계값의 이유** — 80칸을 5장으로 채우면 같은 포스터 반복이 눈에 띈다.
+- 두 소스 모두 **정렬이 고정**(`OrderBy` 없음)이므로 클라이언트에서 셔플한다.
+- **로그인/로그아웃 시 배경이 교체된다** → 크로스페이드(200~300ms). 게스트 우선 구조에서
+  모달만 닫히고 홈이 남는 것이 장점인데, 배경만 뚝 바뀌면 어색하다.
+- 애니메이션: `withRepeat(withTiming(-CYCLE_H, { duration: 60000, easing: Easing.linear }), -1, false)`.
+  ⚠️ 세 번째 인자가 `true`면 위아래로 왕복한다. 같은 세트를 두 번 깔고 한 세트 높이만큼 올려
+  이음매를 없앤다(CSS `translateY(-50%)`와 같은 기법).
+- ⚠️ **탭을 떠나면 애니메이션을 멈춘다** — `useFocusEffect`로 `cancelAnimation`. 안 하면 다른
+  탭에 있는 동안에도 60초 루프가 계속 돈다.
+- **blur는 라이브러리 없이 해결한다** — `PosterSize`에 **`BACKDROP_TILE: 'w92'`** 를 추가하고
+  작은 이미지를 큰 셀에 넣으면 업스케일되며 뭉개진다. `opacity 0.2`와 합쳐 배경으로 충분히
+  물러난다. `expo-blur`는 Android 성능 이슈가 있어 마지막 수단이다.
+
+**② 로고 — 4방향 아웃라인은 텍스트를 5겹으로 겹친다**
+
+RN `Text`는 `textShadowOffset`이 하나뿐이라 와이어프레임의 4방향 그림자를 낼 수 없다.
+배경 4겹(오프셋 `±2`) + 본체 1겹으로 렌더한다.
+⚠️ **배경 4겹에 `importantForAccessibility="no"` / `accessibilityElementsHidden`을 건다** —
+안 걸면 스크린 리더가 "CineMory"를 다섯 번 읽는다.
+로고 크기는 **홈 전용 스타일**로 둔다(`Txt`의 `h1`은 32px이고 토큰을 바꾸면 다른 화면이 전부 영향받는다).
+
+**③ 검색바 — `backdrop-blur`는 뺀다**
+
+배경이 이미 `opacity 0.2`로 물러나 있어 반투명 흰 배경만으로 충분하다. `BlurView`는 Android
+성능만 먹는다. 그림자는 iOS `shadow*` / Android `elevation`으로 분기한다.
+동작은 기존과 동일 — `onSubmitEditing` → `navigate('SearchResult', { query })`.
 
 #### 9.2 SearchResultScreen ★ 2섹션 구조가 핵심
 
@@ -1085,6 +1140,7 @@ npm i nativewind && npm i -D tailwindcss
 | B-12 | 검색 정렬·필터 | `query`/`year`만 지원 (잔여 #22) | 장르 필터·정렬 UI는 불가 | 낮음 |
 | **B-13** | **OTT 플랫폼 목록 조회 API 없음** | `WatchRecordCreateRequest.ottPlatformId`는 필수인데 유효 ID를 얻을 방법이 없다 | `OttPlatformResponse`를 반환하는 목록 엔드포인트 추가 | 1군 (상세 화면 — 지금은 `watchType=OTT` 저장을 막고 THEATER/ETC만 지원) |
 | B-14 | 상세 히어로 배경 | `MovieDetailResponse`에 `backdropPath` 없음(`posterPath`만) | 필요하면 필드 추가 — 없어도 `posterPath`로 우회 가능 | 낮음 |
+| **B-17** | **랜덤 영화 조회 API 없음** | `GET /api/movies`는 `findAll(pageable)`이 정렬 미지정이라 **매번 같은 목록**이 나온다(5-0-D가 클라이언트 `sort`를 의도적으로 미지원) | **`GET /api/movies/random?size=`** 신설 — `poster_path IS NOT NULL` 필터 포함. 설계 확정본은 **백엔드 docs**(`controller-layer-spec.md` 5-2 · `service-layer-spec.md` 4-2) | **1군 (홈 배경).** 없으면 게스트 배경이 **항상 같은 영화**가 된다 |
 | ~~B-15~~ | ~~시청 기록 수정 API 없음~~ | ✅ **백엔드 완료(`PATCH /api/records/{recordId}`), 프론트 연동 완료** — `gen:api` 재생성 확인(2026-09-04) | 없음 | — |
 | ~~B-16~~ | ~~`review.rating` 제거 + 별점 파생~~ | ✅ **백엔드 완료(`ReviewWriteRequest`에서 `rating` 제거 확인), 프론트 연동 완료**(`ReviewModal` 별점 입력 제거) — `gen:api` 재생성 확인(2026-09-02) | 없음 | — |
 
@@ -1185,8 +1241,8 @@ npm i nativewind && npm i -D tailwindcss
 | 단계 | 문서 | 상태 |
 |---|---|---|
 | **M2-A** 기반 | **`M2A-foundation-spec.md`** | ✅ 완료 (2026-08-30) |
-| **M2-B** 1군 화면 | **`M2B-screens-spec.md`** | ⬜ 착수 대기 |
-| **M2-C** 2군 화면 | (M2-B 완료 후 작성) | 대기 |
+| **M2-B** 1군 화면 | **`M2B-screens-spec.md`** | ✅ 완료 (2026-09-06) |
+| **M2-C** 2군 화면 | (M2-B 완료 후 작성) | ⬜ 착수 대기 |
 | **M2-D** 3군 화면 | (백엔드 차단 해소 후) | 🔒 §11 |
 
 **모든 단계에 공통으로 적용되는 원칙**

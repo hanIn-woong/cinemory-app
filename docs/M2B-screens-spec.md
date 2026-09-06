@@ -267,13 +267,29 @@ export const starsToApi = (s: number) => s * 2;   // 4.5 → 9.0
 
 **카카오 로그인은 버튼만 두고 비활성**으로 둔다 — prebuild가 필요하다(상위 §11.1).
 
-### 5.2 `Home`
+### 5.2 `Home` — 2026-09-06 디자인 고도화
 
-- 검색 `TextInput` + `onSubmitEditing` → `navigate('SearchResult', { query })`
-- 배경 포스터는 `GET /api/box-office`(DAILY)로 채울 수 있다
-  ⚠️ **`linked === false`인 항목은 `posterPath`가 `null`이다**(현재 매칭률 90.7%).
-  `PosterImage` 폴백이 자동 처리하지만, 배경이 그라데이션 투성이면 `linked === true`만 거른다
-- 배경 애니메이션(60초 루프)은 **우선순위 낮음.** 정적 그리드로 시작해도 된다
+**요구사항은 상위 §9.1이 단일 출처다** (배경 소스 분기 표·아웃라인 5겹·60초 루프 등). 여기엔
+구현 시 걸린 것만 적는다.
+
+- 컴포넌트 3분할 — `src/components/home/PosterBackdrop.tsx`(① 그리드+루프+소스 분기),
+  `src/components/common/OutlinedText.tsx`(② 5겹 아웃라인, 스플래시·로그인 재사용 가능),
+  `src/screens/home/HomeScreen.tsx`(③ 조립)
+- 소스 분기는 `useHomeBackground` 훅(신규)이 맡는다 — 로그인 + 기록 12편 이상이면
+  `useMyRecords`의 첫 페이지, 아니면 `useRandomMovies`(B-17, `GET /api/movies/random`) 폴백.
+  ⚠️ **로그인 사용자의 기록이 충분한지 알기 전엔 랜덤을 같이 부르지 않는다** — `enabled`로
+  순차 게이팅해서 낭비 호출을 없앴다
+- ⚠️ **`useMyRecords`에 `enabled: isAuthed`가 빠져 있던 걸 이번에 발견해 추가했다** — 상위
+  §3.4 표에 이미 있던 요구사항인데 구현이 누락돼 있었다. 게스트가 `Home`에 들어오는 것만으로
+  `/api/users/0/records`에 불필요한 401 요청이 나가고 있었다(§7.3 로그에서 실제로 관측됨)
+- `PosterSize`에 `BACKDROP_TILE: 'w92'` 추가 — blur 없이 업스케일로 뭉개는 용도
+  (`expo-blur`는 Android 성능 이슈로 마지막 수단, 상위 §9.1)
+- **이 화면만 `Screen` 프리미티브를 쓰지 않는다.** `Screen`의 루트가 `SafeAreaView`라 배경까지
+  안전영역 안쪽으로 잘려서 노치 위아래에 여백이 생긴다 — `<View>` 루트 + 배경은 `absolute
+  inset-0`로 꽉 채우고, 로고·검색바만 안쪽 `SafeAreaView`로 감싼다
+- 검색바는 `TextField` 프리미티브 대신 `TextInput`을 직접 썼다 — 좌측 아이콘·반투명
+  배경(`bg-card/90`)·플랫폼별 그림자(`iOS shadow*` / `Android elevation`) 조합이 프리미티브
+  범위를 벗어난다
 
 ### 5.3 `SearchResult` ★ 2섹션이 핵심
 
@@ -564,13 +580,21 @@ src/hooks/useCollapsibleToolbar.ts   →  { onScroll, toolbarStyle, reset }
 | **G-2** | 게스트로 `suggestions` 탭 | 로그인 모달 → 로그인 → 모달 닫힘 → **검색 결과 화면 그대로** |
 | **G-3** | 게스트로 찜 버튼 탭 | 로그인 모달. 닫으면 상세 화면 그대로 |
 | **G-4** | 게스트로 마이페이지 탭 | `<AuthRequired>` — 빈 화면이나 에러가 아니다 |
-| **G-5** | **인증 전용 화면에서 로그아웃** (`MyRecords`에서) | 그 자리에서 `<AuthRequired>`로 바뀐다. 튕기거나 크래시하지 않는다 |
+| **G-5** | **인증 전용 화면에서 로그아웃** (`MyRecords`에서) ⚠️ | 그 자리에서 `<AuthRequired>`로 바뀐다. 튕기거나 크래시하지 않는다 |
 | **G-6** | 게스트 상태로 인증 API 강제 호출 | 401이 그대로 `ApiError`로 온다 — **refresh·logout을 시도하지 않는다**(§0.1-5) |
 | E-6 | `watchType=OTT` + `ottPlatformId` 없음 | **클라이언트에서 막힌다** (400을 받기 전에) |
 | E-7 | 별점 범위 초과 | 클라이언트에서 막힌다 |
 | E-8 | 비행기 모드 | `isNetwork: true` → 재시도 버튼. **로그아웃되지 않는다** |
 | E-9 | 비밀번호 변경 성공(204) | **로그인 화면으로 이동** |
 | E-10 | 무한 스크롤 2페이지 | 중복·건너뜀 없음 (`allPages.length + 1` 확인) |
+
+⚠️ **G-5는 `MyRecords`에서 그대로 재현할 수 없다(2026-09-05, §7.2 검증 중 확인).**
+`Settings`가 `MyRecords`의 자식이 아니라 `MyPage`(스택 루트)의 형제라, `MyRecords`에 있는
+채로 `Settings`로 가려면 먼저 `MyPage`로 돌아가야 하고 그 순간 네이티브 스택이 `MyRecords`를
+언마운트한다 — "인증 전용 화면이 떠 있는 채로 로그아웃"이라는 조합 자체가 지금 구조로는
+못 만든다. `Settings` 자신을 대상으로(같은 `isAuthed` 게이트 + 같은 화면 안의 로그아웃
+버튼) 검증하는 것으로 대체한다 — 확인하려는 메커니즘(네비게이션 없이 그 자리에서 게이트로
+전환)은 동일하다.
 
 ### 7.3 ★ 동시 401 실전 재확인
 
@@ -628,6 +652,13 @@ M2-B가 끝나면 2군으로 간다. 미리 알아둘 것.
 
 | 날짜 | 내용 |
 |---|---|
+| 2026-09-06 (이어서 2) | **§5.2 `Home` 배경 실기기 검증 — 4열이 3열로 보이는 레이아웃 버그 발견·수정.** 애니메이션·검색바 그림자·로그인/로그아웃 크로스페이드·로고 디자인은 전부 정상. ① 포스터 로딩이 느리다는 지적은 백엔드 문제가 아니었다 — `GET /api/movies/random`은 30~40ms로 즉시 응답하고, 지연은 TMDB CDN에서 이미지(`w92`, 5KB)를 내려받는 자체 왕복 시간(~700ms 측정)이라 프론트·백엔드 어느 쪽에서도 줄일 수 없다(이미 최소 크기·최대 20장 중복 없음 상태). ② "4열 그리드인데 포스터는 3열만" — 실제 버그였다. `PosterBackdrop`이 **마지막 열에도 `marginRight: GAP`을 걸어서** 한 행의 실제 너비가 컨테이너보다 정확히 `GAP`만큼 커졌고, RN Yoga가 고정폭 자식의 사소한 초과도 봐주지 않고 4번째 셀을 다음 줄로 밀어내 3열처럼 보였다. 마지막 열엔 `marginRight: 0`으로 수정. `tsc --noEmit` 통과. 상세는 `docs/DevLog.md` 2026-09-06 "이어서 2" 항목 |
+| 2026-09-06 (이어서) | **§5.2 `Home` 디자인 고도화 구현 — M2-B 완료 이후 사용자 요청.** 상위 §9.1(2026-09-06 신설)을 따라 3개 파일로 분할 구현 — `PosterBackdrop`(배경 그리드+60초 루프+소스 분기) · `OutlinedText`(5겹 아웃라인, 공용 컴포넌트로 승격) · `HomeScreen`(조립). 소스 분기용 `useHomeBackground` 훅과 `B-17`(`GET /api/movies/random`) 연동용 `useRandomMovies` 훅을 신규 추가했고, 백엔드에 이미 구현돼 있던 `/api/movies/random`을 확인해(`npm run gen:api`로 타입 재생성, 39줄 추가) 붙였다. **구현 중 §3.4 위반 1건 발견** — `useMyRecords`에 `enabled: isAuthed`가 누락돼 있어 게스트가 어떤 화면에서든 이 훅을 타면 불필요한 401 요청이 나가고 있었다(§7.3 로그의 `GET /api/users/0/records` 404가 실은 이 버그의 증거였다 — 당시엔 대수롭지 않게 넘겼다). 추가하며 수정. `Home`은 스펙 지시대로 `Screen` 프리미티브를 쓰지 않고 `<View>` + 안쪽 `SafeAreaView`로 직접 구성해 배경이 노치까지 꽉 차게 했다. `npx tsc --noEmit` 통과. **실기기 검증 전이다** — 애니메이션 부드러움·크로스페이드·안전영역 처짐 여부는 번들 확인만으로는 알 수 없다 |
+| 2026-09-06 | **§7.3 동시 401 실전 재확인 — 통과. M2-B 검증 완료.** `access-token-ttl`을 `PT10S`로 임시 낮추고, 백엔드가 기본으로는 요청을 콘솔에 안 남겨서(access log 없음) `DispatcherServlet` DEBUG 로깅을 같이 켜 `reissue` 수신 횟수를 직접 셌다(백엔드도 Claude Code가 배경 기동해 콘솔을 직접 관찰 — 사용자가 로그를 읽어 전달할 필요 없었다). `MovieDetail` 진입 시 5개 병렬 호출이 11ms 창 안에 전부 발사됐고 그 직전 `reissue`가 정확히 1회만 발생, 5개 전부 200/204로 성공했다. `REFRESH_TOKEN_REUSED`·로그아웃 흔적 없음. 세션 전체로는 `reissue`가 5회 찍혔지만 전부 **서로 다른 시점의 독립된 요청 묶음**이 각자 한 번씩 트리거한 것이었다(`access-token-ttl=10s`가 60초 선제 갱신 버퍼보다 짧아 발급 직후부터 항상 "곧 만료" 조건을 만족하는 테스트 환경의 특성) — 같은 배치 안에서 중복 갱신된 사례는 없었다. 검증 직후 `application.yml`을 원상 복구(`git diff` 무변경 확인)했다. **§1(0~10번)·§7.1·§7.2·§7.3 전부 통과로 M2-B 완료.** 상세는 `docs/DevLog.md` 2026-09-06 항목 |
+| 2026-09-05 | **§7.2 경계 케이스 진행 중 — 무한스크롤 풋터 점프 버그 발견·수정, G-5 재해석.** E-10(무한스크롤) 검증 중 "스크롤하면 화면이 순간적으로 튐"이라는 실기기 피드백을 받고 처음엔 페이지네이션 데이터 버그(항목 건너뜀)를 의심했으나, 백엔드 curl 직접 대조(겹치는 id 없음)와 사용자 확인(동시 sync 없이 스크롤만 함)으로 데이터 문제가 아님을 좁혔다. 실제 원인은 `SearchResultScreen`·`MyRecordsScreen` 둘 다 `ListFooterComponent={isFetchingNextPage ? <LoadingState /> : null}` 패턴이라, 페이지를 불러올 때마다 로딩 풋터가 통째로 마운트/언마운트되며 콘텐츠 높이가 출렁인 것 — 사용자가 본 "튐"과 정확히 일치했다. `src/components/common/InfiniteScrollFooter.tsx` 신규 — `hasNextPage`인 동안 항상 같은 높이를 차지하고 그 안에서 스피너만 켜고 꺼서 높이 변화를 리스트 끝 한 번으로 줄였다. 두 화면 모두 교체, `tsc --noEmit` 통과. 같은 세션에서 **G-5도 재해석** — `MyRecords`에 있는 채로 `Settings`(로그아웃 버튼 위치)로 갈 수 없는 스택 토폴로지를 사용자가 지적해 확인, `Settings` 자신을 대상으로 검증하는 것으로 대체(§7.2 표에 반영). 상세는 `docs/DevLog.md` 2026-09-05 "이어서 2" 항목. **§7.3은 사용자 요청으로 이번엔 보류** |
+| 2026-09-05 | **§7.1 핵심 동선 완주 — M2-B 완료 판정 기준 충족.** 앱 재시작 없이 0번(게스트 홈)~8번(리뷰 upsert 중복 없음)을 한 번에 이어서 검증, 전 항목 1차 통과. 검증 중 공용 컴포넌트 버그 1건 발견 — `src/components/primitives/TextField.tsx`가 `multiline` 여부와 무관하게 고정 `h-12`(48px)를 걸어서 `ReviewModal`(리뷰, `numberOfLines=6`)과 `WatchRecordModal`(메모, `numberOfLines=3`) 둘 다 입력칸이 48px로 눌려 있었다. `multiline`이면 `numberOfLines` 기반 `minHeight`를 쓰도록 수정(단일 줄 입력은 회귀 없음). 상세는 `docs/DevLog.md` 2026-09-05 "이어서" 항목. **§7.2(경계 케이스)·§7.3(동시 401 재확인)은 아직 남아 있다** |
+| 2026-09-05 | **`MyPage`/`Settings`(§5.6, §1 9번, M2-B 마지막 화면) 실기기 검증 — 전 항목 통과, 인터셉터 버그 1건 발견·수정.** 닉네임 변경(빈 값·31자·무변경 disabled 포함)·공개범위 변경·로그아웃·메뉴 이동은 1차 시도에 통과. **비밀번호 변경 검증 중 발견** — 현재 비밀번호를 틀리면 폼 에러 대신 강제 로그아웃(성공 시나리오와 동일한 결과)이 나갔다. 원인은 화면 코드가 아니라 `src/api/client.ts`의 401 인터셉터 — `PATCH /api/users/me/password`가 반환하는 `401 INVALID_CREDENTIALS`(비즈니스 401, 토큰 문제 아님)를 세션 무효로 오판해 로그아웃시켰다. 상위 문서 §6.3의 에러 코드 표와 **정반대로 구현돼 있던 버그**였다 — 지금까지는 인증된 요청 안에서 비즈니스 401을 반환하는 엔드포인트가 없어서 드러나지 않았다. `SESSION_INVALID_CODES` 허용목록으로 뒤집어 수정(상세 근거는 상위 §6.3 변경 이력과 `docs/DevLog.md` 2026-09-05 참고). 재검증 결과 10개 항목 전부 통과 |
+| 2026-09-05 | **`MyPage`/`Settings`(§5.6, §1 9번) 구현.** `MyPageScreen`을 로그아웃 검증용 임시 화면에서 본구현으로 교체 — 커버 그라데이션 + 프로필 이미지(카카오 URL 없으면 아이콘 폴백) + 닉네임 + "N편 관람"(`UserProfileResponse`에 없어 `GET /api/users/{myId}/records?size=1`의 `totalElements`로 대체, `useMyRecordsCount` 신규 훅) + 메뉴 6개. `Settings`를 플레이스홀더에서 실제 화면으로 교체 — 닉네임 변경(max 30) · 공개범위 변경(`ActionSheet`) · 비밀번호 변경(react-hook-form + zod) · 로그아웃. 비밀번호 변경 성공 시 `authStore.logout()` 후 `AuthRequired`와 같은 방식으로 `AuthModal`의 `Login`으로 직접 보낸다(일반 로그아웃과 달리 명시적 이동이 필요 — 본문 §5.6 근거). `EditProfile`은 본문이 구체적으로 규정한 게 없어 플레이스홀더로 남겼다. `npx tsc --noEmit` 통과 확인 |
 | 2026-09-04 | **"스크롤 시 툴바 접기"(§5.5) 구현.** `src/hooks/useCollapsibleToolbar.ts` 신규 — `Reanimated`의 `useAnimatedScrollHandler`/`useSharedValue`/`useAnimatedStyle`/`withTiming`으로 방향 기반 접기(`{onScroll, toolbarStyle, reset}`)를 구현했다. `babel-preset-expo`가 `react-native-worklets` 설치를 감지해 워클릿 babel 플러그인을 자동으로 넣어준다는 것을 소스로 확인해 `babel.config.js`는 손대지 않았다. `MyRecordsScreen.tsx`에 통합 — 툴바를 `Animated.View`(`absolute` + `translateY`, 고정 높이 44)로, 리스트를 `Animated.FlatList`로 바꾸고 `contentContainerStyle.paddingTop`을 툴바 높이로 고정(`marginTop` 애니메이션 금지 원칙 준수). 스펙이 짚은 함정 4개 전부 반영 — ① 그리드↔리스트 토글 시 `useEffect`로 `reset()` 호출 ② 툴바에 `pointerEvents="box-none"` ③ 감싸는 `View`에 `overflow-hidden` ④ 목록이 비면 `EmptyState`만 렌더해 `onScroll`이 아예 안 붙으므로 툴바가 자연히 고정된다(별도 분기 불필요). `npx tsc --noEmit`·`expo export` 통과 확인. **실기기 검증 전이다 — 스크롤 끊김·바운스 동작·토글 후 복귀는 번들 확인만으로는 알 수 없다** |
 | 2026-09-04 | **`MyRecords` 그리드 UI 조정 — 실기기 피드백.** ① `MovieGridItem`에서 포스터 아래 제목 텍스트 제거(포스터만 표시, 접근성 라벨로만 `title` 유지). ② 그리드 열 사이 간격을 `spacing.sm`(8)에서 2로 줄이고, **그리드 모드일 때만** 화면 좌우 여백도 0으로 없애 포스터가 화면을 꽉 채우도록 했다(리스트 모드는 기존 여백 유지 — 텍스트 가독성 때문에). `npx tsc --noEmit`·`expo export` 통과 확인 |
 | 2026-09-04 | **`MyRecords`(§5.5, §1 8번) 구현.** `<AuthRequired>` 화면 게이트, `useMyRecords(userId)`(§0에서 이미 구현된 무한스크롤 훅) 연동. `src/components/movie/MovieGridItem.tsx` 신규(§4의 3열 그리드 셀) — 열 폭은 `useWindowDimensions()`로 계산해 호출부가 넘긴다. 그리드/리스트 토글은 `FlatList`의 `numColumns`을 바꿔야 해서 `key={viewMode}`로 강제 리마운트시켰다. 정렬·필터 UI는 스펙대로 넣지 않았다(5-0-D). `MyPageStack.tsx`의 `MyRecords`·`MovieDetail` 플레이스홀더를 실제 화면으로 교체 — `MovieDetail`은 `HomeStack`과 같은 컴포넌트를 공유한다(라우트 파라미터 모양이 동일). `MyPageScreen.tsx`에 "내 기록" 진입점 추가 — 진입점이 없으면 방금 만든 화면을 실기기에서 볼 방법이 없어서(Home/MyPage 때와 같은 패턴). `npx tsc --noEmit`·`expo export` 통과 확인. **실기기 검증 전이다** — 특히 7번(MovieDetail)에서 저장한 기록이 여기 반영되는지(§7.1 6번)가 M2-B 완료 판정의 핵심 동선이다 |
