@@ -2,6 +2,7 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { makePlaceholder } from '../../screens/_placeholder';
 import { MovieDetailScreen } from '../../screens/movie/MovieDetailScreen';
 import { MyPageScreen } from '../../screens/mypage/MyPageScreen';
+import { SettingsScreen } from '../../screens/mypage/SettingsScreen';
 import { MyRecordsScreen } from '../../screens/records/MyRecordsScreen';
 import type { MyPageStackParamList } from '../types';
 
@@ -12,7 +13,7 @@ export function MyPageStack() {
     <Stack.Navigator>
       <Stack.Screen name="MyPage" component={MyPageScreen} options={{ title: '마이페이지' }} />
       <Stack.Screen name="EditProfile" component={makePlaceholder('프로필 수정')} options={{ title: '프로필 수정' }} />
-      <Stack.Screen name="Settings" component={makePlaceholder('설정')} options={{ title: '설정' }} />
+      <Stack.Screen name="Settings" component={SettingsScreen} options={{ title: '설정' }} />
       <Stack.Screen name="MyRecords" component={MyRecordsScreen} options={{ title: '내 기록' }} />
       <Stack.Screen name="Wishlist" component={makePlaceholder('찜한 작품')} options={{ title: '찜한 작품' }} />
       <Stack.Screen name="CollectionList" component={makePlaceholder('컬렉션')} options={{ title: '컬렉션' }} />

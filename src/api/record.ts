@@ -9,9 +9,9 @@ import type {
 } from '../types';
 
 export const recordApi = {
-  ofUser: (userId: number, page: number) =>
+  ofUser: (userId: number, page: number, size?: number) =>
     api
-      .get<PageResponse<UserMovieListItemResponse>>(EP.records.ofUser(userId), { params: { page } })
+      .get<PageResponse<UserMovieListItemResponse>>(EP.records.ofUser(userId), { params: { page, size } })
       .then((r) => r.data),
 
   // 페이징 없는 배열 응답 — 회차 목록.

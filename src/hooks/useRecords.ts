@@ -33,6 +33,17 @@ export function useMyRecords(
   });
 }
 
+// "N편 관람" — UserProfileResponse에 watchedCount가 없어 size=1 조회의 totalElements로 얻는다
+// (docs/M2B-screens-spec.md §5.6).
+export function useMyRecordsCount(userId: number): UseQueryResult<number, ApiError> {
+  const isAuthed = useAuthStore((s) => s.status === 'authenticated');
+  return useQuery({
+    queryKey: queryKeys.records.count(userId),
+    queryFn: () => recordApi.ofUser(userId, 0, 1).then((p) => p.totalElements),
+    enabled: isAuthed,
+  });
+}
+
 export function useWatchLog(userId: number, movieId: number): UseQueryResult<WatchRecordResponse[], ApiError> {
   // GET .../records/movies/{movieId} — 회차 목록. 페이징 없는 배열 응답.
   // 로그인 의존 훅 — 비로그인 진입 시 401을 내지 않도록 막는다 (§3.4).

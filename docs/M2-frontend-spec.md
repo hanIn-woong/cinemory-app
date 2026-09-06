@@ -9,23 +9,23 @@
 
 ---
 
-## 📍 진행 현황 (최종 갱신 2026-08-30)
+## 📍 진행 현황 (최종 갱신 2026-09-06)
 
 > **번호 없는 섹션이다.** 아래 §0~§13의 번호는 다른 문서가 참조하고 있어 바꾸지 않는다.
 > **이 표는 작업이 끝날 때마다 갱신한다.**
 
-### 현재 위치 — **M2-A 완료 → M2-B 착수 대기**
+### 현재 위치 — **M2-B 완료 → M2-C 착수 대기**
 
 ```
-M2-A 기반 ✅ ──► M2-B 1군 화면 ⬜ ──► M2-C 2군 화면 ⬜ ──► M2-D 3군 화면 🔒
-   (완료)          (다음)              (10월)             (백엔드 차단)
+M2-A 기반 ✅ ──► M2-B 1군 화면 ✅ ──► M2-C 2군 화면 ⬜ ──► M2-D 3군 화면 🔒
+   (완료)          (완료)              (다음)             (백엔드 차단)
 ```
 
 | 단계 | 범위 | 상태 | 백엔드 의존 | 상세 |
 |---|---|---|---|---|
 | **M2-A**<br>기반 | 디자인 토큰 · 프리미티브 · API 클라이언트(단일 비행 인터셉터) · `authStore` · 부팅 시퀀스 · 네비게이션 골격 · 생성 타입 | ✅ **완료**<br>(실기기 검증 통과 2026-08-30) | 없음 | **`M2A-foundation-spec.md`** |
-| **M2-B**<br>1군 화면 (9월) | `Login` · `SignUp` · `Home` · `SearchResult` · `MovieDetail` · `MyRecords` · `MyPage`/`Settings` | ⬜ **착수 대기**<br>(스펙 작성 완료) | ⚠️ **B-4**(상세 평점 필드) — **병렬 가능**<br>그 외 API 완비 | **`M2B-screens-spec.md`**<br>요구사항은 §9.1~9.5 · §6 |
-| **M2-C**<br>2군 화면 (10월) | `Wishlist` · `CollectionList`/`Detail` · `Report` | ⬜ 대기 | 위시·컬렉션 ✅<br>⚠️ **B-8**(리포트 API) 미구현 → `Report`는 백엔드 M3-a와 동반 진행 | §9.6~9.8 |
+| **M2-B**<br>1군 화면 (9월) | `Login` · `SignUp` · `Home` · `SearchResult` · `MovieDetail` · `MyRecords` · `MyPage`/`Settings` | ✅ **완료**<br>(실기기 검증 통과 2026-09-06 — §7.1·§7.2·§7.3 전부) | ⚠️ **B-4**(상세 평점 필드)는 여전히 미해소 — 평점 블록만 자리를 비워 두고 진행했다 | **`M2B-screens-spec.md`**<br>요구사항은 §9.1~9.5 · §6 |
+| **M2-C**<br>2군 화면 (10월) | `Wishlist` · `CollectionList`/`Detail` · `Report` | ⬜ **다음** | 위시·컬렉션 ✅<br>⚠️ **B-8**(리포트 API) 미구현 → `Report`는 백엔드 M3-a와 동반 진행 | §9.6~9.8 |
 | **M2-D**<br>3군 화면 (여유 시) | `Social` · `CineMap` · `Recommend` | 🔒 **차단** | **B-9**(`theater` 테이블 비어 있음)<br>**B-10**(활동 피드 API 없음)<br>**B-11**(M3-b 설계 백지) | §9.9~9.11 · §13 |
 
 ### M2-A 완료 근거
@@ -35,11 +35,22 @@ M2-A 기반 ✅ ──► M2-B 1군 화면 ⬜ ──► M2-C 2군 화면 ⬜ �
 프로브 화면·임시 로그 제거, 로그 레벨)도 확인 완료. 절차와 결과는
 `M2A-foundation-spec.md` §9·§11·§12.
 
+### M2-B 완료 근거
+
+`M2B-screens-spec.md` §7 전부 실기기 통과 — **§7.1 핵심 동선**(로그인 → 검색 → 영화 선택 →
+시청 기록 저장 → 내 기록 반영, 0~8번 전 항목) · **§7.2 경계 케이스**(E-1~E-10 · G-1~G-6,
+G-5는 스택 토폴로지상 `Settings` 자신으로 대체 검증) · **§7.3 동시 401**(`MovieDetail`의
+실제 5개 병렬 호출에서 `reissue` 정확히 1회, `access-token-ttl` 임시값은 검증 직후 원복
+확인). 과정에서 발견한 버그(비밀번호 변경 시 인터셉터 오판 강제 로그아웃 · `TextField`
+multiline 높이 고정 · 무한스크롤 풋터 마운트/언마운트로 인한 스크롤 점프 · G-5 시나리오
+자체의 네비게이션 토폴로지 문제)는 전부 그 자리에서 수정·재검증했다. 상세는
+`M2B-screens-spec.md` 변경 이력과 `docs/DevLog.md` 2026-09-05·09-06.
+**B-4(상세 평점)만 의도적으로 미해소 상태로 남기고 진행했다** — 화면 자리만 비워 뒀다(§6).
+
 ### 각 단계 진입 조건
 
 | | 조건 |
 |---|---|
-| **M2-B** | 백엔드에 **B-4** 요청(`MovieDetailResponse`에 `voteAverage`/`voteCount` + `AVG(review.rating)` 집계). 화면 작업과 **병렬 가능**하므로 착수를 막지는 않는다 |
 | **M2-C** | `Report`만 **B-8**(백엔드 M3-a)에 묶인다. `Wishlist`·`Collection`은 바로 가능 |
 | **M2-D** | **셋 다 백엔드 선행이 필요하다.** 지금 만들면 빈 화면이 나온다(§2·§11) |
 
@@ -455,10 +466,19 @@ async function refreshOnce(): Promise<string> {
 | `code` | 처리 |
 |---|---|
 | `TOKEN_EXPIRED` | `refreshOnce()` 후 재시도 |
-| `INVALID_TOKEN` · `REFRESH_TOKEN_NOT_FOUND` · `REFRESH_TOKEN_REUSED` | **즉시 로그아웃** |
-| `INVALID_CREDENTIALS` | 로그인 폼에 표시 (인터셉터 개입 없음) |
+| `INVALID_TOKEN` · `REFRESH_TOKEN_NOT_FOUND` · `REFRESH_TOKEN_REUSED` · `UNAUTHORIZED` | **즉시 로그아웃** |
+| `INVALID_CREDENTIALS` | 호출부(폼)에 표시 — **인터셉터 개입 없음** |
 | `INVALID_NONCE` | nonce 재발급 후 카카오 로그인 재시도 |
 | `INVALID_OAUTH_TOKEN` | §6.5 참고 |
+
+⚠️ **이 표에 없는 401 코드는 전부 "인터셉터 개입 없음" 쪽이다.** `TOKEN_EXPIRED`가 아니라고
+곧바로 로그아웃 처리하면 안 된다 — `INVALID_CREDENTIALS`가 `/api/auth/login`(인터셉터 대상
+밖)에서만 나온다고 가정하고 짰다가, **인증된 요청 안에서 입력값이 틀려서 401을 반환하는
+엔드포인트**(예: `PATCH /api/users/me/password`의 현재 비밀번호 불일치)가 처음 생겼을 때
+실기기에서 "틀린 값 입력 → 강제 로그아웃"으로 터진 적이 있다(M2B-screens-spec.md §5.6
+변경 이력 2026-09-05). `UNAUTHORIZED`는 백엔드의 `requireAuthenticated`(viewerId null
+방어 코드, 정상 흐름에선 SecurityFilterChain이 먼저 막아 도달하지 않는 이중 방어)에서만
+나와 토큰 문제와 동치로 보고 로그아웃 대상에 포함했다.
 
 ### 6.4 저장과 부팅 시퀀스
 
@@ -1185,8 +1205,8 @@ npm i nativewind && npm i -D tailwindcss
 | 단계 | 문서 | 상태 |
 |---|---|---|
 | **M2-A** 기반 | **`M2A-foundation-spec.md`** | ✅ 완료 (2026-08-30) |
-| **M2-B** 1군 화면 | **`M2B-screens-spec.md`** | ⬜ 착수 대기 |
-| **M2-C** 2군 화면 | (M2-B 완료 후 작성) | 대기 |
+| **M2-B** 1군 화면 | **`M2B-screens-spec.md`** | ✅ 완료 (2026-09-06) |
+| **M2-C** 2군 화면 | (M2-B 완료 후 작성) | ⬜ 착수 대기 |
 | **M2-D** 3군 화면 | (백엔드 차단 해소 후) | 🔒 §11 |
 
 **모든 단계에 공통으로 적용되는 원칙**
@@ -1278,6 +1298,8 @@ export { CineMapWebView as CineMapView } from './CineMapWebView';
 
 | 날짜 | 내용 |
 |---|---|
+| 2026-09-06 | **「📍 진행 현황」·§12 갱신 — M2-B 완료, M2-C 착수 대기로 전환.** `M2B-screens-spec.md` §7(§7.1·§7.2·§7.3) 실기기 검증이 전부 끝나 현재 위치 마커·단계 표·§12 색인을 갱신했다. B-4(상세 평점)는 여전히 미해소임을 명시해 뒀다 — M2-B가 "완료"인 것은 B-4를 화면 자리 비움으로 우회했기 때문이지 B-4 자체가 해소된 게 아니다. 근거는 M2-B 완료 근거 절 신설로 §7 결과 요약(§6.3 갱신 포함)을 남겼다 |
+| 2026-09-05 | **§6.3 에러 코드 표 정정 — `UNAUTHORIZED` 추가 + "표에 없으면 개입 없음" 명시.** `Settings`(§5.6, M2-B) 실기기 검증 중 `src/api/client.ts`의 401 인터셉터가 이 표와 **정반대로 구현돼 있던 것**을 발견했다 — "표에 있는 코드만 로그아웃"이 아니라 "`TOKEN_EXPIRED`가 아니면 전부 로그아웃"으로 짜여 있어, 비밀번호 변경 폼에서 현재 비밀번호를 틀리면(`401 INVALID_CREDENTIALS`) 폼 에러 대신 강제 로그아웃됐다. `/api/auth/login`의 `INVALID_CREDENTIALS`는 애초에 `/api/auth/` 접두사 예외로 인터셉터를 안 타서 이 표가 처음 작성됐을 때는 이 구현 오류가 드러나지 않았다. 코드를 표에 맞게 수정하면서(`SESSION_INVALID_CODES` 허용목록으로 전환), 표에 없던 `UNAUTHORIZED`(백엔드 `requireAuthenticated` 이중 방어 코드 — 정상 흐름에선 도달하지 않음)도 토큰 문제로 판단해 로그아웃 대상에 추가했다. 상세 경위는 `docs/DevLog.md` 2026-09-05 항목 |
 | 2026-09-04 | **B-15·B-16 해소 확인.** 백엔드가 `PATCH /api/records/{recordId}`를 구현했다는 보고를 받고 `npm run gen:api`로 확인 — `WatchRecordUpdateRequest`(전체 치환, `movieId`·`representative` 제외)와 `updateWatchRecord` 오퍼레이션이 §11.2 설계 확정본 그대로 반영돼 있었다. 프론트도 연동 완료(실행 내역은 `M2B-screens-spec.md` 변경 이력 참고). 둘 다 §11 표에서 ✅ 완료로 갱신 |
 | 2026-09-04 | **§11에 B-15 추가.** `MovieDetail` 실기기 재검증 중 발견 — 시청 기록에 update API가 없다. `POST /api/records`·`DELETE /api/records/{id}`·`PATCH .../representative`뿐이라 잘못 기록한 시청 기록(날짜·방식·장소·별점·메모)을 고칠 방법이 없다. 삭제 후 재생성하는 우회안을 검토했으나, §7.3의 "새 기록 INSERT 시 대표 자동 승격" 규칙 때문에 대표가 아니던 기록을 이 방식으로 "수정"해도 재생성 순간 대표로 바뀌는 부작용이 있어 채택하지 않고 백엔드에 `PATCH /api/records/{recordId}` 신설을 요청하기로 했다. 항목 수 표기를 14건→15건으로 갱신(§0) |
 | 2026-08-31 | **§11에 B-13·B-14 추가.** `MovieDetail` 구현 중 새로 드러난 백엔드 갭 2건. **B-13(1군, 상세 화면 블로커)** — OTT 플랫폼 목록을 조회하는 엔드포인트가 없다. `WatchRecordCreateRequest.ottPlatformId`는 `watchType=OTT`일 때 필수인데 유효한 ID를 얻을 방법이 없어, 지금은 프론트에서 `watchType=OTT` 저장 자체를 막고 안내만 띄운다(THEATER/ETC만 동작). **B-14(낮음)** — `MovieDetailResponse`에 `backdropPath`가 없다(`posterPath`만 있음). 상세 화면 히어로 배경은 `posterPath`로 대신 렌더한다. 항목 수 표기를 12건→14건으로 갱신(§0) |

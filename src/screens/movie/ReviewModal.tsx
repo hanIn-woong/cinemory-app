@@ -49,14 +49,7 @@ export function ReviewModal({ visible, onClose, movieId, initial }: ReviewModalP
         </Txt>
         <Spacer size="lg" />
 
-        <TextField
-          label="리뷰"
-          value={content}
-          onChangeText={setContent}
-          multiline
-          numberOfLines={6}
-          textAlignVertical="top"
-        />
+        <TextField label="리뷰" value={content} onChangeText={setContent} multiline numberOfLines={6} />
 
         <Spacer size="xl" />
         <View className="flex-row">

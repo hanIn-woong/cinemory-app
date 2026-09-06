@@ -39,6 +39,15 @@ const bare = axios.create({ baseURL: BASE_URL });
 
 const AUTH_PATH_PREFIX = '/api/auth/';
 
+// 토큰/세션 자체가 무효하다는 뜻인 코드만 강제 로그아웃 대상이다(docs/M2-frontend-spec.md §6.3
+// 에러 코드 표). `UNAUTHORIZED`는 표에 없지만 viewerId가 null인 이중 방어 코드에서만 나오고
+// (backend `requireAuthenticated`), 정상적으로는 SecurityFilterChain이 먼저 막아 여기 도달하지
+// 않는 케이스라 토큰 문제로 취급한다. ⚠️ `INVALID_CREDENTIALS`처럼 **인증된 요청 안에서
+// 입력값(예: 현재 비밀번호 불일치)이 틀려서 401을 반환하는 비즈니스 코드**를 여기 넣으면
+// 안 된다 — 세션은 멀쩡한데 강제 로그아웃돼 버린다(2026-09-05, 비밀번호 변경 §5.6 실기기
+// 검증에서 발견).
+const SESSION_INVALID_CODES = new Set(['INVALID_TOKEN', 'REFRESH_TOKEN_NOT_FOUND', 'REFRESH_TOKEN_REUSED', 'UNAUTHORIZED']);
+
 // ★ 단일 비행(single-flight) 재발급 — 동시 401이 각자 reissue를 호출하면
 // 리프레시 회전 + 재사용 감지에 걸려 전 세션이 폐기된다 (docs/M2-frontend-spec.md §6.3).
 let refreshPromise: Promise<string> | null = null;
@@ -99,8 +108,11 @@ api.interceptors.response.use(undefined, async (error: AxiosError<ErrorResponseB
 
   const code = response.data?.code;
   if (code !== 'TOKEN_EXPIRED') {
-    // INVALID_TOKEN / REFRESH_TOKEN_NOT_FOUND / REFRESH_TOKEN_REUSED 등
-    await useAuthStore.getState().logout();
+    if (SESSION_INVALID_CODES.has(code ?? '')) {
+      await useAuthStore.getState().logout();
+    }
+    // 그 외 코드(예: INVALID_CREDENTIALS)는 세션과 무관한 비즈니스 401이다 — 인터셉터가
+    // 개입하지 않고 호출부의 에러 처리로 그대로 넘긴다(§6.3 에러 코드 표).
     throw normalizeError(error);
   }
 

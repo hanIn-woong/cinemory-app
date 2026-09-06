@@ -6,6 +6,165 @@ narrative로 남긴다.
 
 ---
 
+## 2026-09-06 — §7.3 동시 401 실전 재확인 통과 — M2-B 검증 완료
+
+- **환경 준비**: `cinemory-backend/src/main/resources/application.yml`의
+  `access-token-ttl`을 `PT30M`→`PT10S`로 임시 변경. 백엔드가 HTTP 요청을 기본으로는 콘솔에
+  찍지 않아(access log 없음) `POST /api/auth/reissue` 수신 횟수를 셀 수가 없었다 —
+  `logging.level.org.springframework.web.servlet.DispatcherServlet: DEBUG`를 같이 추가해
+  `DispatcherServlet`이 매 요청마다 남기는 `GET/POST "경로"` 라인으로 대체했다. 백엔드는
+  Claude Code가 직접 `./gradlew bootRun`으로 백그라운드 기동해 콘솔 출력을 그대로 관찰했다
+  (사용자 터미널에 의존하지 않아 로그를 사람이 읽어 전달할 필요가 없었다).
+- **결과 — 통과.** 로그인 → 대기 → `MovieDetail`(영화 id 1369) 진입 흐름에서, 5개 병렬 호출
+  (`GET /api/movies/1369` · `.../records/movies/1369` · `.../reviews/me?movieId=1369` ·
+  `.../wishes/me/1369` · `.../movies/1369/reviews`)이 **15:47:55.329~.340의 11ms 창** 안에
+  전부 발사됐고, 그 직전 **15:47:55.255에 `reissue`가 정확히 1회**만 발생해 5개 전부 새
+  토큰으로 성공(200/200/204/200/200)했다. `REFRESH_TOKEN_REUSED`나 로그아웃 흔적은 로그
+  전체에 없었다.
+- **관찰 — 세션 전체로는 `reissue`가 5회 찍혔지만 버그가 아니다.** 로그인 직후
+  `useLogin.onSuccess`의 단독 `userApi.me()` 호출과, 그 직후 마운트되는 화면(`MyPage`류)의
+  `useMe()`+`useMyRecordsCount` 배치가 **서로 다른 시점**에 각각 자기만의
+  단일 비행(`refreshOnce`)을 열어서 두 번 찍힌 것이었다 — **같은 배치 안에서는 여전히
+  1회로 묶였다.** 원인은 `access-token-ttl=10s`가 선제 갱신 버퍼(60초)보다 짧아서, 토큰을
+  발급받은 바로 그 순간부터 이미 "60초 내 만료" 조건을 항상 만족하기 때문이다 — 즉
+  이 세션 동안의 모든 요청 묶음이 각자 한 번씩 갱신을 트리거했을 뿐, **진짜 동시 요청을
+  중복 갱신한 사례는 없었다.** 실사용 TTL(30분)에서는 이런 잦은 트리거 자체가 없다. 부수적으로
+  로그에서 로그인이 두 번(22.5s, 26.9s) 찍힌 것도 확인했는데 첫 시도가 401이라 — 버그가
+  아니라 사용자의 단순 재시도(자격증명 오타 추정)였다.
+- **정리**: 검증 직후 `application.yml`을 원상 복구(`git diff` 무변경 확인)하고 백엔드를
+  재기동해 정상 동작 확인. `access-token-ttl`도 `DispatcherServlet` DEBUG 로깅도 남지 않았다.
+- **M2-B 완료.** §1의 실행 순서 0~10번, §7.1(핵심 동선)·§7.2(경계 케이스, G-5는 재해석해
+  대체 검증)·§7.3(동시 401)까지 전부 통과했다. 남은 알려진 이슈는 없음 — 다음은 M2-C.
+
+---
+
+## 2026-09-05 (이어서 2) — §7.2 경계 케이스 검증 중 무한스크롤 풋터 점프 버그 발견·수정 + G-5 재해석
+
+- **§7.2 진행 중 두 가지가 나왔다.**
+  1. **G-5(인증 전용 화면에서 로그아웃)를 스크립트대로 재현할 수 없음 — 사용자 지적으로 확인.**
+     `MyRecordsStackParamList`에서 `Settings`는 `MyRecords`의 자식이 아니라 `MyPage`(스택
+     루트)의 형제다. `MyRecords`에 있는 채로 `Settings`에 가려면 먼저 `MyPage`로 돌아가야
+     하는데, 네이티브 스택은 그 순간 `MyRecords`를 언마운트한다 — "`MyRecords`가 화면에
+     떠 있는 상태로 로그아웃"이라는 조합 자체가 지금 구조로는 만들 수 없다(게스트 여부와
+     무관한 **스택 토폴로지 문제**). G-5가 실제로 확인하려는 건 "인증 전용 화면이 네비게이션
+     없이 그 자리에서 게이트로 바뀌는가"이므로, **`Settings` 자신을 대상으로 검증**하는
+     쪽으로 대체했다 — `Settings`도 동일한 `isAuthed` 게이트가 있고 로그아웃 버튼이 같은
+     화면 안에 있어 같은 메커니즘을 확인할 수 있다(§5.6 검증 때 이미 관찰됨). §7.2 표의
+     `MyRecords`에서" 문구는 실제 도달 가능한 경로가 아니라는 걸 기록해 둔다.
+  2. **E-10(무한스크롤) 검증 중 "스크롤하면 화면이 순간적으로 튐/깜빡인다"는 실기기 피드백.**
+     처음엔 페이지네이션 자체가 항목을 건너뛰는 데이터 버그를 의심해 백엔드에 curl로
+     `query=의`(전체 565건/29페이지) page=1·page=2를 직접 비교해 겹치는 id가 없음을
+     확인했고, 박스오피스 스케줄러는 새벽 5시라 테스트 시간대와 무관함도 확인했다. 사용자
+     확인 결과 **스크롤 중 다른 영화를 sync하지 않았고, 증상은 데이터 누락이 아니라 순간적인
+     시각적 튐/깜빡임**이었다 — 데이터 정합성 문제가 아니라 렌더링 문제로 좁혀졌다.
+- **원인**: `SearchResultScreen.tsx`·`MyRecordsScreen.tsx` 둘 다
+  `ListFooterComponent={isFetchingNextPage ? <LoadingState /> : null}` 패턴이었다.
+  `LoadingState`(기본 variant)는 `py-12`짜리 블록이라, 페이지를 불러올 때마다 **풋터가
+  통째로 마운트→언마운트**되면서 리스트 콘텐츠 높이가 그 순간 출렁였다 — 정확히 사용자가
+  본 "스크롤 중 화면이 튐"과 일치한다. 두 화면에 동일하게 있던 공용 버그였다.
+- **수정**: `src/components/common/InfiniteScrollFooter.tsx` 신규 — `hasNextPage`인 동안은
+  **항상 같은 높이(`h-16`)**를 차지하고 그 안에서 스피너만 켜고 끈다. 높이가 바뀌는 순간을
+  리스트가 실제로 끝나는(`hasNextPage → false`) 단 한 번으로 줄였다. 두 화면 모두
+  `ListFooterComponent`를 이걸로 교체. `tsc --noEmit` 통과 확인.
+- **남겨둔 것**: `hasNextPage`가 `undefined`인 초기 순간(쿼리 미실행)엔 `?? false`로
+  방어했다. 실기기 재검증(스크롤 시 더 이상 튀지 않는지)은 다음 확인 때 진행.
+
+---
+
+## 2026-09-05 (이어서) — §7.1 핵심 동선 완주 실기기 검증 통과 + `TextField` multiline 높이 버그 발견·수정
+
+- **§7.1(핵심 동선 완주 — M2-B 완료 판정) 전체를 앱 재시작 없이 한 번에 이어서 검증** — 0번(게스트
+  홈 도달)부터 8번(리뷰 upsert 중복 없음)까지 **전 항목 1차 시도에 통과.** `M2B-screens-spec.md`
+  11행이 정의한 M2-B 완료 판정 문구("로그인 → 검색 → 영화 선택 → 시청 기록 저장 → 내 기록에
+  반영 확인까지 한 번에 이어진다")를 그대로 충족했다.
+- 검증 중 질문 두 개가 나왔다.
+  1. **"내 서재에 있는 작품"(`registered`)에 들어오는 기준** — 로그인한 사용자 개인화가 아니다.
+     `cinemory-backend`의 `MovieSearchService`가 **우리 DB(`movie` 테이블)에서
+     `title OR original_title` LIKE 매칭**만 하는 것이라(`service-layer-spec.md` 4-2, 347행),
+     **누구든(다른 유저의 검색·sync, 백엔드 시드 작업) 한 번이라도 TMDB에서 동기화한 적 있으면**
+     이후 모든 사용자의 검색에서 registered로 뜬다. "내 서재"라는 라벨과 달리 실제로는 서비스
+     DB 전체 등록 여부다 — 화면 문구가 오해를 부를 수 있다는 점은 기록해 두되, 이번엔 화면
+     문구를 바꾸지 않았다(요청받은 범위가 질문에 대한 설명이었다).
+  2. **리뷰 입력칸이 좁아서 긴 문장을 쓰기 불편하다** — 실제 버그로 확인.
+- **원인**: `src/components/primitives/TextField.tsx`가 `multiline` 여부와 무관하게 항상
+  `h-12`(48px 고정 높이) 클래스를 걸고 있었다. `ReviewModal`의 `numberOfLines={6}`,
+  `WatchRecordModal`의 메모 필드 `numberOfLines={3}`이 **전부 48px로 눌려서** `numberOfLines`
+  값이 사실상 무시되고 있었다 — 리뷰만의 문제가 아니라 앱에 존재하는 **모든 multiline
+  TextField 공용 버그**였다.
+- **수정**: `TextField`에서 `multiline`이면 `h-12` 대신 `py-3` + `numberOfLines` 기반
+  `minHeight`(`numberOfLines * 24 + 24`)를 적용하도록 바꿨다. `textAlignVertical`도
+  `multiline`일 때 기본값 `'top'`을 주도록 옮겨서, 호출부(`ReviewModal`)가 개별로 넣던
+  `textAlignVertical="top"`을 지울 수 있었다(중복 제거). `numberOfLines={6}` 기준 리뷰
+  입력칸은 이제 최소 168px, `numberOfLines={3}` 메모 필드는 최소 96px로 커진다.
+  단일 줄 입력(`multiline` 미지정)은 기존 `h-12` 그대로라 회귀 없음.
+- `tsc --noEmit` 통과 확인. 스타일 변경뿐이라 리뷰 upsert 동작 자체(§7.1 8번)는 재검증
+  필요 없다고 판단했고, 사용자에게는 입력칸 크기만 눈으로 재확인 요청.
+- **남은 것 — §7.2(경계 케이스 E/G 시리즈)·§7.3(MovieDetail 실제 5개 병렬 호출에서의 동시
+  401 재확인, `access-token-ttl` 임시 조정 필요)는 아직 체계적으로 훑지 않았다.** §7.1
+  기준으로는 M2-B 완료 판정을 충족했지만, §7 전체(§1 10번 "검증")를 다 돈 것은 아니다 —
+  다음 세션에서 진행 여부를 사용자와 정할 것.
+
+---
+
+## 2026-09-05 — `MyPage`/`Settings` 구현 (§5.6, M2-B §1 마지막 화면)
+
+- `MyPageScreen`을 로그아웃 검증용 임시 화면에서 본구현으로 교체했다: 커버(그라데이션)
+  + 프로필 이미지(96, 카카오 URL 없으면 아이콘 폴백) + 닉네임 + "N편 관람", 그 아래 메뉴
+  6개(내 기록·내 컬렉션·찜 목록·시청 분석·프로필 수정·설정). "N편 관람"은
+  `UserProfileResponse`에 없어서 `GET /api/users/{myId}/records?size=1`의
+  `totalElements`로 얻는다 — `useMyRecordsCount` 훅을 새로 추가했고, `recordApi.ofUser`에
+  `size` 파라미터를 옵션으로 얹었다(기존 무한스크롤 호출은 영향 없음, axios가 `undefined`
+  파라미터를 자동으로 뺀다).
+- `Settings`를 플레이스홀더에서 실제 화면으로 교체했다: 닉네임 변경(max 30, 가입 max 50과
+  비대칭 — §5.1 재확인) · 공개범위 변경(`ActionSheet`로 3택) · 비밀번호 변경(react-hook-form
+  + zod, `SignUpScreen`과 동일한 `applyServerErrors` 패턴) · 로그아웃.
+- **비밀번호 변경 성공 시 처리가 스펙에서 특별 취급된다** — 서버가 204(실제 생성 스키마는
+  200)로 전 세션을 폐기하므로, 일반 로그아웃(§5.1 — "화면 전환 없음, status만 바뀜")과
+  달리 **명시적으로 로그인 화면으로 보내야** 한다. `useChangePassword`의 `onSuccess`에서
+  `authStore.logout()`을 호출해 로컬 세션도 같이 정리하고, 화면에서는 `AuthRequired`와
+  같은 방식으로 `NavigationProp<RootStackParamList>`를 받아
+  `navigate('AuthModal', { screen: 'Login' })`으로 로그인 모달을 직접 띄운다.
+- `EditProfile`은 이번에 손대지 않고 플레이스홀더로 남겼다 — §5.6 본문이 `MyPage`의 메뉴
+  목록과 `Settings`만 구체적으로 규정하고 있고, 정작 닉네임/공개범위 변경 같은 "프로필
+  수정"에 해당할 법한 동작은 전부 `Settings` 테이블에 배정돼 있어서 별도 화면에 넣을
+  내용이 없었다. 프로필 사진 업로드도 여전히 금지(L-13 미결)라 더더욱 빈 화면이라 판단.
+  나중에 이 판단이 틀렸다면(예: 기획이 EditProfile에 별도 필드를 원하면) 재검토.
+- 새 화면 둘 다 `edges={['left', 'right']}`로 만들었다 — 어제(2026-09-04) 발견한 `Screen`
+  기본 `edges`의 헤더 밑 중복 여백 문제를 처음부터 피해 갔다.
+- `tsc --noEmit` 통과 확인.
+
+**후속 업데이트 (같은 날) — 실기기 검증 중 인터셉터 버그 발견·수정**
+
+닉네임 변경(빈 값·31자·무변경 disabled 포함)·공개범위 변경·로그아웃·메뉴 이동은 전부
+1차 시도에 통과했다. **비밀번호 변경 검증(현재 비밀번호를 틀리게 입력하는 케이스) 중
+심각한 버그를 발견했다** — 틀린 현재 비밀번호를 넣으면 폼 에러 대신 **로그인 모달로
+튕기며 강제 로그아웃**됐다(비밀번호 변경 *성공* 시나리오와 동일한 결과).
+
+- **원인**: `PATCH /api/users/me/password`가 현재 비밀번호 불일치 시 반환하는
+  `401 INVALID_CREDENTIALS`는 입력값 문제일 뿐 토큰/세션 문제가 아니다. 그런데
+  `src/api/client.ts`의 401 인터셉터는 *"`TOKEN_EXPIRED`가 아닌 401은 전부 강제
+  로그아웃"* 으로 짜여 있었다 — `docs/M2-frontend-spec.md` §6.3의 에러 코드 표(
+  `INVALID_TOKEN`·`REFRESH_TOKEN_NOT_FOUND`·`REFRESH_TOKEN_REUSED`만 강제 로그아웃,
+  `INVALID_CREDENTIALS`는 "인터셉터 개입 없음")와 **정반대로 구현돼 있었다.** M2-A 이후
+  이 화면이 처음으로 *인증된 요청 안에서* 비즈니스 401을 반환하는 엔드포인트였던 탓에
+  지금까지 드러나지 않았다(`/api/auth/login`의 `INVALID_CREDENTIALS`는 `/api/auth/` 접두사
+  예외로 애초에 인터셉터를 안 탄다).
+- **수정**: `SESSION_INVALID_CODES` 허용목록(`INVALID_TOKEN`·`REFRESH_TOKEN_NOT_FOUND`·
+  `REFRESH_TOKEN_REUSED`·`UNAUTHORIZED`)을 두고 이 안에 있을 때만 `authStore.logout()`을
+  호출하도록 뒤집었다. `UNAUTHORIZED`는 §6.3 표에는 없지만 백엔드의
+  `requireAuthenticated`(viewerId null 방어 코드, 정상 흐름에선 SecurityFilterChain이 먼저
+  막아 도달하지 않는 이중 방어)에서만 나와 토큰 문제와 동치로 판단해 포함시켰다. 그 외
+  코드(예: `INVALID_CREDENTIALS`)는 인터셉터가 개입하지 않고 호출부로 그대로 넘어간다.
+  단일 비행(refreshOnce) 자체와 `TOKEN_EXPIRED` 재시도 경로는 손대지 않았다.
+- 수정 후 재검증 — 틀린 현재 비밀번호는 폼에 인라인 에러로 표시되고 세션은 유지된다.
+  이후 정상 비밀번호 변경 → 로그인 모달로 이동 → 새 비밀번호로 재로그인까지 포함해
+  **10개 검증 항목 전부 통과.** `tsc --noEmit` 재확인 완료.
+- **범위 밖으로 남긴 것**: 이 인터셉터가 앞으로 붙을 다른 인증된 쓰기 엔드포인트에서도
+  비즈니스 401을 반환할 가능성이 있다 — 새 엔드포인트를 붙일 때마다 401의 의미(토큰 문제 vs
+  입력값 문제)를 확인하고 필요하면 `SESSION_INVALID_CODES`를 갱신할 것.
+
+---
+
 ## 2026-09-04 — `MyRecords` 툴바 접기 중 헤더 밑 빈 틈 발견 → `Screen` 기본 `edges` 문제로 귀결
 
 - **배경**: `MyRecords`(§5.5)에 스펙대로 스크롤 시 그리드/리스트 토글 툴바를 접는 기능을

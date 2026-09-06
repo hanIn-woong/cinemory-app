@@ -3,7 +3,7 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useState } from 'react';
 import { Alert, SectionList, View } from 'react-native';
 import type { ApiError } from '../../api/client';
-import { EmptyState, ErrorState, LoadingState } from '../../components/common';
+import { EmptyState, ErrorState, InfiniteScrollFooter, LoadingState } from '../../components/common';
 import { MovieListItem } from '../../components/movie/MovieListItem';
 import { Screen, Txt } from '../../components/primitives';
 import { useMovieSearch, useMovieSync } from '../../hooks/useMovies';
@@ -130,7 +130,9 @@ export function SearchResultScreen() {
           if (search.hasNextPage && !search.isFetchingNextPage) search.fetchNextPage();
         }}
         onEndReachedThreshold={0.5}
-        ListFooterComponent={search.isFetchingNextPage ? <LoadingState /> : null}
+        ListFooterComponent={
+          <InfiniteScrollFooter visible={search.hasNextPage ?? false} loading={search.isFetchingNextPage} />
+        }
         stickySectionHeadersEnabled={false}
       />
     </Screen>

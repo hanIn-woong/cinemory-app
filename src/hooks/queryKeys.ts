@@ -9,6 +9,8 @@ export const queryKeys = {
   records: {
     ofUser: (userId: number) => ['records', 'ofUser', userId] as const,
     ofUserMovie: (userId: number, movieId: number) => ['records', 'ofUserMovie', userId, movieId] as const,
+    // "N편 관람" 표시용 — size=1 조회. ofUser(무한스크롤)와 캐시 모양이 달라 키를 분리한다.
+    count: (userId: number) => ['records', 'count', userId] as const,
   },
   reviews: {
     me: (movieId: number) => ['reviews', 'me', movieId] as const,
