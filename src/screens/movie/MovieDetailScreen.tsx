@@ -35,11 +35,9 @@ const WATCH_TYPE_LABEL: Record<WatchType, string> = {
 // 스크림이 필요 없어지고 포스터를 배경색으로 그대로 페이드하면 이을 경계 자체가 없다.
 // 4:5로 상단 기준 크롭하는 이유는 2:3 full-bleed(390px 기기에서 585px, 화면의 69%)면
 // 장르·감독·출연이 전부 스크롤 밖으로 밀리기 때문이다.
-// ⚠️ 4:5(587px)로도 실기기에서 기본 정보 박스 하단이 살짝 스크롤 밖으로 남았다
-// (2026-09-10 실기기 확인) — 정사각형(1:1)으로 한 번 더 줄였다. 상위 §9.3이 검토했던
-// 옵션 중 하나(46%, "포스터 느낌이 옅어진다"는 우려가 있었지만)로, 첫 화면에 박스가
-// 들어오는 쪽을 우선했다.
-const HERO_ASPECT_RATIO = 1; // width:height — 정사각형
+// ⚠️ 1:1(46%)까지 줄여봤으나 실기기에서 "너무 줄였다"는 피드백으로 4:5로 롤백했다
+// (2026-09-10) — 정보 박스 노출과 포스터 비중 사이의 정확한 지점은 추후 미세조정 예정.
+const HERO_ASPECT_RATIO = 4 / 5; // width:height
 const HERO_FADE_RATIO = 0.38; // 하단 페이드 밴드 높이 비율
 
 export function MovieDetailScreen() {
@@ -194,8 +192,9 @@ export function MovieDetailScreen() {
               </Txt>
               <Spacer size="xs" />
               {/* ⚠️ 첫 아이템이 스크롤뷰 경계에 딱 붙으면 원형 아바타 왼쪽 끝이 살짝
-                  잘려 보인다(실기기 확인) — 약간의 왼쪽 여백으로 해결한다. */}
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingLeft: 3 }}>
+                  잘려 보인다(실기기 확인) — 약간의 왼쪽 여백으로 해결한다.
+                  3px로는 부족해 8px로 늘렸다(2026-09-10 재확인). */}
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingLeft: 8 }}>
                 {movie.actors.map((actor) => (
                   <View key={actor.id} className="mr-4 w-16 items-center">
                     <ActorAvatar profilePath={actor.profilePath} />
