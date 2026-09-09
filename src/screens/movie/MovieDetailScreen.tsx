@@ -91,6 +91,11 @@ export function MovieDetailScreen() {
 
   const movie = detail.data;
   const year = movie.releaseDate ? movie.releaseDate.slice(0, 4) : null;
+  // 대표 기록 → (null이면) 별점 있는 가장 최근 기록 → 없으면 별점 없음. 공개 리뷰의
+  // 파생 별점과 같은 폴백 규칙이다(2026-09-01 확정, watchLog는 이미 id DESC로 온다).
+  // 리뷰를 안 썼어도(myReview 없음) 시청 기록만으로 뜨게 하려고 watchLog에서 직접 뽑는다.
+  const representativeRecord = watchLog.data?.find((r) => r.representative);
+  const myRating = representativeRecord?.rating ?? watchLog.data?.find((r) => r.rating != null)?.rating ?? null;
   const heroUri = tmdbImageUrl(movie.posterPath, PosterSize.HERO);
   // 히어로 컨테이너는 4:5 — 원본 포스터(2:3)를 top:0에 두고 컨테이너로 아래쪽만 자른다.
   const heroHeight = windowWidth / HERO_ASPECT_RATIO;
@@ -179,6 +184,15 @@ export function MovieDetailScreen() {
         <Txt variant="caption" color="mutedForeground" className="text-center">
           {[year, movie.runtime ? `${movie.runtime}분` : null].filter(Boolean).join(' · ')}
         </Txt>
+
+        {myRating != null && (
+          <>
+            <Spacer size="md" />
+            <View className="items-center">
+              <RatingStars rating={myRating} size={28} />
+            </View>
+          </>
+        )}
 
         <Spacer size="lg" />
         <Card>
