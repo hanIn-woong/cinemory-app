@@ -6,6 +6,34 @@ narrative로 남긴다.
 
 ---
 
+## 2026-09-09 — 브랜치 정리(SDK57 미병합 발견) + M2-C §1 1~6번 구현
+
+- **M2-C 착수 전 브랜치 상태를 점검하다 실행 자체가 막혀 있던 문제를 발견했다.**
+  `feature/mypage-settings-home`(당시 작업 브랜치)이 `develop`에서 갈라진 뒤, 같은 지점에서
+  갈라진 `feature/expo-57`(SDK 56→57 업그레이드, 기기 Expo Go가 57로 고정돼 필수였고
+  실기기 검증도 이미 통과한 상태)이 한 번도 병합되지 않았다. 그런데 막 작성된
+  `M2C-screens-spec.md`는 스택을 이미 "Expo SDK 57"로 전제하고 있어서, 그대로 진행하면
+  코드는 SDK 56인 채로 SDK 57 전제의 스펙을 구현하는 셈이 되고 애초에 기기에서 열리지도
+  않는 상태였다.
+- **조치**: ① `feature/mypage-settings-home`에 `feature/expo-57`을 병합 — `docs/DevLog.md`·
+  `docs/M2-frontend-spec.md`의 변경 이력 표 충돌만 있었고(둘 다 파일 상단에 새 절을 추가하는
+  구조라 겹쳤다), 내용 손실 없이 둘 다 보존하는 방향으로 해결했다(날짜·연속 번호 순서 유지).
+  `npm install`·`tsc --noEmit` 재확인. ② M2-B 전체(1군 화면)와 SDK57이 이제 한 브랜치에
+  모였으므로 `develop`에 병합(fast-forward). ③ `feature/m2c-wishlist-collection`을 `develop`에서
+  새로 잘라 M2-C 작업 전용 브랜치로 전환 — 기존 브랜치명(`feature/mypage-settings-home`)은
+  M2-B 범위를 가리키는 이름이라 M2-C를 얹기에 부적절했다. `main`은 이번에도 갱신하지 않고
+  남겨 뒀다(별도 릴리스 시점 정책으로 보여 판단을 보류).
+- **M2-C 구현**: `M2C-screens-spec.md` §1의 실행 순서(의존 방향)를 그대로 따랐다 —
+  collection API/훅 보강 → `Wishlist` → `CollectionList`/`Detail` → `MovieDetail` 컬렉션 연결.
+  단계마다 `tsc --noEmit`으로 즉시 확인했고 마지막에 `expo export --platform android`로
+  번들 자체가 끝까지 도는 것까지 확인했다. 상세 내용은 `M2C-screens-spec.md`·
+  `M2-frontend-spec.md` 변경 이력(둘 다 2026-09-09).
+- **남은 것 — §7(검증 절차) 전체가 실기기가 필요해 이번 세션에서 못 했다.** 특히 §7.1의
+  7·8번(컬렉션 수정 시 헤더 제목 즉시 갱신, 영화 제거 시 카드 편수 갱신)은 스펙 자체가
+  "실제로 자주 깨진다"고 짚어 둔 지점이라 다음 실기기 세션에서 우선 확인할 것.
+
+---
+
 ## 2026-09-06 (이어서 5) — Expo SDK 56 → 57 업그레이드
 
 - **발단은 개발 편의 문제였다.** 사용자가 프로젝트를 SDK 56으로 유지하려 했는데 기기 쪽
