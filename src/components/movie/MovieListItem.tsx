@@ -10,14 +10,15 @@ interface MovieListItemProps {
   // 장르 등 부가 정보 — 응답에 없으면 생략한다(§4 표: 응답마다 구성이 다르다).
   subtitle?: string;
   onPress: () => void;
+  onLongPress?: () => void;
 }
 
-export function MovieListItem({ id, title, posterPath, releaseDate, subtitle, onPress }: MovieListItemProps) {
+export function MovieListItem({ id, title, posterPath, releaseDate, subtitle, onPress, onLongPress }: MovieListItemProps) {
   const year = releaseDate ? releaseDate.slice(0, 4) : undefined;
   const meta = [year, subtitle].filter(Boolean).join(' · ');
 
   return (
-    <Pressable onPress={onPress} className="flex-row items-center py-2">
+    <Pressable onPress={onPress} onLongPress={onLongPress} className="flex-row items-center py-2">
       <PosterImage id={id} posterPath={posterPath} width={80} height={112} />
       <View className="ml-3 flex-1">
         <Txt variant="h4" numberOfLines={2}>
