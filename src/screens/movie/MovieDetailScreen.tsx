@@ -1,4 +1,5 @@
 import { useRoute, type RouteProp } from '@react-navigation/native';
+import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Heart, User as UserIcon } from 'lucide-react-native';
 import { useState } from 'react';
@@ -30,9 +31,13 @@ const WATCH_TYPE_LABEL: Record<WatchType, string> = {
 
 // 히어로 블러 영역(제목·년도·러닝타임이 놓이는 하단 밴드) 높이 비율.
 const HERO_BLUR_ZONE_RATIO = 0.42;
-// ⚠️ 2단(선명/블러)만 쓰면 경계가 갑자기 바뀌어 이음매가 도드라진다(2026-09-10 실기기
-// 확인). 위에서 아래로 블러 세기를 5단계로 늘려 점진적으로 흐려지는 느낌을 근사한다.
-const HERO_BLUR_RADII = [0, 5, 11, 19, 28];
+// ⚠️ Image의 blurRadius를 여러 겹으로 잘라 쓰는 방식은 계단이 실기기에서 뚜렷이
+// 보였다(2026-09-10). expo-blur의 BlurView로 교체 — 원본 이미지 위에 얹기만 하면
+// 그 자리에서 바로 블러를 계산해 주므로 이미지를 잘라 겹치는 수작업이 필요 없고,
+// 네이티브 블러라 화질도 낫다. 홈 배경 때는 60초 루프 애니메이션 위에 실시간으로
+// 다시 계산해야 해서 Android 성능을 우려해 피했는데, 여기는 스크롤해도 안 움직이는
+// 정적 이미지 한 장이라 상황이 다르다.
+const HERO_BLUR_INTENSITIES = [15, 35, 55, 80, 100];
 // 텍스트는 밴드 전체가 아니라 위쪽 65%에만 둔다 — 아래쪽은 배경색으로 빠지는
 // 페이드 구간이라 글자를 놓으면 대비가 사라진다.
 const HERO_TEXT_ZONE_RATIO = 0.65;
@@ -130,7 +135,7 @@ export function MovieDetailScreen() {
     <Screen edges={['left', 'right']} scroll padded={false}>
       {/* 히어로 — 화면 폭 대형 포스터. MovieDetailResponse엔 backdropPath가 없어
           posterPath를 그대로 키운다(2026-09-10, 배경 이미지를 대형 포스터로 교체). 하단
-          밴드는 5단계 블러 + 배경색으로 빠지는 그라디언트로 처리해 아래 콘텐츠와
+          밴드는 5단계 BlurView + 배경색으로 빠지는 그라디언트로 처리해 아래 콘텐츠와
           자연스럽게 이어지도록 하고, 그 위에 제목·년도·러닝타임을 얹는다. */}
       <View style={{ width: windowWidth, height: heroHeight, backgroundColor: colors.muted }}>
         {heroUri && (
@@ -140,39 +145,20 @@ export function MovieDetailScreen() {
               style={{ position: 'absolute', width: windowWidth, height: heroHeight }}
               resizeMode="cover"
             />
-            {/* ⚠️ RN엔 알파 마스크가 없어 진짜 점진적 블러는 못 만든다 — 같은 이미지를
-                여러 밴드로 잘라(overflow hidden + 음수 top으로 위치 맞춤) 밴드마다 다른
-                blurRadius를 건 근사치다. 밴드 수가 많을수록 계단이 덜 보인다. */}
-            {HERO_BLUR_RADII.map((blurRadius, index) => {
-              const bandCount = HERO_BLUR_RADII.length;
+            {/* BlurView는 자기 자리에서 바로 밑을 블러 처리해 준다 — Image를 잘라 겹치는
+                수작업이 필요 없다. 세기가 다른 밴드를 쌓아 점진적으로 흐려지는 느낌을 낸다. */}
+            {HERO_BLUR_INTENSITIES.map((intensity, index) => {
+              const bandCount = HERO_BLUR_INTENSITIES.length;
               const bandHeight = heroBlurZoneHeight / bandCount;
-              // index 0 = 블러 밴드 중 맨 위(선명한 영역과 맞닿는 곳, 블러 약하게) ·
-              // 마지막 index = 맨 아래(블러 가장 강하게).
+              // index 0 = 맨 위(선명한 영역과 맞닿는 곳, 약하게) · 마지막 index = 맨 아래(가장 강하게).
               const bottomOffset = (bandCount - 1 - index) * bandHeight;
               return (
-                <View
+                <BlurView
                   key={index}
-                  style={{
-                    position: 'absolute',
-                    left: 0,
-                    right: 0,
-                    bottom: bottomOffset,
-                    height: bandHeight,
-                    overflow: 'hidden',
-                  }}
-                >
-                  <Image
-                    source={{ uri: heroUri }}
-                    style={{
-                      position: 'absolute',
-                      width: windowWidth,
-                      height: heroHeight,
-                      top: -(heroHeight - heroBlurZoneHeight + index * bandHeight),
-                    }}
-                    blurRadius={blurRadius}
-                    resizeMode="cover"
-                  />
-                </View>
+                  intensity={intensity}
+                  tint="dark"
+                  style={{ position: 'absolute', left: 0, right: 0, bottom: bottomOffset, height: bandHeight }}
+                />
               );
             })}
           </>

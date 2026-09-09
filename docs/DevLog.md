@@ -6,6 +6,32 @@ narrative로 남긴다.
 
 ---
 
+## 2026-09-10 (이어서 3) — 히어로 블러를 `Image blurRadius` 근사에서 `expo-blur`로 교체
+
+- 5단계 `blurRadius` 밴드 + 배경색 그라디언트로 고쳐도 실기기에서 "경계가 뚜렷이
+  보인다"는 재확인을 받았다. `expo-blur` 도입 비용을 설명했다 — 설치 자체는
+  `npx expo install`로 prebuild 없이 되지만(Expo Go SDK 57에 내장), 완전히 매끄러운
+  블러를 만들려면 결국 알파 마스크 라이브러리(`@react-native-masked-view`)가 더
+  필요하고, Android 성능은 실기기에서 직접 봐야 안다고 미리 알렸다. 사용자가
+  전환을 택했다.
+- **`npx expo install expo-blur`**(`~57.0.2`) 설치 — `package.json`에 이 한 줄만
+  추가됐고 `expo` 자체 버전은 건드리지 않았다(이전에 `npm install`/`expo export`가
+  `expo` 패치 버전을 조용히 올렸던 것과 달리 이번엔 `expo install`을 정식으로 써서
+  깨끗했다).
+- **구현이 오히려 단순해졌다.** `Image blurRadius` 방식은 같은 이미지를 밴드 수만큼
+  복제해 각각 다른 위치로 잘라 붙여야 했는데(음수 `top` 오프셋 계산에서 부호 실수도
+  한 번 냈었다), `BlurView`는 자기 자리 바로 밑을 블러 처리해 주므로 **밴드마다
+  `intensity`만 다르게 준 `BlurView`를 얹기만 하면 됐다.** `HERO_BLUR_INTENSITIES =
+  [15,35,55,80,100]` + `tint="dark"`.
+- **홈 배경 때 `expo-blur`를 피했던 이유(60초 루프 애니메이션 위에 실시간 재계산 →
+  Android 성능 우려)가 여기엔 적용되지 않는다고 판단**했다 — 이 히어로는 스크롤해도
+  안 움직이는 정적 이미지 한 장이다. 실기기 성능은 다음 확인 때 최종 판단.
+- `npx tsc --noEmit`·`expo export --platform android`·`expo-doctor`(무관한 기존
+  `expo` 패치 버전 경고 1건 제외 전부 통과) 확인. 상세는 `M2B-screens-spec.md`
+  변경 이력 2026-09-10(이어서 2). **다음 실기기 확인에서 이음매·성능 둘 다 봐야 한다.**
+
+---
+
 ## 2026-09-10 (이어서 2) — 그리드 포스터 해상도 개선 + `MovieDetail` 히어로를 대형 포스터로 교체
 
 - **포스터 화질 문의**: 사용자가 그리드 포스터 화질이 걱정된다고 물었다. 확인해 보니
