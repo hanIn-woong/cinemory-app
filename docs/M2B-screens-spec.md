@@ -3,7 +3,7 @@
 > 상위 문서: `docs/M2-frontend-spec.md` — **계약과 사실은 그쪽, 실행과 검증은 여기**
 > (분담 기준은 상위 문서의 「📚 문서 구성」)
 > 선행 단계: `docs/M2A-foundation-spec.md` (✅ 완료 2026-08-30)
-> 대상: `cinemory-app` — Expo SDK 56 / RN 0.85 / React 19.2 / TypeScript
+> 대상: `cinemory-app` — **Expo SDK 57 / RN 0.86 / React 19.2** / TypeScript (2026-09-06 업그레이드)
 
 **범위** — 기획노트 4-M2의 **1군**: `Login` · `SignUp` · `Home` · `SearchResult` ·
 `MovieDetail` · `MyRecords` · `MyPage`/`Settings`
@@ -412,7 +412,7 @@ TMDB 한글화 커버리지 한계이며 우리 버그가 아니다.
 **접는 것은 화면 안 툴바(그리드/리스트 토글)뿐이다. 네이티브 스택 헤더는 건드리지 않는다**
 (상위 §9.4 — 플랫폼 뷰라 부드럽게 움직일 수 없다).
 
-**Reanimated를 쓴다.** `reanimated 4.3.1` + `react-native-worklets`가 이미 설치돼 있다
+**Reanimated를 쓴다.** `reanimated 4.5.1` + `react-native-worklets`가 이미 설치돼 있다
 (NativeWind가 worklets를 요구해 들어온 것). `Animated.diffClamp`(RN 내장)를 쓰지 않는 이유:
 
 1. **이 화면은 포스터 그리드라 이미지 디코딩이 JS 스레드를 먹는다.** JS 드리븐 애니메이션은
