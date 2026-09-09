@@ -12,6 +12,7 @@ interface CollectionShelfCardProps {
   id: number;
   name: string;
   movieCount: number;
+  description?: string;
   // B-6 대기 중 — CollectionResponse에 아직 필드가 없다. 오면 그대로 채운다(docs/M2C-screens-spec.md §5.2).
   posters?: string[];
   onPress: () => void;
@@ -20,7 +21,7 @@ interface CollectionShelfCardProps {
 // 목록 카드 = "선반 위 포스터 진열"(뉴트럴 렛지, 2026-09-09 확정). 새 라이브러리 없이
 // 전부 expo-linear-gradient로 만든다(홈 배경에서 이미 사용 중). shadowColor/elevation은
 // 플랫폼별 결과가 달라 쓰지 않고, 접지 그림자는 LinearGradient 한 겹으로 대신한다.
-export function CollectionShelfCard({ id, name, movieCount, posters = [], onPress }: CollectionShelfCardProps) {
+export function CollectionShelfCard({ id, name, movieCount, description, posters = [], onPress }: CollectionShelfCardProps) {
   // ⚠️ 부족분을 빈 회색 슬롯으로 채우지 않는다 — 선반 위에서는 로딩 실패처럼 보인다.
   const visiblePosters = posters.slice(0, 5);
 
@@ -28,7 +29,7 @@ export function CollectionShelfCard({ id, name, movieCount, posters = [], onPres
     <Pressable
       onPress={onPress}
       accessible
-      accessibilityLabel={`${name}, 영화 ${movieCount}편`}
+      accessibilityLabel={[`${name}, 영화 ${movieCount}편`, description].filter(Boolean).join(', ')}
       className="overflow-hidden rounded-lg bg-card"
     >
       {/* ♿ 선반·포스터는 장식이다 — 카드는 위 accessibilityLabel 하나로만 읽혀야 한다 */}
@@ -75,13 +76,20 @@ export function CollectionShelfCard({ id, name, movieCount, posters = [], onPres
         <LinearGradient colors={[shelf.groundShadow, 'transparent']} style={{ height: 10, opacity: 0.2 }} />
       </View>
 
-      <View className="flex-row items-center justify-between px-3.5 py-2">
-        <Txt variant="body" numberOfLines={1} className="flex-1">
-          {name}
-        </Txt>
-        <Txt variant="caption" color="mutedForeground" className="ml-2">
-          영화 {movieCount}편
-        </Txt>
+      <View className="px-3.5 py-2">
+        <View className="flex-row items-center justify-between">
+          <Txt variant="body" numberOfLines={1} className="flex-1">
+            {name}
+          </Txt>
+          <Txt variant="caption" color="mutedForeground" className="ml-2">
+            영화 {movieCount}편
+          </Txt>
+        </View>
+        {description && (
+          <Txt variant="caption" color="mutedForeground" numberOfLines={1} className="mt-0.5">
+            {description}
+          </Txt>
+        )}
       </View>
     </Pressable>
   );

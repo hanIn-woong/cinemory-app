@@ -5,15 +5,14 @@ import { useEffect, useLayoutEffect, useState } from 'react';
 import { Alert, Pressable, useWindowDimensions, View } from 'react-native';
 import Animated from 'react-native-reanimated';
 import { ActionSheet, EmptyState, ErrorState, InfiniteScrollFooter, LoadingState, type ActionSheetOption } from '../../components/common';
-import { CollectionFormModal } from '../../components/collection/CollectionFormModal';
+import { CollectionEditModal } from '../../components/collection/CollectionEditModal';
 import { MovieGridItem } from '../../components/movie/MovieGridItem';
 import { MovieListItem } from '../../components/movie/MovieListItem';
 import { Screen, Txt } from '../../components/primitives';
 import { useCollapsibleToolbar } from '../../hooks/useCollapsibleToolbar';
-import { useCollectionMovies, useDeleteCollection, useRemoveMovieFromCollection } from '../../hooks/useCollection';
+import { useCollectionMovies, useDeleteCollection } from '../../hooks/useCollection';
 import type { MyPageStackParamList } from '../../navigation/types';
 import { colors, layout } from '../../theme/tokens';
-import type { CollectionMovieListItemResponse } from '../../types';
 
 type Rt = RouteProp<MyPageStackParamList, 'CollectionDetail'>;
 type Nav = NativeStackNavigationProp<MyPageStackParamList, 'CollectionDetail'>;
@@ -33,7 +32,6 @@ export function CollectionDetailScreen() {
 
   const movies = useCollectionMovies(collectionId);
   const deleteCollection = useDeleteCollection();
-  const removeMovie = useRemoveMovieFromCollection();
 
   // ⚠️ 헤더 제목은 라우트 파라미터다 — 수정 성공 후 캐시를 무효화해도 이 값은 저절로 안 바뀐다.
   // navigation.setParams로 파라미터 자체를 갱신해야 여기서도 새 제목을 받는다(§5.3).
@@ -71,24 +69,9 @@ export function CollectionDetailScreen() {
   const items = movies.data.pages.flatMap((p) => p.content);
   const cellWidth = (windowWidth - GRID_GAP * (GRID_COLUMNS - 1)) / GRID_COLUMNS;
 
-  // ⚠️ 길게 누르기만으로는 발견성이 낮다(실기기 검증에서 확인) — MovieGridItem/MovieListItem의
-  // 우상단/우측 제거 버튼과 길게 누르기 둘 다 여기로 이어진다.
-  function confirmRemoveMovie(item: CollectionMovieListItemResponse) {
-    Alert.alert(item.title ?? '영화', '이 컬렉션에서 제거할까요?', [
-      { text: '취소', style: 'cancel' },
-      {
-        text: '제거',
-        style: 'destructive',
-        onPress: () =>
-          removeMovie.mutate(
-            { collectionId, movieId: item.movieId! },
-            { onError: (error) => Alert.alert('실패', error.message) },
-          ),
-      },
-    ]);
-  }
-
   const menuOptions: ActionSheetOption[] = [
+    // ⚠️ 이름/설명 수정뿐 아니라 영화 추가·제거까지 여기서 한다(2026-09-10, 실기기 검증
+    // 피드백 — 브라우징 화면에 제거 버튼을 따로 두지 않고 편집 화면에 모았다).
     { label: '컬렉션 수정', onPress: () => setEditVisible(true) },
     {
       label: '컬렉션 삭제',
@@ -112,8 +95,7 @@ export function CollectionDetailScreen() {
 
   return (
     <Screen padded={false} edges={['left', 'right']}>
-      {/* 컬렉션 제목 밑 설명 — 접기 대상이 아니다(항상 보인다). 실기기 검증에서 설명이 어디에도
-          안 보인다는 지적을 받아 추가했다(§7.1 7번). */}
+      {/* 컬렉션 제목 밑 설명 — 접기 대상이 아니다(항상 보인다). */}
       {description && (
         <View className="border-b border-border px-4 py-2">
           <Txt variant="caption" color="mutedForeground" numberOfLines={2}>
@@ -138,7 +120,7 @@ export function CollectionDetailScreen() {
         {items.length === 0 ? (
           // ⚠️ C-4 — 빈 컬렉션도 툴바는 고정된 채로 보인다(스크롤이 없어 접기 자체가 안 걸린다).
           <View style={{ paddingTop: TOOLBAR_HEIGHT, flex: 1 }}>
-            <EmptyState title="담긴 영화가 없어요" description="영화 상세에서 이 컬렉션에 추가해보세요" />
+            <EmptyState title="담긴 영화가 없어요" description="헤더 메뉴의 '컬렉션 수정'에서 추가해보세요" />
           </View>
         ) : (
           <Animated.FlatList
@@ -163,8 +145,6 @@ export function CollectionDetailScreen() {
                   posterPath={item.posterPath}
                   width={cellWidth}
                   onPress={() => navigation.navigate('MovieDetail', { movieId: item.movieId! })}
-                  onLongPress={() => confirmRemoveMovie(item)}
-                  onRemove={() => confirmRemoveMovie(item)}
                 />
               ) : (
                 <MovieListItem
@@ -173,8 +153,6 @@ export function CollectionDetailScreen() {
                   posterPath={item.posterPath}
                   subtitle={[item.releaseYear, item.directorNames].filter(Boolean).join(' · ')}
                   onPress={() => navigation.navigate('MovieDetail', { movieId: item.movieId! })}
-                  onLongPress={() => confirmRemoveMovie(item)}
-                  onRemove={() => confirmRemoveMovie(item)}
                 />
               )
             }
@@ -191,11 +169,13 @@ export function CollectionDetailScreen() {
 
       <ActionSheet visible={menuVisible} onClose={() => setMenuVisible(false)} options={menuOptions} />
 
-      <CollectionFormModal
+      <CollectionEditModal
         visible={editVisible}
         onClose={() => setEditVisible(false)}
-        editing={{ collectionId, name: title, description }}
-        onSaved={(data) =>
+        collectionId={collectionId}
+        name={title}
+        description={description}
+        onInfoSaved={(data) =>
           navigation.setParams({ title: data.name ?? title, description: data.description ?? undefined })
         }
       />

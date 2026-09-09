@@ -154,8 +154,9 @@ M2-B에서 **의도적으로 M2-C로 미룬 것**이 하나 있다. 잊으면 �
 
 | 컴포넌트 | 역할 | 주의 |
 |---|---|---|
-| `CollectionShelfCard` | 목록의 카드 = **선반 위 포스터 진열** + 이름 + "영화 N편" | §5.2 — 선반 색은 **반드시 토큰** |
-| `CollectionFormModal` | 생성/수정 **겸용** 모달 | 초기값만 다르다. `WatchRecordModal`이 같은 패턴 |
+| `CollectionShelfCard` | 목록의 카드 = **선반 위 포스터 진열** + 이름 + "영화 N편" + 설명(있으면) | §5.2 — 선반 색은 **반드시 토큰** |
+| `CollectionFormModal` | **생성 전용** 모달 | §4 — 2026-09-10부터 수정은 `CollectionEditModal`로 분리 |
+| `CollectionEditModal` | 이름/설명 수정 + 영화 추가·제거 통합 편집 화면 | §5.3-A (2026-09-10 신설) |
 | `CollectionPickerSheet` | 상세 화면의 "컬렉션에 추가" 선택 시트 | §5.4 |
 
 ---
@@ -210,7 +211,12 @@ DVD를 꽂아 둔 느낌. 채택안은 **B(뉴트럴 렛지)** 다.
   ├ 앞면  height 3  · 상판보다 어둡게 (모서리)
   └ 밑그림자 height 10 · LinearGradient(검정 7%→투명)
 [meta]   이름 ·······  영화 N편
+         설명(있으면, 1줄)
 ```
+
+**⚠️ 설명도 목록 카드에 표시한다(2026-09-10 실기기 피드백 — 상세에만 있어 확인할 방법이
+없었다).** 이름/편수 줄 아래 `numberOfLines={1}`로 잘라 보여준다. 없으면 렌더하지 않는다.
+`accessibilityLabel`도 `"{이름}, 영화 N편, {설명}"`으로 같이 갱신한다.
 
 카드 높이 **≈ 130px**. 전부 `expo-linear-gradient`로 만든다 — **새 라이브러리를 넣지 않는다**
 (홈 배경에서 이미 쓰고 있다).
@@ -288,7 +294,32 @@ export const shelf = {
 - 헤더 `MoreVertical` → `ActionSheet` — **컬렉션 수정 / 컬렉션 삭제(destructive)**
 - **삭제는 `Alert.alert` 확인 필수.** 성공 시 `['collections']` 무효화 + **`navigation.goBack()`**
   (지운 컬렉션 화면에 남아 있으면 다음 조회가 `COLLECTION_NOT_FOUND`로 터진다)
-- 영화 항목 **길게 누르기** → "이 컬렉션에서 제거" (`DELETE .../movies/{movieId}`)
+- 영화 항목은 **탭으로 `MovieDetail` 이동만** 한다 — 제거는 §5.3-A(컬렉션 수정 화면)로 이동
+  (2026-09-10, 아래 참고)
+
+#### 5.3-A ★ "컬렉션 수정" = 이름/설명 + 영화 추가·제거 통합 편집 (2026-09-10 실기기 피드백 반영)
+
+최초 설계는 **길게 누르기 → 제거**였는데, 실기기 검증에서 두 가지가 지적됐다 — ①
+브라우징 그리드에 표시했던 제거 버튼(X)이 **UI상 어색하다** ② 이름/설명 수정과 별개로
+**영화 추가·제거도 한 곳에서 하고 싶다**(지금은 영화 상세에서 한 편씩만 담을 수 있다).
+그래서 `CollectionFormModal`(생성 전용으로 축소)과 별도로 **`CollectionEditModal`**을
+신설해 "컬렉션 수정" 진입점을 여기로 바꿨다.
+
+**구성 — 전체 화면 모달**
+
+1. 상단 — 이름/설명 `TextField` + 저장 버튼(`PATCH /api/collections/{id}`, 항상 전체 필드 전송)
+2. 탭 3개
+   - **현재 영화** — 3열 그리드, 각 셀 우상단에 X(`MovieGridItem`의 `onRemove`) →
+     `DELETE .../movies/{movieId}`. 편집 화면 전용이라 브라우징 화면(§5.3)엔 더 이상 없다
+   - **검색해서 추가** — `useMovieSearch` 재사용(`SearchResultScreen`과 같은 registered/
+     suggestion 2섹션 로직). `suggestion`은 `movieId`가 없어 **`sync` 후 그 결과로 담는다**
+     (검색 화면의 `handleSuggestionPress`와 동일 패턴, 다만 이동 대신 추가)
+   - **내 기록에서 추가** — `useMyRecords` 재사용. 이미 시청 기록이 있는 영화라 검색보다 빠르다
+3. 각 행은 담김 여부(`existingIds`, 현재 영화 목록에서 파생)에 따라 **"추가"/"담김"** 표시
+
+**⚠️ 그리드 셀 탭이 `MovieDetail`로 이동하지 않는다.** 모달이 네비게이션 스택 위에 뜬
+`<Modal>`이라, 안에서 스택을 이동하면 모달이 열린 채로 뒤에서 화면이 바뀌는 혼란만 남는다.
+편집 화면에서는 포스터 탭이 아무 동작도 하지 않고 X만 제거를 수행한다.
 
 **⚠️ 수정 모달의 초기값을 채울 방법이 지금은 없다 — 파라미터를 넓힌다**
 
@@ -400,11 +431,16 @@ SELECT collection_id, poster_path FROM (
 | 4 | `컬렉션 생성` → 목록에 나타난다 |
 | 5 | 상세 화면 → **컬렉션에 추가** → 그 컬렉션 상세에 영화가 있다 |
 | 6 | **같은 영화를 같은 컬렉션에 다시 추가** → *"이미 있어요"* 가 뜬다 (§5.4) |
-| 7 | 컬렉션 **수정**(이름+설명) → **헤더 제목이 즉시 바뀐다** · 다시 열어도 **설명이 남아 있다** ★ |
-| 8 | 컬렉션에서 영화 제거 → 뒤로 나가면 **카드의 "영화 N편"이 줄어 있다** ★ |
+| 7 | 컬렉션 **수정**(이름+설명, `CollectionEditModal`) → **헤더 제목이 즉시 바뀐다** · **목록 카드에도 설명이 보인다**(§5.2) · 다시 열어도 **설명이 남아 있다** ★ |
+| 8 | `CollectionEditModal`의 "현재 영화" 탭에서 **X로 제거** → 뒤로 나가면 **카드의 "영화 N편"이 줄어 있다** ★ |
+| 8-A | 같은 모달의 "검색해서 추가"·"내 기록에서 추가" 탭에서 영화 선택 → "현재 영화" 탭에 바로 반영, 다시 선택하면 **"담김"으로 비활성** |
 | 9 | 컬렉션 **삭제** → 목록으로 되돌아오고 카드가 사라진다 |
 
 ★ **7·8번이 실제로 자주 깨진다** — 7은 라우트 파라미터 갱신(§5.3), 8은 목록 키 무효화(§3.1).
+
+> **2026-09-10 변경** — 최초 설계(길게 누르기 → 제거)는 실기기 검증에서 브라우징 화면의
+> 제거 버튼(X)이 UI상 어색하다는 지적과, 추가·제거를 한 곳에서 하고 싶다는 요청을 받아
+> "컬렉션 수정" 화면(`CollectionEditModal`)으로 통합했다 — §5.3-A 참고.
 
 ### 7.2 경계 케이스
 
@@ -465,6 +501,7 @@ SELECT collection_id, poster_path FROM (
 
 | 날짜 | 내용 |
 |---|---|
+| 2026-09-10 | **실기기 §7.1 검증 중 7·8번 재설계 — "컬렉션 수정"에 영화 추가·제거 통합.** ① **7번**: 이름 수정은 즉시 반영되는데 설명은 상세 화면 어디에도 안 보인다는 지적 → 목록 카드(`CollectionShelfCard`)에 설명 한 줄을 추가했다(§5.2, `accessibilityLabel`도 갱신). ② **8번**: 브라우징 그리드에 뒀던 제거용 X 버튼이 "UI상 안 좋다"는 피드백 + "추가·제거를 한 곳에서 하고 싶다"는 요청 → 브라우징 화면(§5.3)에서 제거 기능 자체를 없애고, `CollectionFormModal`을 **생성 전용**으로 되돌린 뒤 **`CollectionEditModal`**(§5.3-A)을 신설해 이름/설명 수정 + "현재 영화"(X로 제거) + "검색해서 추가"(`useMovieSearch` 재사용, suggestion은 sync 후 추가) + "내 기록에서 추가"(`useMyRecords` 재사용) 3탭을 한 모달에 묶었다. `MovieGridItem`의 `onRemove`는 이 편집 화면 전용으로 남기고 `MovieListItem`의 `onRemove`·양쪽의 `onLongPress`는 쓰는 곳이 없어져 제거했다(죽은 코드 방지). `npx tsc --noEmit`·`expo export --platform android` 통과 |
 | 2026-09-09 | **§1 실행 순서 1~6번 구현 완료 — 실기기 검증(§7) 전.** ① `src/api/collection.ts`에 PATCH·DELETE·영화 추가/제거 4메서드 추가(백엔드 스키마가 이미 생성돼 있어 `gen:api` 재실행 불필요, `CollectionUpdateRequest`·`AddMoviesToCollectionRequest/Response`를 `src/types/index.ts`에 별칭 추가). ② `useCollection.ts` 재작성 — `useMyCollections`·`useCollectionMovies`를 `useInfiniteQuery`로 전환, `useCreateCollection` 무효화 누락 수정, `useUpdateCollection`·`useDeleteCollection`·`useAddMoviesToCollection`·`useRemoveMovieFromCollection` 신설(영화 추가/제거는 §3.1 무효화 매트릭스대로 상세+목록 키를 함께 무효화). ③ `WishlistScreen` — `MyRecordsScreen`을 구조째 베낌. ④ `CollectionShelfCard`(선반 진열, `expo-linear-gradient`만 사용, `tokens.ts`의 `shelf` 토큰 참조, 포스터·선반 접근성 숨김) + `CollectionFormModal`(생성/수정 겸용) + `CollectionListScreen`. ⑤ `CollectionDetailScreen` — 그리드/리스트 토글+툴바 접기, 헤더 `MoreVertical` ActionSheet(수정 시 `navigation.setParams`로 헤더 제목 즉시 갱신·삭제 시 `goBack`), 영화 길게 눌러 컬렉션에서 제거. `MyPageStackParamList`·`SocialStackParamList`의 `CollectionDetail`에 `description` 추가(§5.3 (A)안). ⑥ `CollectionPickerSheet` — `MovieDetailScreen`의 `Alert.alert('준비 중', ...)`를 교체, 게스트에게도 버튼을 보이고 `useRequireAuth()`로 감쌈(G-1), `addedCount`/`skippedCount` 분기, 컬렉션 0개에서 생성 직후 바로 담기(C-3). 부수 변경 — `PosterImage`에 `radius` prop 추가(선반 카드용 3px 모서리), `MovieGridItem`/`MovieListItem`에 `onLongPress` 추가. `npx tsc --noEmit`·`expo export --platform android` 통과. **§7(검증 절차)은 실기기가 필요해 다음 세션으로 남긴다** |
 | 2026-09-09 | **`Report` 분리 확정 + 컬렉션 카드를 선반 진열로 확정(B안).** ① **`Report`는 M2-C2(백엔드 M3-a 동반)로 분리**했다 — 넣어 두면 M2-C가 영원히 완료되지 않는다(§0.2). ② **컬렉션 카드 = 선반 위 포스터 진열**(§5.2). 와이어프레임의 포스터 5칸 나열을 *"서재에 DVD를 전시한 모습"* 으로 발전시킨 것으로, 3안(A 나무 · B 뉴트럴 · C 진열장)을 시안으로 비교해 **B(뉴트럴 렛지)** 를 택했다 — 흰 배경 + 시안 팔레트와 톤이 맞고 **새 색 계열을 들이지 않는다.** 구현은 전부 `expo-linear-gradient`(이미 홈 배경에서 사용 중)라 **라이브러리 추가가 없다.** 확정한 세부 넷 — ⓐ **선반 색은 반드시 토큰**(`tokens.ts`의 `shelf`): A↔B 전환을 **hex 6개 교체**로 만들기 위한 것이고, 컴포넌트에 박으면 카드·빈 상태·스켈레톤을 전부 찾아다녀야 한다. ⓑ **`shadowColor`/`elevation` 금지** — 플랫폼별로 결과가 다르고 Android는 그림자 방향을 줄 수 없어 "빛이 위에서 온다"가 성립하지 않는다. 접지 그림자는 `LinearGradient` 한 겹. ⓒ **빈 슬롯을 채우지 않는다** — 와이어프레임의 회색 사각형은 선반 위에서 **로딩 실패처럼** 보인다. ⓓ **`w92` 사용** — 홈 배경과 같은 사이즈라 **이미지 캐시가 겹친다.** ★ **이 디자인의 실질적 이점은 B-6을 기다리지 않아도 된다는 것**이다 — 빈 선반이 그 자체로 성립하므로(영화 0편 컬렉션과 같은 모습) 선반·카드를 먼저 완성하고 `previewPosterPaths`가 오면 `posters` prop만 채우면 된다. 시그니처를 처음부터 `posters?: string[]`로 열어 둔다. 함께 **§6.1에 B-6의 백엔드 구현 방향**(윈도 함수 1쿼리 — 화면 전체 2→3쿼리)을 적어 요청 비용이 작다는 근거를 남겼다 |
 | 2026-09-09 | **초안 작성.** 백엔드 소스를 직접 대조해(`CollectionController` 7개 엔드포인트 · DTO 6종 · `UserAccessPolicy` · 리포지토리 정렬) 상위 §9.6~§9.8과 맞췄고, 그 과정에서 **B-18(컬렉션 목록·컬렉션 영화 목록의 정렬 미지정)** 을 새로 발견해 등록했다 — 위시만 `OrderByIdDesc`가 있고 컬렉션 두 곳에는 없어, **페이지 경계에서 중복·누락이 나는데 20개 미만에서는 재현되지 않는다.** 함께 정리한 결정 넷 — ① **`Report`를 M2-C에서 분리**(§0.2): 백엔드에 리포트 컨트롤러가 실제로 없음을 확인했고, 넣어 두면 M2-C가 영원히 완료되지 않는다. ② **`CollectionDetail` 파라미터에 `description` 추가**(§5.3): `CollectionUpdateRequest`가 전체 치환이라 설명을 모르면 **수정할 때마다 설명이 지워진다** — 치명적인데 조용한 종류다. ③ **영화 추가/제거 무효화에 목록 키를 포함**(§3.1): `movieCount`가 목록 응답에 들어 있어 상세만 무효화하면 카드 편수가 어긋난다. ④ **"토스트" → `Alert.alert`**(§5.4): 프로젝트에 토스트 인프라가 없고 M2-B 전체가 `Alert.alert`로 통일돼 있다. 기존 훅 3건의 결함(`useMyCollections`·`useCollectionMovies`의 페이지 0 고정, `useCreateCollection`의 무효화 누락)도 §3에 적었다 |

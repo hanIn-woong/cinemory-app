@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Alert, Modal, View } from 'react-native';
 import { Button, Screen, Spacer, TextField, Txt } from '../../components/primitives';
-import { useCreateCollection, useUpdateCollection } from '../../hooks/useCollection';
+import { useCreateCollection } from '../../hooks/useCollection';
 import type { CollectionResponse } from '../../types';
 
 const NAME_MAX = 50;
@@ -10,16 +10,15 @@ const DESCRIPTION_MAX = 500;
 interface CollectionFormModalProps {
   visible: boolean;
   onClose: () => void;
-  // 있으면 수정 모드(PATCH, 전체 치환), 없으면 새로 작성(POST).
-  editing?: { collectionId: number; name: string; description?: string | null } | null;
-  // 수정 성공 시 호출부가 라우트 파라미터 등 화면 상태를 갱신할 수 있도록 결과를 넘겨준다.
+  // 생성 성공 시 호출부가 이어서 동작할 수 있도록 결과를 넘겨준다(예: 방금 만든 컬렉션에
+  // 영화 바로 담기 — CollectionPickerSheet §5.4).
   onSaved?: (result: CollectionResponse) => void;
 }
 
-// 생성/수정 겸용 — 초기값만 다르다(WatchRecordModal과 같은 패턴, docs/M2C-screens-spec.md §4).
-export function CollectionFormModal({ visible, onClose, editing, onSaved }: CollectionFormModalProps) {
+// 컬렉션 생성 전용 — 수정은 CollectionEditModal이 맡는다(2026-09-10, 실기기 검증 피드백으로
+// 이름/설명 편집과 영화 추가·제거를 한 화면에 통합하면서 분리했다).
+export function CollectionFormModal({ visible, onClose, onSaved }: CollectionFormModalProps) {
   const createCollection = useCreateCollection();
-  const updateCollection = useUpdateCollection();
 
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
@@ -27,12 +26,10 @@ export function CollectionFormModal({ visible, onClose, editing, onSaved }: Coll
 
   useEffect(() => {
     if (!visible) return;
-    setName(editing?.name ?? '');
-    setDescription(editing?.description ?? '');
+    setName('');
+    setDescription('');
     setNameError(undefined);
-  }, [visible, editing]);
-
-  const isPending = editing ? updateCollection.isPending : createCollection.isPending;
+  }, [visible]);
 
   function handleSubmit() {
     const trimmedName = name.trim();
@@ -51,37 +48,23 @@ export function CollectionFormModal({ visible, onClose, editing, onSaved }: Coll
     }
     setNameError(undefined);
 
-    // ⚠️ CollectionUpdateRequest는 전체 치환이다 — name은 @NotBlank라 생략하면 400,
-    // description을 생략하면 조용히 지워진다. 두 필드를 항상 같이 보낸다.
-    const body = { name: trimmedName, description: description.trim() || undefined };
-
-    if (editing) {
-      updateCollection.mutate(
-        { collectionId: editing.collectionId, body },
-        {
-          onSuccess: (data) => {
-            onSaved?.(data);
-            onClose();
-          },
-          onError: (error) => Alert.alert('저장 실패', error.message),
-        },
-      );
-    } else {
-      createCollection.mutate(body, {
+    createCollection.mutate(
+      { name: trimmedName, description: description.trim() || undefined },
+      {
         onSuccess: (data) => {
           onSaved?.(data);
           onClose();
         },
         onError: (error) => Alert.alert('저장 실패', error.message),
-      });
-    }
+      },
+    );
   }
 
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
       <Screen scroll>
         <Spacer size="lg" />
-        <Txt variant="h3">{editing ? '컬렉션 수정' : '컬렉션 만들기'}</Txt>
+        <Txt variant="h3">컬렉션 만들기</Txt>
         <Spacer size="lg" />
 
         <TextField
@@ -113,7 +96,7 @@ export function CollectionFormModal({ visible, onClose, editing, onSaved }: Coll
             취소
           </Button>
           <Spacer size="md" horizontal />
-          <Button onPress={handleSubmit} loading={isPending} className="flex-1">
+          <Button onPress={handleSubmit} loading={createCollection.isPending} className="flex-1">
             저장
           </Button>
         </View>

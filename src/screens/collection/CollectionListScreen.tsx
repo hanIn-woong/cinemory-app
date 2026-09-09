@@ -75,6 +75,7 @@ export function CollectionListScreen() {
               id={item.id!}
               name={item.name!}
               movieCount={item.movieCount ?? 0}
+              description={item.description ?? undefined}
               onPress={() =>
                 navigation.navigate('CollectionDetail', {
                   collectionId: item.id!,
