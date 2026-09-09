@@ -1,13 +1,13 @@
 import { useRoute, type RouteProp } from '@react-navigation/native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Heart, User as UserIcon } from 'lucide-react-native';
 import { useState } from 'react';
-import { Alert, Image, Pressable, ScrollView, View } from 'react-native';
+import { Alert, Image, Pressable, ScrollView, useWindowDimensions, View } from 'react-native';
 import { ActionSheet, EmptyState, ErrorState, LoadingState, type ActionSheetOption } from '../../components/common';
 import { CollectionPickerSheet } from '../../components/collection/CollectionPickerSheet';
-import { PosterImage } from '../../components/movie/PosterImage';
 import { RatingStars } from '../../components/movie/RatingStars';
 import { Button, Card, Divider, Screen, Spacer, Txt } from '../../components/primitives';
-import { BackdropSize, ProfileSize, tmdbImageUrl } from '../../constants/tmdb';
+import { PosterSize, ProfileSize, tmdbImageUrl } from '../../constants/tmdb';
 import { useMovieDetail } from '../../hooks/useMovies';
 import { useDeleteRecord, useSetRepresentative, useWatchLog } from '../../hooks/useRecords';
 import { useRequireAuth } from '../../hooks/useRequireAuth';
@@ -15,7 +15,7 @@ import { useMovieReviews, useMyReview } from '../../hooks/useReview';
 import { useIsWished, useWishToggle } from '../../hooks/useWishlist';
 import type { HomeStackParamList } from '../../navigation/types';
 import { useAuthStore } from '../../store/authStore';
-import { colors } from '../../theme/tokens';
+import { colors, layout } from '../../theme/tokens';
 import type { WatchRecordResponse, WatchType } from '../../types';
 import { ReviewModal } from './ReviewModal';
 import { WatchRecordModal } from './WatchRecordModal';
@@ -28,8 +28,13 @@ const WATCH_TYPE_LABEL: Record<WatchType, string> = {
   ETC: '기타',
 };
 
+// 히어로 블러 영역(제목·년도·러닝타임이 놓이는 하단 밴드) 높이 비율.
+const HERO_BLUR_ZONE_RATIO = 0.42;
+const HERO_BLUR_RADIUS = 30;
+
 export function MovieDetailScreen() {
   const { movieId } = useRoute<Rt>().params;
+  const { width: windowWidth } = useWindowDimensions();
   const isAuthed = useAuthStore((s) => s.status === 'authenticated');
   const myId = useAuthStore((s) => s.user?.id);
   const requireAuth = useRequireAuth();
@@ -75,7 +80,10 @@ export function MovieDetailScreen() {
 
   const movie = detail.data;
   const year = movie.releaseDate ? movie.releaseDate.slice(0, 4) : null;
-  const heroUri = tmdbImageUrl(movie.posterPath, BackdropSize.DETAIL);
+  const heroUri = tmdbImageUrl(movie.posterPath, PosterSize.HERO);
+  // 2:3 포스터 비율 그대로 화면 폭에 꽉 채운다.
+  const heroHeight = windowWidth / layout.posterAspectRatio;
+  const heroBlurZoneHeight = heroHeight * HERO_BLUR_ZONE_RATIO;
 
   function recordSheetOptions(record: WatchRecordResponse): ActionSheetOption[] {
     const options: ActionSheetOption[] = [
@@ -115,25 +123,64 @@ export function MovieDetailScreen() {
 
   return (
     <Screen edges={['left', 'right']} scroll padded={false}>
-      {/* 히어로 — MovieDetailResponse엔 backdropPath가 없어 posterPath로 대신한다 */}
-      <View style={{ height: 256, backgroundColor: colors.muted }}>
-        {heroUri && <Image source={{ uri: heroUri }} style={{ width: '100%', height: '100%' }} blurRadius={2} />}
+      {/* 히어로 — 화면 폭 대형 포스터. MovieDetailResponse엔 backdropPath가 없어
+          posterPath를 그대로 키운다(2026-09-10, 배경 이미지를 대형 포스터로 교체). 하단
+          밴드는 블러 + 어두운 그라디언트로 처리하고 그 위에 제목·년도·러닝타임을 얹는다. */}
+      <View style={{ width: windowWidth, height: heroHeight, backgroundColor: colors.muted }}>
+        {heroUri && (
+          <>
+            <Image
+              source={{ uri: heroUri }}
+              style={{ position: 'absolute', width: windowWidth, height: heroHeight }}
+              resizeMode="cover"
+            />
+            {/* ⚠️ RN엔 알파 마스크가 없어 진짜 점진적 블러는 못 만든다 — 같은 이미지를 하단
+                밴드 높이만큼 잘라(overflow hidden + 음수 top으로 위치 맞춤) 블러radius를
+                건 두 번째 레이어로 얹고, 그 위 그라디언트로 이음매를 가린다(근사치). */}
+            <View
+              style={{
+                position: 'absolute',
+                left: 0,
+                right: 0,
+                bottom: 0,
+                height: heroBlurZoneHeight,
+                overflow: 'hidden',
+              }}
+            >
+              <Image
+                source={{ uri: heroUri }}
+                style={{
+                  position: 'absolute',
+                  width: windowWidth,
+                  height: heroHeight,
+                  top: -(heroHeight - heroBlurZoneHeight),
+                }}
+                blurRadius={HERO_BLUR_RADIUS}
+                resizeMode="cover"
+              />
+            </View>
+          </>
+        )}
+        <LinearGradient
+          colors={['transparent', 'rgba(0,0,0,0.45)', 'rgba(0,0,0,0.88)']}
+          locations={[0, 0.4, 1]}
+          style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: heroBlurZoneHeight }}
+        />
+        <View
+          style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: heroBlurZoneHeight }}
+          className="items-center justify-center px-6"
+        >
+          <Txt variant="h2" color="primaryForeground" numberOfLines={2} className="text-center">
+            {movie.title}
+          </Txt>
+          <Spacer size="xs" />
+          <Txt variant="body" color="primaryForeground" className="text-center">
+            {[year, movie.runtime ? `${movie.runtime}분` : null].filter(Boolean).join(' · ')}
+          </Txt>
+        </View>
       </View>
 
       <View className="px-4">
-        <View style={{ marginTop: -56 }} className="flex-row items-end">
-          <PosterImage id={movie.id!} posterPath={movie.posterPath} width={112} height={160} size="DETAIL" />
-          <View className="ml-3 flex-1 pb-1">
-            <Txt variant="h2" numberOfLines={2}>
-              {movie.title}
-            </Txt>
-            <Spacer size="xs" />
-            <Txt variant="caption" color="mutedForeground">
-              {[year, movie.runtime ? `${movie.runtime}분` : null].filter(Boolean).join(' · ')}
-            </Txt>
-          </View>
-        </View>
-
         <Spacer size="lg" />
         <Card>
           <InfoRow label="장르" value={movie.genres?.map((g) => g.name).join(', ')} />
