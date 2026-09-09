@@ -4,18 +4,11 @@ import { LayoutGrid, List, MoreVertical } from 'lucide-react-native';
 import { useEffect, useLayoutEffect, useState } from 'react';
 import { Alert, Pressable, useWindowDimensions, View } from 'react-native';
 import Animated from 'react-native-reanimated';
-import {
-  ActionSheet,
-  EmptyState,
-  ErrorState,
-  InfiniteScrollFooter,
-  LoadingState,
-  type ActionSheetOption,
-} from '../../components/common';
+import { ActionSheet, EmptyState, ErrorState, InfiniteScrollFooter, LoadingState, type ActionSheetOption } from '../../components/common';
 import { CollectionFormModal } from '../../components/collection/CollectionFormModal';
 import { MovieGridItem } from '../../components/movie/MovieGridItem';
 import { MovieListItem } from '../../components/movie/MovieListItem';
-import { Screen } from '../../components/primitives';
+import { Screen, Txt } from '../../components/primitives';
 import { useCollapsibleToolbar } from '../../hooks/useCollapsibleToolbar';
 import { useCollectionMovies, useDeleteCollection, useRemoveMovieFromCollection } from '../../hooks/useCollection';
 import type { MyPageStackParamList } from '../../navigation/types';
@@ -36,7 +29,6 @@ export function CollectionDetailScreen() {
   const [viewMode, setViewMode] = useState<ViewMode>('grid');
   const [menuVisible, setMenuVisible] = useState(false);
   const [editVisible, setEditVisible] = useState(false);
-  const [removeTarget, setRemoveTarget] = useState<CollectionMovieListItemResponse | null>(null);
   const { onScroll, toolbarStyle, reset } = useCollapsibleToolbar(TOOLBAR_HEIGHT);
 
   const movies = useCollectionMovies(collectionId);
@@ -79,6 +71,23 @@ export function CollectionDetailScreen() {
   const items = movies.data.pages.flatMap((p) => p.content);
   const cellWidth = (windowWidth - GRID_GAP * (GRID_COLUMNS - 1)) / GRID_COLUMNS;
 
+  // ⚠️ 길게 누르기만으로는 발견성이 낮다(실기기 검증에서 확인) — MovieGridItem/MovieListItem의
+  // 우상단/우측 제거 버튼과 길게 누르기 둘 다 여기로 이어진다.
+  function confirmRemoveMovie(item: CollectionMovieListItemResponse) {
+    Alert.alert(item.title ?? '영화', '이 컬렉션에서 제거할까요?', [
+      { text: '취소', style: 'cancel' },
+      {
+        text: '제거',
+        style: 'destructive',
+        onPress: () =>
+          removeMovie.mutate(
+            { collectionId, movieId: item.movieId! },
+            { onError: (error) => Alert.alert('실패', error.message) },
+          ),
+      },
+    ]);
+  }
+
   const menuOptions: ActionSheetOption[] = [
     { label: '컬렉션 수정', onPress: () => setEditVisible(true) },
     {
@@ -103,6 +112,15 @@ export function CollectionDetailScreen() {
 
   return (
     <Screen padded={false} edges={['left', 'right']}>
+      {/* 컬렉션 제목 밑 설명 — 접기 대상이 아니다(항상 보인다). 실기기 검증에서 설명이 어디에도
+          안 보인다는 지적을 받아 추가했다(§7.1 7번). */}
+      {description && (
+        <View className="border-b border-border px-4 py-2">
+          <Txt variant="caption" color="mutedForeground" numberOfLines={2}>
+            {description}
+          </Txt>
+        </View>
+      )}
       <View className="flex-1 overflow-hidden">
         <Animated.View
           pointerEvents="box-none"
@@ -145,7 +163,8 @@ export function CollectionDetailScreen() {
                   posterPath={item.posterPath}
                   width={cellWidth}
                   onPress={() => navigation.navigate('MovieDetail', { movieId: item.movieId! })}
-                  onLongPress={() => setRemoveTarget(item)}
+                  onLongPress={() => confirmRemoveMovie(item)}
+                  onRemove={() => confirmRemoveMovie(item)}
                 />
               ) : (
                 <MovieListItem
@@ -154,7 +173,8 @@ export function CollectionDetailScreen() {
                   posterPath={item.posterPath}
                   subtitle={[item.releaseYear, item.directorNames].filter(Boolean).join(' · ')}
                   onPress={() => navigation.navigate('MovieDetail', { movieId: item.movieId! })}
-                  onLongPress={() => setRemoveTarget(item)}
+                  onLongPress={() => confirmRemoveMovie(item)}
+                  onRemove={() => confirmRemoveMovie(item)}
                 />
               )
             }
@@ -178,25 +198,6 @@ export function CollectionDetailScreen() {
         onSaved={(data) =>
           navigation.setParams({ title: data.name ?? title, description: data.description ?? undefined })
         }
-      />
-
-      <ActionSheet
-        visible={removeTarget != null}
-        onClose={() => setRemoveTarget(null)}
-        title={removeTarget?.title}
-        options={[
-          {
-            label: '이 컬렉션에서 제거',
-            destructive: true,
-            onPress: () => {
-              if (!removeTarget) return;
-              removeMovie.mutate(
-                { collectionId, movieId: removeTarget.movieId! },
-                { onError: (error) => Alert.alert('실패', error.message) },
-              );
-            },
-          },
-        ]}
       />
     </Screen>
   );

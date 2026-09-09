@@ -1,6 +1,8 @@
+import { X } from 'lucide-react-native';
 import { Pressable, View } from 'react-native';
 import { Txt } from '../primitives/Txt';
 import { PosterImage } from './PosterImage';
+import { colors } from '../../theme/tokens';
 
 interface MovieListItemProps {
   id: number;
@@ -11,9 +13,20 @@ interface MovieListItemProps {
   subtitle?: string;
   onPress: () => void;
   onLongPress?: () => void;
+  // 있으면 우측에 항상 보이는 제거 버튼을 띄운다(MovieGridItem과 동일 이유).
+  onRemove?: () => void;
 }
 
-export function MovieListItem({ id, title, posterPath, releaseDate, subtitle, onPress, onLongPress }: MovieListItemProps) {
+export function MovieListItem({
+  id,
+  title,
+  posterPath,
+  releaseDate,
+  subtitle,
+  onPress,
+  onLongPress,
+  onRemove,
+}: MovieListItemProps) {
   const year = releaseDate ? releaseDate.slice(0, 4) : undefined;
   const meta = [year, subtitle].filter(Boolean).join(' · ');
 
@@ -30,6 +43,16 @@ export function MovieListItem({ id, title, posterPath, releaseDate, subtitle, on
           </Txt>
         )}
       </View>
+      {onRemove && (
+        <Pressable
+          onPress={onRemove}
+          hitSlop={8}
+          accessibilityLabel={`${title} 제거`}
+          className="h-8 w-8 items-center justify-center rounded-full bg-muted"
+        >
+          <X size={16} color={colors.mutedForeground} />
+        </Pressable>
+      )}
     </Pressable>
   );
 }
