@@ -1,5 +1,6 @@
 import { useRoute, type RouteProp } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { StatusBar } from 'expo-status-bar';
 import { Heart, Maximize2, User as UserIcon, X } from 'lucide-react-native';
 import { useState } from 'react';
 import { Alert, Image, Modal, Pressable, ScrollView, useWindowDimensions, View } from 'react-native';
@@ -385,11 +386,16 @@ export function MovieDetailScreen() {
       {/* 히어로에서 크롭된 원본을 그대로 보여준다 — w780을 재사용하므로 추가 다운로드가
           없다(§9.3). Android 뒤로가기는 onRequestClose로 받는다.
           ⚠️ 탭-배경-닫기 대신 명시적 닫기 버튼을 둔다 — 포스터를 자세히 보려는 화면에서
-          아무 데나 탭하면 닫히는 게 오히려 불편하다는 실기기 피드백을 반영했다. */}
+          아무 데나 탭하면 닫히는 게 오히려 불편하다는 실기기 피드백을 반영했다.
+          ⚠️ Android는 statusBarTranslucent 없이는 Modal이 상태바 아래부터만 그려져
+          최상단이 어두워지지 않는다(갤럭시 실기기 확인) — 켜서 검정 배경이 상태바까지
+          덮게 한다. */}
+      {posterModalVisible && <StatusBar style="light" />}
       <Modal
         visible={posterModalVisible}
         transparent
         animationType="fade"
+        statusBarTranslucent
         onRequestClose={() => setPosterModalVisible(false)}
       >
         <View className="flex-1 items-center justify-center bg-black/90">
