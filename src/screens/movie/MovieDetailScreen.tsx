@@ -30,7 +30,12 @@ const WATCH_TYPE_LABEL: Record<WatchType, string> = {
 
 // 히어로 블러 영역(제목·년도·러닝타임이 놓이는 하단 밴드) 높이 비율.
 const HERO_BLUR_ZONE_RATIO = 0.42;
-const HERO_BLUR_RADIUS = 30;
+// ⚠️ 2단(선명/블러)만 쓰면 경계가 갑자기 바뀌어 이음매가 도드라진다(2026-09-10 실기기
+// 확인). 위에서 아래로 블러 세기를 5단계로 늘려 점진적으로 흐려지는 느낌을 근사한다.
+const HERO_BLUR_RADII = [0, 5, 11, 19, 28];
+// 텍스트는 밴드 전체가 아니라 위쪽 65%에만 둔다 — 아래쪽은 배경색으로 빠지는
+// 페이드 구간이라 글자를 놓으면 대비가 사라진다.
+const HERO_TEXT_ZONE_RATIO = 0.65;
 
 export function MovieDetailScreen() {
   const { movieId } = useRoute<Rt>().params;
@@ -125,7 +130,8 @@ export function MovieDetailScreen() {
     <Screen edges={['left', 'right']} scroll padded={false}>
       {/* 히어로 — 화면 폭 대형 포스터. MovieDetailResponse엔 backdropPath가 없어
           posterPath를 그대로 키운다(2026-09-10, 배경 이미지를 대형 포스터로 교체). 하단
-          밴드는 블러 + 어두운 그라디언트로 처리하고 그 위에 제목·년도·러닝타임을 얹는다. */}
+          밴드는 5단계 블러 + 배경색으로 빠지는 그라디언트로 처리해 아래 콘텐츠와
+          자연스럽게 이어지도록 하고, 그 위에 제목·년도·러닝타임을 얹는다. */}
       <View style={{ width: windowWidth, height: heroHeight, backgroundColor: colors.muted }}>
         {heroUri && (
           <>
@@ -134,40 +140,58 @@ export function MovieDetailScreen() {
               style={{ position: 'absolute', width: windowWidth, height: heroHeight }}
               resizeMode="cover"
             />
-            {/* ⚠️ RN엔 알파 마스크가 없어 진짜 점진적 블러는 못 만든다 — 같은 이미지를 하단
-                밴드 높이만큼 잘라(overflow hidden + 음수 top으로 위치 맞춤) 블러radius를
-                건 두 번째 레이어로 얹고, 그 위 그라디언트로 이음매를 가린다(근사치). */}
-            <View
-              style={{
-                position: 'absolute',
-                left: 0,
-                right: 0,
-                bottom: 0,
-                height: heroBlurZoneHeight,
-                overflow: 'hidden',
-              }}
-            >
-              <Image
-                source={{ uri: heroUri }}
-                style={{
-                  position: 'absolute',
-                  width: windowWidth,
-                  height: heroHeight,
-                  top: -(heroHeight - heroBlurZoneHeight),
-                }}
-                blurRadius={HERO_BLUR_RADIUS}
-                resizeMode="cover"
-              />
-            </View>
+            {/* ⚠️ RN엔 알파 마스크가 없어 진짜 점진적 블러는 못 만든다 — 같은 이미지를
+                여러 밴드로 잘라(overflow hidden + 음수 top으로 위치 맞춤) 밴드마다 다른
+                blurRadius를 건 근사치다. 밴드 수가 많을수록 계단이 덜 보인다. */}
+            {HERO_BLUR_RADII.map((blurRadius, index) => {
+              const bandCount = HERO_BLUR_RADII.length;
+              const bandHeight = heroBlurZoneHeight / bandCount;
+              // index 0 = 블러 밴드 중 맨 위(선명한 영역과 맞닿는 곳, 블러 약하게) ·
+              // 마지막 index = 맨 아래(블러 가장 강하게).
+              const bottomOffset = (bandCount - 1 - index) * bandHeight;
+              return (
+                <View
+                  key={index}
+                  style={{
+                    position: 'absolute',
+                    left: 0,
+                    right: 0,
+                    bottom: bottomOffset,
+                    height: bandHeight,
+                    overflow: 'hidden',
+                  }}
+                >
+                  <Image
+                    source={{ uri: heroUri }}
+                    style={{
+                      position: 'absolute',
+                      width: windowWidth,
+                      height: heroHeight,
+                      top: -(heroHeight - heroBlurZoneHeight + index * bandHeight),
+                    }}
+                    blurRadius={blurRadius}
+                    resizeMode="cover"
+                  />
+                </View>
+              );
+            })}
           </>
         )}
+        {/* ⚠️ 검정으로 끝내지 않고 화면 배경색으로 끝낸다 — 히어로 블록과 아래 카드 사이에
+            색이 뚝 끊기는 경계가 생기지 않고 그대로 녹아들듯 이어진다. */}
         <LinearGradient
-          colors={['transparent', 'rgba(0,0,0,0.45)', 'rgba(0,0,0,0.88)']}
-          locations={[0, 0.4, 1]}
+          colors={['transparent', 'rgba(0,0,0,0.55)', 'rgba(0,0,0,0.6)', colors.background]}
+          locations={[0, 0.3, 0.6, 1]}
           style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: heroBlurZoneHeight }}
         />
         <View
-          style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: heroBlurZoneHeight }}
+          style={{
+            position: 'absolute',
+            left: 0,
+            right: 0,
+            top: heroHeight - heroBlurZoneHeight,
+            height: heroBlurZoneHeight * HERO_TEXT_ZONE_RATIO,
+          }}
           className="items-center justify-center px-6"
         >
           <Txt variant="h2" color="primaryForeground" numberOfLines={2} className="text-center">
