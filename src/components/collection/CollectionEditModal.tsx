@@ -20,6 +20,7 @@ const NAME_MAX = 50;
 const DESCRIPTION_MAX = 500;
 const GRID_COLUMNS = 3;
 const GRID_GAP = 2;
+const GRID_PADDING = 12;
 
 type Tab = 'movies' | 'search' | 'records';
 const TAB_LABEL: Record<Tab, string> = { movies: '현재 영화', search: '검색해서 추가', records: '내 기록에서 추가' };
@@ -100,7 +101,9 @@ export function CollectionEditModal({
     ...Array.from(pendingAdd.values()),
   ];
   const visibleIds = new Set(visibleItems.map((m) => m.movieId));
-  const cellWidth = (windowWidth - GRID_GAP * (GRID_COLUMNS - 1)) / GRID_COLUMNS;
+  // ⚠️ 그리드에 좌우 padding(GRID_PADDING)이 있다 — 이걸 빼지 않고 windowWidth 기준으로만
+  // 셀 폭을 계산하면 한 행의 실제 너비가 컨테이너보다 커져 맨 오른쪽 셀이 잘린다.
+  const cellWidth = (windowWidth - GRID_PADDING * 2 - GRID_GAP * (GRID_COLUMNS - 1)) / GRID_COLUMNS;
 
   function stageAdd(movie: PendingMovie) {
     if (pendingRemove.has(movie.movieId)) {
@@ -259,7 +262,7 @@ export function CollectionEditModal({
                 numColumns={GRID_COLUMNS}
                 columnWrapperStyle={{ gap: GRID_GAP }}
                 keyExtractor={(item) => String(item.movieId)}
-                contentContainerStyle={{ padding: 12, gap: GRID_GAP }}
+                contentContainerStyle={{ padding: GRID_PADDING, gap: GRID_GAP }}
                 renderItem={({ item }) => (
                   <MovieGridItem
                     id={item.movieId}
