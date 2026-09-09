@@ -106,8 +106,13 @@ export function MovieDetailScreen() {
   // ⚠️ PATCH /api/records/{id}는 전체 치환이다(B-15) — rating만 보내면 나머지 필드가
   // null로 지워진다. 대표 기록의 기존 값을 그대로 다시 실어 보낸다(WatchRecordModal의
   // 수정 흐름과 동일한 이유).
+  //
+  // ⚠️ RatingStars는 "같은 별을 다시 탭하면 0(해제)"을 보낸다 — WatchRecordModal처럼
+  // "저장" 전 임시 상태에서는 안전하지만, 여기는 탭마다 바로 저장이라 현재 별점과 같은
+  // 위치를 탭하면 그대로 지워져 저장되는 버그가 됐다(실기기 확인). 0은 무시한다 —
+  // 별점을 지우고 싶으면 "시청 기록 수정" 모달을 쓴다.
   function handleChangeMyRating(nextRating: number) {
-    if (!representativeRecord) return;
+    if (!representativeRecord || nextRating <= 0) return;
     updateRecord.mutate(
       {
         recordId: representativeRecord.id!,
@@ -116,7 +121,7 @@ export function MovieDetailScreen() {
           watchDate: representativeRecord.watchDate ?? undefined,
           watchType: representativeRecord.watchType ?? undefined,
           placeDetail: representativeRecord.placeDetail ?? undefined,
-          rating: nextRating > 0 ? nextRating : undefined,
+          rating: nextRating,
           note: representativeRecord.note ?? undefined,
         },
       },
