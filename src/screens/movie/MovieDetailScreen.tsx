@@ -1,9 +1,8 @@
 import { useRoute, type RouteProp } from '@react-navigation/native';
-import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Heart, User as UserIcon } from 'lucide-react-native';
+import { Heart, Maximize2, User as UserIcon } from 'lucide-react-native';
 import { useState } from 'react';
-import { Alert, Image, Pressable, ScrollView, useWindowDimensions, View } from 'react-native';
+import { Alert, Image, Modal, Pressable, ScrollView, useWindowDimensions, View } from 'react-native';
 import { ActionSheet, EmptyState, ErrorState, LoadingState, type ActionSheetOption } from '../../components/common';
 import { CollectionPickerSheet } from '../../components/collection/CollectionPickerSheet';
 import { RatingStars } from '../../components/movie/RatingStars';
@@ -29,18 +28,14 @@ const WATCH_TYPE_LABEL: Record<WatchType, string> = {
   ETC: '기타',
 };
 
-// 히어로 블러 영역(제목·년도·러닝타임이 놓이는 하단 밴드) 높이 비율.
-const HERO_BLUR_ZONE_RATIO = 0.42;
-// ⚠️ Image의 blurRadius를 여러 겹으로 잘라 쓰는 방식은 계단이 실기기에서 뚜렷이
-// 보였다(2026-09-10). expo-blur의 BlurView로 교체 — 원본 이미지 위에 얹기만 하면
-// 그 자리에서 바로 블러를 계산해 주므로 이미지를 잘라 겹치는 수작업이 필요 없고,
-// 네이티브 블러라 화질도 낫다. 홈 배경 때는 60초 루프 애니메이션 위에 실시간으로
-// 다시 계산해야 해서 Android 성능을 우려해 피했는데, 여기는 스크롤해도 안 움직이는
-// 정적 이미지 한 장이라 상황이 다르다.
-const HERO_BLUR_INTENSITIES = [15, 35, 55, 80, 100];
-// 텍스트는 밴드 전체가 아니라 위쪽 65%에만 둔다 — 아래쪽은 배경색으로 빠지는
-// 페이드 구간이라 글자를 놓으면 대비가 사라진다.
-const HERO_TEXT_ZONE_RATIO = 0.65;
+// ⚠️ 이음매 문제와 텍스트 배치 문제가 같은 문제였다(2026-09-10 재설계, 상위 §9.3) —
+// 제목을 포스터 위에 얹으려면 흰 글씨→어두운 스크림→흰 배경으로 이어질 때 값이
+// 반전돼 탁한 회색 띠가 생긴다. 텍스트를 히어로 밖으로 빼서 이 사슬을 끊었다 —
+// 스크림이 필요 없어지고 포스터를 배경색으로 그대로 페이드하면 이을 경계 자체가 없다.
+// 4:5로 상단 기준 크롭하는 이유는 2:3 full-bleed(390px 기기에서 585px, 화면의 69%)면
+// 장르·감독·출연이 전부 스크롤 밖으로 밀리기 때문이다.
+const HERO_ASPECT_RATIO = 4 / 5; // width:height
+const HERO_FADE_RATIO = 0.38; // 하단 페이드 밴드 높이 비율
 
 export function MovieDetailScreen() {
   const { movieId } = useRoute<Rt>().params;
@@ -65,6 +60,7 @@ export function MovieDetailScreen() {
   const [reviewModalVisible, setReviewModalVisible] = useState(false);
   const [recordSheet, setRecordSheet] = useState<WatchRecordResponse | null>(null);
   const [collectionSheetVisible, setCollectionSheetVisible] = useState(false);
+  const [posterModalVisible, setPosterModalVisible] = useState(false);
 
   function closeRecordModal() {
     setRecordModalVisible(false);
@@ -91,9 +87,10 @@ export function MovieDetailScreen() {
   const movie = detail.data;
   const year = movie.releaseDate ? movie.releaseDate.slice(0, 4) : null;
   const heroUri = tmdbImageUrl(movie.posterPath, PosterSize.HERO);
-  // 2:3 포스터 비율 그대로 화면 폭에 꽉 채운다.
-  const heroHeight = windowWidth / layout.posterAspectRatio;
-  const heroBlurZoneHeight = heroHeight * HERO_BLUR_ZONE_RATIO;
+  // 히어로 컨테이너는 4:5 — 원본 포스터(2:3)를 top:0에 두고 컨테이너로 아래쪽만 자른다.
+  const heroHeight = windowWidth / HERO_ASPECT_RATIO;
+  const posterNaturalHeight = windowWidth / layout.posterAspectRatio;
+  const heroFadeHeight = heroHeight * HERO_FADE_RATIO;
 
   function recordSheetOptions(record: WatchRecordResponse): ActionSheetOption[] {
     const options: ActionSheetOption[] = [
@@ -133,64 +130,51 @@ export function MovieDetailScreen() {
 
   return (
     <Screen edges={['left', 'right']} scroll padded={false}>
-      {/* 히어로 — 화면 폭 대형 포스터. MovieDetailResponse엔 backdropPath가 없어
-          posterPath를 그대로 키운다(2026-09-10, 배경 이미지를 대형 포스터로 교체). 하단
-          밴드는 5단계 BlurView + 배경색으로 빠지는 그라디언트로 처리해 아래 콘텐츠와
-          자연스럽게 이어지도록 하고, 그 위에 제목·년도·러닝타임을 얹는다. */}
-      <View style={{ width: windowWidth, height: heroHeight, backgroundColor: colors.muted }}>
-        {heroUri && (
-          <>
+      {/* 히어로 — 4:5로 상단 기준 크롭한 대형 포스터. MovieDetailResponse엔 backdropPath가
+          없어 posterPath를 그대로 키운다. 원본(2:3)을 top:0에 두고 컨테이너(overflow
+          hidden)로 아래쪽만 잘라낸다 — resizeMode="cover"는 가운데 기준이라 인물·타이틀이
+          있는 위쪽이 잘리므로 쓰지 않는다. 잘리는 하단은 어차피 페이드가 덮는다.
+          탭하면 크롭 전 원본을 볼 수 있다(§9.3 "히어로 탭 → 포스터 전체 보기"). */}
+      <Pressable
+        onPress={() => setPosterModalVisible(true)}
+        disabled={!movie.posterPath}
+        accessibilityRole="imagebutton"
+        accessibilityLabel="포스터 전체 보기"
+      >
+        <View style={{ width: windowWidth, height: heroHeight, overflow: 'hidden', backgroundColor: colors.muted }}>
+          {heroUri && (
             <Image
               source={{ uri: heroUri }}
-              style={{ position: 'absolute', width: windowWidth, height: heroHeight }}
-              resizeMode="cover"
+              style={{ position: 'absolute', top: 0, left: 0, width: windowWidth, height: posterNaturalHeight }}
             />
-            {/* BlurView는 자기 자리에서 바로 밑을 블러 처리해 준다 — Image를 잘라 겹치는
-                수작업이 필요 없다. 세기가 다른 밴드를 쌓아 점진적으로 흐려지는 느낌을 낸다. */}
-            {HERO_BLUR_INTENSITIES.map((intensity, index) => {
-              const bandCount = HERO_BLUR_INTENSITIES.length;
-              const bandHeight = heroBlurZoneHeight / bandCount;
-              // index 0 = 맨 위(선명한 영역과 맞닿는 곳, 약하게) · 마지막 index = 맨 아래(가장 강하게).
-              const bottomOffset = (bandCount - 1 - index) * bandHeight;
-              return (
-                <BlurView
-                  key={index}
-                  intensity={intensity}
-                  tint="dark"
-                  style={{ position: 'absolute', left: 0, right: 0, bottom: bottomOffset, height: bandHeight }}
-                />
-              );
-            })}
-          </>
-        )}
-        {/* ⚠️ 검정으로 끝내지 않고 화면 배경색으로 끝낸다 — 히어로 블록과 아래 카드 사이에
-            색이 뚝 끊기는 경계가 생기지 않고 그대로 녹아들듯 이어진다. */}
-        <LinearGradient
-          colors={['transparent', 'rgba(0,0,0,0.55)', 'rgba(0,0,0,0.6)', colors.background]}
-          locations={[0, 0.3, 0.6, 1]}
-          style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: heroBlurZoneHeight }}
-        />
-        <View
-          style={{
-            position: 'absolute',
-            left: 0,
-            right: 0,
-            top: heroHeight - heroBlurZoneHeight,
-            height: heroBlurZoneHeight * HERO_TEXT_ZONE_RATIO,
-          }}
-          className="items-center justify-center px-6"
-        >
-          <Txt variant="h2" color="primaryForeground" numberOfLines={2} className="text-center">
-            {movie.title}
-          </Txt>
-          <Spacer size="xs" />
-          <Txt variant="body" color="primaryForeground" className="text-center">
-            {[year, movie.runtime ? `${movie.runtime}분` : null].filter(Boolean).join(' · ')}
-          </Txt>
+          )}
+          {/* ⚠️ 검정 스크림이 아니라 화면 배경색 자체로 페이드한다 — 제목을 히어로 밖으로
+              뺐기 때문에 대비를 위한 어두운 스크림이 필요 없고, 그래서 이을 경계 자체가
+              없다(이전엔 검정→흰색 전환 구간이 탁한 회색 띠로 보였다). */}
+          <LinearGradient
+            colors={['rgba(255,255,255,0)', 'rgba(255,255,255,0.72)', colors.background]}
+            locations={[0, 0.55, 1]}
+            style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: heroFadeHeight }}
+          />
+          {movie.posterPath && (
+            // ⚠️ 크롭된 화면은 잘렸다는 티가 안 나 힌트가 없으면 아무도 안 누른다.
+            <View className="absolute bottom-3 right-3 h-7 w-7 items-center justify-center rounded-full bg-black/40">
+              <Maximize2 size={14} color={colors.primaryForeground} />
+            </View>
+          )}
         </View>
-      </View>
+      </Pressable>
 
       <View className="px-4">
+        <Spacer size="md" />
+        <Txt variant="h2" numberOfLines={2} className="text-center">
+          {movie.title}
+        </Txt>
+        <Spacer size="xs" />
+        <Txt variant="caption" color="mutedForeground" className="text-center">
+          {[year, movie.runtime ? `${movie.runtime}분` : null].filter(Boolean).join(' · ')}
+        </Txt>
+
         <Spacer size="lg" />
         <Card>
           <InfoRow label="장르" value={movie.genres?.map((g) => g.name).join(', ')} />
@@ -391,6 +375,27 @@ export function MovieDetailScreen() {
         onClose={() => setCollectionSheetVisible(false)}
         movieId={movieId}
       />
+      {/* 히어로에서 크롭된 원본을 그대로 보여준다 — w780을 재사용하므로 추가 다운로드가
+          없다(§9.3). ActionSheet와 같은 탭-배경-닫기 패턴, Android 뒤로가기는 onRequestClose. */}
+      <Modal
+        visible={posterModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setPosterModalVisible(false)}
+      >
+        <Pressable
+          className="flex-1 items-center justify-center bg-black/90"
+          onPress={() => setPosterModalVisible(false)}
+        >
+          {heroUri && (
+            <Image
+              source={{ uri: heroUri }}
+              style={{ width: windowWidth, height: posterNaturalHeight }}
+              resizeMode="contain"
+            />
+          )}
+        </Pressable>
+      </Modal>
     </Screen>
   );
 }
