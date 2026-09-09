@@ -6,7 +6,7 @@
 > 선행: **M2-B 완료**(2026-09-06 실기기 검증 통과)
 >
 > 확정: **`Report` 분리**(§0.2) · **컬렉션 카드 = 선반 진열, B안**(§5.2, 2026-09-09).
-> 미확정: §6의 백엔드 요청 3건(B-6·B-7·B-18) 전달 여부.
+> 미확정: §6의 백엔드 요청 4건(B-6·B-7·B-18·B-19) 전달 여부.
 
 ---
 
@@ -379,13 +379,20 @@ skippedCount === 1 →  "이미 '{컬렉션명}'에 있어요"
 | B-6 | 컬렉션 카드 미리보기 포스터 | **선반이 비어 있다**(§5.2 — 화면은 성립하지만 밋밋하다) | `CollectionResponse`에 `previewPosterPaths: List<String>`(최대 5, `poster_path IS NOT NULL`) 추가. §6.2 |
 | B-7 | 컬렉션 단건 조회 | 딥링크 불가 · 파라미터로 우회 중 | `GET /api/collections/{id}` 추가 |
 | **B-18** | **컬렉션 목록·컬렉션 영화 목록 정렬 미지정** ★신규 | **페이지 경계에서 중복·누락 가능** | `CollectionRepository.findByUserId` · `CollectionMovieRepository.findByCollectionId`에 정렬 추가 |
+| **B-19** | **컬렉션 내 영화 순서 지정 불가** ★신규(2026-09-10) | 드래그로 영화 순서를 바꾸는 기능 요청을 받았으나 **저장할 곳이 없다** | `CollectionMovie`에 순서 컬럼(예: `position`) 추가 + `PATCH .../movies/order` 같은 저장 엔드포인트 신설 |
 
 **B-18을 등록해야 하는 이유** — 위시(`findByUserIdOrderByIdDesc`)에는 정렬이 있는데 컬렉션
 두 곳에만 없다. **일관성 문제가 아니라 정확성 문제**이며, 20개를 넘기 전에는 재현되지 않아
 **사용자 데이터가 쌓인 뒤에 터진다.** 백엔드 `service-layer-spec.md`의 페이징 규약과 함께
 확인하는 편이 좋다.
 
-> 셋 다 **M2-C를 막지는 않는다.** B-8만 `Report`를 막는다.
+**B-19를 등록해야 하는 이유** — `CollectionMovie` 엔티티에 순서를 표현할 컬럼 자체가
+없다(현재는 담긴 순서 = PK/생성 순서로 고정). 클라이언트에서만 순서를 바꾸면 새로고침·
+재조회 시 원래 순서로 돌아가 **사용자를 속이는 UI**가 되므로, 저장 수단이 생기기 전까지
+드래그 정렬 UI는 넣지 않는다(§8).
+
+> 넷 다 **M2-C를 막지는 않는다.** B-8만 `Report`를 막고, B-19는 "순서 바꾸기" 기능
+> 자체만 막는다(추가·제거는 이미 된다).
 
 ### 6.1 B-6은 백엔드에서 쿼리 1개다
 
@@ -475,7 +482,9 @@ SELECT collection_id, poster_path FROM (
 - **남의 컬렉션 보기** — API는 permitAll이지만 진입점이 소셜 화면이다(3군)
 - **컬렉션 내 정렬·필터** — 백엔드 미지원(상위 B-12·5-0-D)
 - **컬렉션 커버 이미지** — 필드 없음. B-6이 먼저다
-- **드래그 정렬** — `CollectionMovie`에 순서 컬럼이 없다
+- **드래그 정렬** — `CollectionMovie`에 순서 컬럼이 없다. 클라이언트만 순서를 바꿔도
+  새로고침·재조회 시 원래 순서로 돌아가 사용자를 속이는 UI가 된다 → **B-19로 등록**(§6),
+  백엔드에 순서 컬럼 + 저장 엔드포인트가 생긴 뒤 착수
 - **토스트 시스템** — §5.4
 - **선반 반사(reflection)·기울여 꽂기** — 포스터 노드가 두 배가 되고 `FlatList`에서 값이 비싸다. 필요하면 B-6 이후 별도 판단
 - **위시 → 컬렉션 일괄 담기** — 벌크 API는 있으나 다중 선택 UI가 새 구조다
@@ -501,6 +510,7 @@ SELECT collection_id, poster_path FROM (
 
 | 날짜 | 내용 |
 |---|---|
+| 2026-09-10 (이어서) | **`CollectionEditModal`을 즉시 반영 → "저장" 눌러야 반영으로 전환 + 드래그 정렬 요청을 B-19로 등록.** 영화 추가/제거가 탭 즉시 서버에 반영되던 것이, 이름/설명만 "저장"을 눌러야 반영되는 것과 **동작이 갈린다**는 지적을 받았다 — 확인 결과 사용자는 **영화 변경도 저장 시점에만 반영**되길 원했다. `pendingAdd`(Map)·`pendingRemove`(Set) 로컬 상태를 도입해 화면에는 즉시 반영해 보여 주되(체감 반응성 유지), 실제 `addMovies`/`removeMovie` 호출은 `handleSave` 안에서 이름/설명 저장 다음에 한 번에 나가도록 바꿨다("닫기"는 전부 취소). 벌크 제거 엔드포인트가 없어 제거는 `Promise.all`로 한 편씩 호출한다. 같은 세션에서 뺐다가 다시 담거나(제거 대기 취소) 새로 담았다가 다시 빼면(추가 대기 취소) 헛호출 없이 상쇄되도록 처리했다. `suggestion`(미등록 영화)의 `sync`만은 예외 — 카탈로그 등록이라는 전역 동작이라 편집 취소와 무관하게 탭 즉시 실행한다. 함께, **드래그로 영화 순서를 바꾸는 기능 요청을 받았으나 `CollectionMovie`에 순서 컬럼이 없어 저장할 곳이 없다** — 클라이언트만 순서를 바꾸면 재조회 시 되돌아가 사용자를 속이는 UI가 되므로 구현하지 않고 **B-19로 등록**(§6·§8). `npx tsc --noEmit` 통과 |
 | 2026-09-10 | **실기기 §7.1 검증 중 7·8번 재설계 — "컬렉션 수정"에 영화 추가·제거 통합.** ① **7번**: 이름 수정은 즉시 반영되는데 설명은 상세 화면 어디에도 안 보인다는 지적 → 목록 카드(`CollectionShelfCard`)에 설명 한 줄을 추가했다(§5.2, `accessibilityLabel`도 갱신). ② **8번**: 브라우징 그리드에 뒀던 제거용 X 버튼이 "UI상 안 좋다"는 피드백 + "추가·제거를 한 곳에서 하고 싶다"는 요청 → 브라우징 화면(§5.3)에서 제거 기능 자체를 없애고, `CollectionFormModal`을 **생성 전용**으로 되돌린 뒤 **`CollectionEditModal`**(§5.3-A)을 신설해 이름/설명 수정 + "현재 영화"(X로 제거) + "검색해서 추가"(`useMovieSearch` 재사용, suggestion은 sync 후 추가) + "내 기록에서 추가"(`useMyRecords` 재사용) 3탭을 한 모달에 묶었다. `MovieGridItem`의 `onRemove`는 이 편집 화면 전용으로 남기고 `MovieListItem`의 `onRemove`·양쪽의 `onLongPress`는 쓰는 곳이 없어져 제거했다(죽은 코드 방지). `npx tsc --noEmit`·`expo export --platform android` 통과 |
 | 2026-09-09 | **§1 실행 순서 1~6번 구현 완료 — 실기기 검증(§7) 전.** ① `src/api/collection.ts`에 PATCH·DELETE·영화 추가/제거 4메서드 추가(백엔드 스키마가 이미 생성돼 있어 `gen:api` 재실행 불필요, `CollectionUpdateRequest`·`AddMoviesToCollectionRequest/Response`를 `src/types/index.ts`에 별칭 추가). ② `useCollection.ts` 재작성 — `useMyCollections`·`useCollectionMovies`를 `useInfiniteQuery`로 전환, `useCreateCollection` 무효화 누락 수정, `useUpdateCollection`·`useDeleteCollection`·`useAddMoviesToCollection`·`useRemoveMovieFromCollection` 신설(영화 추가/제거는 §3.1 무효화 매트릭스대로 상세+목록 키를 함께 무효화). ③ `WishlistScreen` — `MyRecordsScreen`을 구조째 베낌. ④ `CollectionShelfCard`(선반 진열, `expo-linear-gradient`만 사용, `tokens.ts`의 `shelf` 토큰 참조, 포스터·선반 접근성 숨김) + `CollectionFormModal`(생성/수정 겸용) + `CollectionListScreen`. ⑤ `CollectionDetailScreen` — 그리드/리스트 토글+툴바 접기, 헤더 `MoreVertical` ActionSheet(수정 시 `navigation.setParams`로 헤더 제목 즉시 갱신·삭제 시 `goBack`), 영화 길게 눌러 컬렉션에서 제거. `MyPageStackParamList`·`SocialStackParamList`의 `CollectionDetail`에 `description` 추가(§5.3 (A)안). ⑥ `CollectionPickerSheet` — `MovieDetailScreen`의 `Alert.alert('준비 중', ...)`를 교체, 게스트에게도 버튼을 보이고 `useRequireAuth()`로 감쌈(G-1), `addedCount`/`skippedCount` 분기, 컬렉션 0개에서 생성 직후 바로 담기(C-3). 부수 변경 — `PosterImage`에 `radius` prop 추가(선반 카드용 3px 모서리), `MovieGridItem`/`MovieListItem`에 `onLongPress` 추가. `npx tsc --noEmit`·`expo export --platform android` 통과. **§7(검증 절차)은 실기기가 필요해 다음 세션으로 남긴다** |
 | 2026-09-09 | **`Report` 분리 확정 + 컬렉션 카드를 선반 진열로 확정(B안).** ① **`Report`는 M2-C2(백엔드 M3-a 동반)로 분리**했다 — 넣어 두면 M2-C가 영원히 완료되지 않는다(§0.2). ② **컬렉션 카드 = 선반 위 포스터 진열**(§5.2). 와이어프레임의 포스터 5칸 나열을 *"서재에 DVD를 전시한 모습"* 으로 발전시킨 것으로, 3안(A 나무 · B 뉴트럴 · C 진열장)을 시안으로 비교해 **B(뉴트럴 렛지)** 를 택했다 — 흰 배경 + 시안 팔레트와 톤이 맞고 **새 색 계열을 들이지 않는다.** 구현은 전부 `expo-linear-gradient`(이미 홈 배경에서 사용 중)라 **라이브러리 추가가 없다.** 확정한 세부 넷 — ⓐ **선반 색은 반드시 토큰**(`tokens.ts`의 `shelf`): A↔B 전환을 **hex 6개 교체**로 만들기 위한 것이고, 컴포넌트에 박으면 카드·빈 상태·스켈레톤을 전부 찾아다녀야 한다. ⓑ **`shadowColor`/`elevation` 금지** — 플랫폼별로 결과가 다르고 Android는 그림자 방향을 줄 수 없어 "빛이 위에서 온다"가 성립하지 않는다. 접지 그림자는 `LinearGradient` 한 겹. ⓒ **빈 슬롯을 채우지 않는다** — 와이어프레임의 회색 사각형은 선반 위에서 **로딩 실패처럼** 보인다. ⓓ **`w92` 사용** — 홈 배경과 같은 사이즈라 **이미지 캐시가 겹친다.** ★ **이 디자인의 실질적 이점은 B-6을 기다리지 않아도 된다는 것**이다 — 빈 선반이 그 자체로 성립하므로(영화 0편 컬렉션과 같은 모습) 선반·카드를 먼저 완성하고 `previewPosterPaths`가 오면 `posters` prop만 채우면 된다. 시그니처를 처음부터 `posters?: string[]`로 열어 둔다. 함께 **§6.1에 B-6의 백엔드 구현 방향**(윈도 함수 1쿼리 — 화면 전체 2→3쿼리)을 적어 요청 비용이 작다는 근거를 남겼다 |
