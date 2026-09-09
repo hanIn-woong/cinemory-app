@@ -11,7 +11,7 @@ import { RatingStars } from '../../components/movie/RatingStars';
 import { Button, Card, Divider, Screen, Spacer, Txt } from '../../components/primitives';
 import { PosterSize, ProfileSize, tmdbImageUrl } from '../../constants/tmdb';
 import { useMovieDetail } from '../../hooks/useMovies';
-import { useDeleteRecord, useSetRepresentative, useWatchLog } from '../../hooks/useRecords';
+import { useDeleteRecord, useSetRepresentative, useUpdateRecord, useWatchLog } from '../../hooks/useRecords';
 import { useRequireAuth } from '../../hooks/useRequireAuth';
 import { useMovieReviews, useMyReview } from '../../hooks/useReview';
 import { useIsWished, useWishToggle } from '../../hooks/useWishlist';
@@ -58,6 +58,7 @@ export function MovieDetailScreen() {
   const wishToggle = useWishToggle();
   const deleteRecord = useDeleteRecord();
   const setRepresentative = useSetRepresentative();
+  const updateRecord = useUpdateRecord();
 
   const [recordModalVisible, setRecordModalVisible] = useState(false);
   const [editingRecord, setEditingRecord] = useState<WatchRecordResponse | null>(null);
@@ -101,6 +102,27 @@ export function MovieDetailScreen() {
   const heroHeight = windowWidth / HERO_ASPECT_RATIO;
   const posterNaturalHeight = windowWidth / layout.posterAspectRatio;
   const heroFadeHeight = heroHeight * HERO_FADE_RATIO;
+
+  // ⚠️ PATCH /api/records/{id}는 전체 치환이다(B-15) — rating만 보내면 나머지 필드가
+  // null로 지워진다. 대표 기록의 기존 값을 그대로 다시 실어 보낸다(WatchRecordModal의
+  // 수정 흐름과 동일한 이유).
+  function handleChangeMyRating(nextRating: number) {
+    if (!representativeRecord) return;
+    updateRecord.mutate(
+      {
+        recordId: representativeRecord.id!,
+        movieId,
+        body: {
+          watchDate: representativeRecord.watchDate ?? undefined,
+          watchType: representativeRecord.watchType ?? undefined,
+          placeDetail: representativeRecord.placeDetail ?? undefined,
+          rating: nextRating > 0 ? nextRating : undefined,
+          note: representativeRecord.note ?? undefined,
+        },
+      },
+      { onError: (error) => Alert.alert('저장 실패', error.message) },
+    );
+  }
 
   function recordSheetOptions(record: WatchRecordResponse): ActionSheetOption[] {
     const options: ActionSheetOption[] = [
@@ -189,7 +211,15 @@ export function MovieDetailScreen() {
           <>
             <Spacer size="md" />
             <View className="items-center">
-              <RatingStars rating={myRating} size={28} />
+              {/* 탭해서 바로 수정 — 대표 기록의 별점을 갱신한다. 기록이 여러 개면
+                  대표만 바뀐다(다른 회차의 별점은 그대로). */}
+              <RatingStars
+                rating={myRating}
+                size={40}
+                onChange={
+                  representativeRecord && !updateRecord.isPending ? handleChangeMyRating : undefined
+                }
+              />
             </View>
           </>
         )}
