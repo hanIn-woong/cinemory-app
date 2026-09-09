@@ -4,7 +4,7 @@ import { Search } from 'lucide-react-native';
 import { useState } from 'react';
 import { Platform, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { OutlinedText } from '../../components/common';
+import { ExtrudedText } from '../../components/common';
 import { PosterBackdrop } from '../../components/home/PosterBackdrop';
 import type { HomeStackParamList } from '../../navigation/types';
 import { colors } from '../../theme/tokens';
@@ -29,12 +29,13 @@ export function HomeScreen() {
       <PosterBackdrop />
       <SafeAreaView edges={['top', 'left', 'right']} className="flex-1">
         <View className="flex-1 items-center justify-center px-6">
-          <OutlinedText
+          <ExtrudedText
             style={{ fontSize: 56, fontWeight: '700', color: colors.primary }}
-            outlineColor={[colors.brandDeep, colors.brandLight, colors.brandLight, colors.brandLight]}
+            extrudeColor={colors.brandDeep}
+            keylineColor={colors.brandLight}
           >
             CineMory
-          </OutlinedText>
+          </ExtrudedText>
 
           <View
             className="mt-8 w-full max-w-sm flex-row items-center rounded-xl bg-card/90 px-4 py-4"
