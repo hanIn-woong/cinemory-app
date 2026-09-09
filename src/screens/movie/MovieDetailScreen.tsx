@@ -1,8 +1,9 @@
 import { useRoute, type RouteProp } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Heart, Maximize2, User as UserIcon } from 'lucide-react-native';
+import { Heart, Maximize2, User as UserIcon, X } from 'lucide-react-native';
 import { useState } from 'react';
 import { Alert, Image, Modal, Pressable, ScrollView, useWindowDimensions, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ActionSheet, EmptyState, ErrorState, LoadingState, type ActionSheetOption } from '../../components/common';
 import { CollectionPickerSheet } from '../../components/collection/CollectionPickerSheet';
 import { RatingStars } from '../../components/movie/RatingStars';
@@ -34,12 +35,17 @@ const WATCH_TYPE_LABEL: Record<WatchType, string> = {
 // 스크림이 필요 없어지고 포스터를 배경색으로 그대로 페이드하면 이을 경계 자체가 없다.
 // 4:5로 상단 기준 크롭하는 이유는 2:3 full-bleed(390px 기기에서 585px, 화면의 69%)면
 // 장르·감독·출연이 전부 스크롤 밖으로 밀리기 때문이다.
-const HERO_ASPECT_RATIO = 4 / 5; // width:height
+// ⚠️ 4:5(587px)로도 실기기에서 기본 정보 박스 하단이 살짝 스크롤 밖으로 남았다
+// (2026-09-10 실기기 확인) — 정사각형(1:1)으로 한 번 더 줄였다. 상위 §9.3이 검토했던
+// 옵션 중 하나(46%, "포스터 느낌이 옅어진다"는 우려가 있었지만)로, 첫 화면에 박스가
+// 들어오는 쪽을 우선했다.
+const HERO_ASPECT_RATIO = 1; // width:height — 정사각형
 const HERO_FADE_RATIO = 0.38; // 하단 페이드 밴드 높이 비율
 
 export function MovieDetailScreen() {
   const { movieId } = useRoute<Rt>().params;
   const { width: windowWidth } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
   const isAuthed = useAuthStore((s) => s.status === 'authenticated');
   const myId = useAuthStore((s) => s.user?.id);
   const requireAuth = useRequireAuth();
@@ -187,7 +193,9 @@ export function MovieDetailScreen() {
                 출연
               </Txt>
               <Spacer size="xs" />
-              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+              {/* ⚠️ 첫 아이템이 스크롤뷰 경계에 딱 붙으면 원형 아바타 왼쪽 끝이 살짝
+                  잘려 보인다(실기기 확인) — 약간의 왼쪽 여백으로 해결한다. */}
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingLeft: 3 }}>
                 {movie.actors.map((actor) => (
                   <View key={actor.id} className="mr-4 w-16 items-center">
                     <ActorAvatar profilePath={actor.profilePath} />
@@ -376,17 +384,16 @@ export function MovieDetailScreen() {
         movieId={movieId}
       />
       {/* 히어로에서 크롭된 원본을 그대로 보여준다 — w780을 재사용하므로 추가 다운로드가
-          없다(§9.3). ActionSheet와 같은 탭-배경-닫기 패턴, Android 뒤로가기는 onRequestClose. */}
+          없다(§9.3). Android 뒤로가기는 onRequestClose로 받는다.
+          ⚠️ 탭-배경-닫기 대신 명시적 닫기 버튼을 둔다 — 포스터를 자세히 보려는 화면에서
+          아무 데나 탭하면 닫히는 게 오히려 불편하다는 실기기 피드백을 반영했다. */}
       <Modal
         visible={posterModalVisible}
         transparent
         animationType="fade"
         onRequestClose={() => setPosterModalVisible(false)}
       >
-        <Pressable
-          className="flex-1 items-center justify-center bg-black/90"
-          onPress={() => setPosterModalVisible(false)}
-        >
+        <View className="flex-1 items-center justify-center bg-black/90">
           {heroUri && (
             <Image
               source={{ uri: heroUri }}
@@ -394,7 +401,16 @@ export function MovieDetailScreen() {
               resizeMode="contain"
             />
           )}
-        </Pressable>
+          <Pressable
+            onPress={() => setPosterModalVisible(false)}
+            hitSlop={8}
+            accessibilityLabel="닫기"
+            className="absolute right-4 h-10 w-10 items-center justify-center rounded-full bg-black/60"
+            style={{ top: insets.top + 12 }}
+          >
+            <X size={22} color={colors.primaryForeground} />
+          </Pressable>
+        </View>
       </Modal>
     </Screen>
   );
