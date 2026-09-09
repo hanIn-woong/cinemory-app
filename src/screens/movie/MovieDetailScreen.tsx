@@ -3,6 +3,7 @@ import { Heart, User as UserIcon } from 'lucide-react-native';
 import { useState } from 'react';
 import { Alert, Image, Pressable, ScrollView, View } from 'react-native';
 import { ActionSheet, EmptyState, ErrorState, LoadingState, type ActionSheetOption } from '../../components/common';
+import { CollectionPickerSheet } from '../../components/collection/CollectionPickerSheet';
 import { PosterImage } from '../../components/movie/PosterImage';
 import { RatingStars } from '../../components/movie/RatingStars';
 import { Button, Card, Divider, Screen, Spacer, Txt } from '../../components/primitives';
@@ -48,6 +49,7 @@ export function MovieDetailScreen() {
   const [editingMinDate, setEditingMinDate] = useState<string | null>(null);
   const [reviewModalVisible, setReviewModalVisible] = useState(false);
   const [recordSheet, setRecordSheet] = useState<WatchRecordResponse | null>(null);
+  const [collectionSheetVisible, setCollectionSheetVisible] = useState(false);
 
   function closeRecordModal() {
     setRecordModalVisible(false);
@@ -191,6 +193,12 @@ export function MovieDetailScreen() {
             </Pressable>
           </View>
 
+          {/* 찜과 마찬가지로 게스트에게도 항상 보인다 — 탭 시 requireAuth가 모달을 띄운다(G-1). */}
+          <Spacer size="sm" />
+          <Button variant="secondary" onPress={() => requireAuth(() => setCollectionSheetVisible(true))}>
+            컬렉션에 추가
+          </Button>
+
           {!isAuthed ? (
             <>
               <Spacer size="md" />
@@ -206,11 +214,6 @@ export function MovieDetailScreen() {
             </>
           ) : (
             <>
-              <Spacer size="sm" />
-              <Button variant="secondary" onPress={() => Alert.alert('준비 중', '컬렉션 기능은 곧 제공됩니다')}>
-                컬렉션에 추가
-              </Button>
-
               <Spacer size="md" />
               <Divider />
               <Spacer size="md" />
@@ -325,6 +328,11 @@ export function MovieDetailScreen() {
         visible={recordSheet != null}
         onClose={() => setRecordSheet(null)}
         options={recordSheet ? recordSheetOptions(recordSheet) : []}
+      />
+      <CollectionPickerSheet
+        visible={collectionSheetVisible}
+        onClose={() => setCollectionSheetVisible(false)}
+        movieId={movieId}
       />
     </Screen>
   );
