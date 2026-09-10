@@ -82,5 +82,13 @@ export type WishListItemResponse = S['WishListItemResponse'];
 export type CollectionResponse = S['CollectionResponse'];
 export type CollectionCreateRequest = S['CollectionCreateRequest'];
 
+// ⚠️ 전체 치환이다 — description을 생략하면 지워진다. 편집 폼은 항상 두 필드를 다 싣는다
+// (docs/M2C-screens-spec.md §2).
+export type CollectionUpdateRequest = S['CollectionUpdateRequest'];
+
 // ⚠️ 컬렉션 단건 조회 API가 없다 — 제목 등은 목록에서 받은 값을 화면 파라미터로 넘겨야 한다.
 export type CollectionMovieListItemResponse = S['CollectionMovieListItemResponse'];
+
+// 벌크·멱등, 최대 50. 1편 추가도 배열로 보낸다(docs/M2C-screens-spec.md §2).
+export type AddMoviesToCollectionRequest = S['AddMoviesToCollectionRequest'];
+export type AddMoviesToCollectionResponse = S['AddMoviesToCollectionResponse'];

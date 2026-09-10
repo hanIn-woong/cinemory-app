@@ -5,4 +5,4 @@ export { ScreenHeader } from './ScreenHeader';
 export { ActionSheet, type ActionSheetOption } from './ActionSheet';
 export { AuthRequired } from './AuthRequired';
 export { InfiniteScrollFooter } from './InfiniteScrollFooter';
-export { OutlinedText } from './OutlinedText';
+export { ExtrudedText } from './ExtrudedText';

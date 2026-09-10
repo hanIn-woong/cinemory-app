@@ -6,6 +6,238 @@ narrative로 남긴다.
 
 ---
 
+## 2026-09-10 (이어서 11) — `MovieDetail` 진입 직후 빠른 뒤로가기 시 빈 화면 — 원인 미확정, 백로그 기록만
+
+- M2-C(§7) 실기기 검증이 전부 끝난 뒤 사용자가 별개로 발견한 증상을 보고했다 — 영화를
+  탭해 `MovieDetail`로 넘어간 직후 빠르게 뒤로가기를 누르면 빈 화면이 뜨고, **다시 한 번
+  뒤로가기를 눌러야 정상 동작한다.**
+- 실기기 재현·디버그 도구 없이는 확정할 수 없어 **코드 추정만** 전달했다 — `MovieDetail`이
+  `headerTransparent: true`(`HomeStack`·`MyPageStack`·`RecommendStack`·`SocialStack` 4곳에
+  등록)로 뜨고 진입 시 API 5개 + 히어로 이미지 로딩이 동시에 걸리는 무거운 화면이라,
+  Android `react-native-screens`의 push 전환이 끝나기 전에 pop이 들어오면 전환 상태가
+  꼬여 한 프레임이 비는 알려진 패턴과 증상이 일치한다는 정도. **"두 번째 뒤로가기는
+  정상"이라는 단서가 이 가설과 부합한다.**
+- 저비용으로 시도해볼 만한 것(`freezeOnBlur` 등 native-stack 옵션)은 있으나 **효과가
+  보장되지 않고**, 확실한 원인 규명에는 실기기 반복 재현이 필요해 비용을 가늠하기
+  어렵다고 정직하게 전달했다. 사용자가 시간이 없어 **지금은 착수하지 않고 기록만
+  남기기로** 했다 — `docs/M2B-screens-spec.md` §5.4에 🔖 백로그로 등록.
+
+---
+
+## 2026-09-10 (이어서 12) — 진입 직후 빠른 뒤로가기 시 빈 화면 — 이분 탐색으로 원인 확정·해결
+
+- 사용자가 시간이 나서 위 백로그를 다시 열었다. **"간단한 방안부터 시도"** 로 시작해
+  `freezeOnBlur: true`를 `HomeStack`·`MyPageStack`의 `MovieDetail`에 추가했으나 실기기
+  재현 결과 **효과 없음.**
+- 사용자가 직접 이분 탐색 계획을 세워 순서를 지시했다 — ① `freezeOnBlur` 제거 ②
+  `headerTransparent` 임시로 끄기(사라지면 확정, 그대로면 ③) ③ `animation: 'none'`
+  임시로 걸기(사라지면 애니메이션 경합 확정 → `detachPreviousScreen: false` 시도, 그대로면
+  렌더 쪽 문제로 방향 전환) ④ `MovieDetailScreen`의 로딩·에러·완료 3상태가 `<Screen>`(View)
+  ↔ `<Screen scroll>`(ScrollView)로 갈라져 있어 데이터 도착 순간 하위 트리가 remount되는
+  걸 결과와 무관하게 통일. 함께 **구조 문제**도 지적받았다 — `MovieDetail` 옵션이 4개
+  스택(Home·MyPage·Social·Recommend)에 복붙돼 있어 실험할 때마다 4곳을 따로 고쳐야
+  했다. `src/navigation/movieDetailScreenOptions.ts`(단일 상수)로 추출해 이후 모든 실험이
+  한 곳만 고치면 되게 만들었다.
+- **②(headerTransparent 끔) → 그대로 재현.** `MovieDetail`의 투명 헤더는 원인이 아님을
+  확정.
+- **③(animation: 'none') → 사라짐.** 전환 애니메이션 경합이 원인임을 확정한 지점. 이
+  결과를 보고하니 사용자가 **"영화 상세 화면뿐 아니라 모든 화면의 뒤로가기에서 이
+  버그가 발생한다"** 고 알려왔다 — `MovieDetail`의 무거운 로딩 때문이라는 애초 가설이
+  틀렸고, native-stack 전체에 걸친 문제로 범위가 넓어졌다. 실험 옵션도 화면별
+  (`movieDetailScreenOptions.ts`)이 아니라 스택 전체(`defaultStackScreenOptions.ts` 신설,
+  7개 네비게이터 — Root·Auth·Home·MyPage·Social·Recommend·CineMap — 의 `screenOptions`에
+  전부 연결)로 옮겼다.
+- **다음 단계로 지시받은 `detachPreviousScreen: false`가 타입 에러로 막혔다.** 확인해보니
+  `react-native-screens` 공식 README에 이 옵션은 JS 기반 `@react-navigation/stack`
+  (미설치) 전용이라고 명시돼 있었다 — native-stack은 네이티브 컨트롤러가 전환을
+  담당해서 이 개념 자체가 없다. 사용자에게 이 사실과 대안 네 가지(애니메이션 지속시간
+  단축, 뒤로가기 디바운스, 패키지 버전 확인, `animation: 'none'` 영구 적용)를 제시했다.
+- 사용자가 **애니메이션 지속시간 단축**(`animationDuration: 150`)을 골랐다 — 실기기
+  재현 결과 **여전히 재현됨**(창을 좁혔을 뿐 닫지는 못했다는 뜻).
+- 사용자가 원리를 물어 **뒤로가기 디바운스**(전환 중엔 뒤로가기 자체를 막는 방식)를
+  설명했다 — react-navigation의 `beforeRemove` 이벤트가 하드웨어 back·헤더 back
+  버튼·스와이프 제스처를 전부 같은 지점에서 가로채는 표준 API임을 소스(native-stack의
+  `onHeaderBackButtonClicked`가 `StackActions.pop()`을 dispatch하는 경로, iOS
+  `preventNativeDismiss`의 연동)로 확인한 뒤 설명에 반영했다.
+- "비용이 싸면 구현, 테스트 후 아니면 `animation: 'none'`으로" 라는 조건부 지시를
+  받고 **비용이 낮다고 판단해 바로 구현**했다 — `src/navigation/backGuard.ts` 신설.
+  `transitionStart`/`transitionEnd`(나가는 화면·들어오는 화면 양쪽에서 한 쌍씩 오므로
+  boolean이 아니라 카운터로 추적)로 "전환 중" 상태를 잡고, `beforeRemove`에서 전환
+  중이면 `preventDefault()`로 막는다. `BACK_GUARD_SCREEN_LISTENERS`를 7개
+  네비게이터의 `screenListeners`에 전부 연결. `animationDuration: 150`은 되돌리고
+  (`defaultStackScreenOptions.ts` 다시 빈 객체) 디바운스만으로 막히는지 깨끗하게
+  확인했다.
+- **실기기 확인 결과 버그 재현 안 됨 — 해결.** `npx tsc --noEmit` 통과 확인.
+  `M2-frontend-spec.md` §8.6 신설(단일 출처), `M2B-screens-spec.md` §5.4는 요약 +
+  링크로 축약하고 양쪽 변경 이력에 기록했다.
+
+---
+
+## 2026-09-10 (이어서 13) — `backGuard.ts` 구현 리뷰 반영 — 카운터 누수 천장 추가
+
+- 커밋·PR 준비 중 사용자가 직접 `M2-frontend-spec.md` §8.6에 「알려진 한계와 방어」
+  절을 추가하고 **구현을 요청**했다. 코드가 아니라 스펙을 먼저 고치고 구현을 시키는
+  흐름 — 검토 결과를 문서에 먼저 박아 두고 그걸 단일 출처로 구현하게 한 것.
+- §8.6이 지적한 것 셋 중 실제 코드 변경이 필요한 건 ①뿐이었다 — **카운터가 새면
+  뒤로가기가 영구 차단된다.** `Math.max(0, transitionCount - 1)`은 아래쪽만 막고
+  위쪽엔 천장이 없어서, `transitionStart`가 짝 없이 끝나면(전환 중 화면 파괴·앱
+  백그라운드 전환·네비게이터 언마운트) `transitionCount`가 1 이상으로 영영 남고
+  **원래 버그보다 나쁜 상태**(영구 잠금, 앱 재시작 전엔 복구 불가)가 된다. 스펙이 준
+  개념 그대로 `MAX_TRANSITION_MS = 1000`과 `lastStartAt` 타임스탬프를 추가해 —
+  `guardBeforeRemove`가 `transitionCount > 0`뿐 아니라 `Date.now() - lastStartAt <
+  MAX_TRANSITION_MS`도 같이 봐야 막도록 고쳤다. 정상 경로는 이벤트 기반 그대로,
+  누수했을 때만 시간으로 강제 해제된다 — 타이머를 쓰지 않아 정리할 자원도 없다.
+- ②(프로그램 `goBack()`이 `beforeRemove`에 조용히 삼켜지는 것) · ③(`transitionCount`가
+  Fast Refresh를 살아남는 것)은 **스펙 지시대로 코드는 그대로 두고**, ③은 짧은 개발자
+  주석으로만 남겼다 — ②는 발생 확률이 낮고 지금 고칠 대상이 아니라고 스펙이 이미
+  정리해 뒀다("한계로 기록, 증상 보고 시 여기부터 의심").
+- `npx tsc --noEmit` 통과 확인. 재발 방지 검증표(§8.6, 실기기 5항목)는 아직 돌리지
+  않았다 — 다음 실기기 확인 때 같이 본다.
+
+---
+
+## 2026-09-10 (이어서 3) — 히어로 블러를 `Image blurRadius` 근사에서 `expo-blur`로 교체
+
+- 5단계 `blurRadius` 밴드 + 배경색 그라디언트로 고쳐도 실기기에서 "경계가 뚜렷이
+  보인다"는 재확인을 받았다. `expo-blur` 도입 비용을 설명했다 — 설치 자체는
+  `npx expo install`로 prebuild 없이 되지만(Expo Go SDK 57에 내장), 완전히 매끄러운
+  블러를 만들려면 결국 알파 마스크 라이브러리(`@react-native-masked-view`)가 더
+  필요하고, Android 성능은 실기기에서 직접 봐야 안다고 미리 알렸다. 사용자가
+  전환을 택했다.
+- **`npx expo install expo-blur`**(`~57.0.2`) 설치 — `package.json`에 이 한 줄만
+  추가됐고 `expo` 자체 버전은 건드리지 않았다(이전에 `npm install`/`expo export`가
+  `expo` 패치 버전을 조용히 올렸던 것과 달리 이번엔 `expo install`을 정식으로 써서
+  깨끗했다).
+- **구현이 오히려 단순해졌다.** `Image blurRadius` 방식은 같은 이미지를 밴드 수만큼
+  복제해 각각 다른 위치로 잘라 붙여야 했는데(음수 `top` 오프셋 계산에서 부호 실수도
+  한 번 냈었다), `BlurView`는 자기 자리 바로 밑을 블러 처리해 주므로 **밴드마다
+  `intensity`만 다르게 준 `BlurView`를 얹기만 하면 됐다.** `HERO_BLUR_INTENSITIES =
+  [15,35,55,80,100]` + `tint="dark"`.
+- **홈 배경 때 `expo-blur`를 피했던 이유(60초 루프 애니메이션 위에 실시간 재계산 →
+  Android 성능 우려)가 여기엔 적용되지 않는다고 판단**했다 — 이 히어로는 스크롤해도
+  안 움직이는 정적 이미지 한 장이다. 실기기 성능은 다음 확인 때 최종 판단.
+- `npx tsc --noEmit`·`expo export --platform android`·`expo-doctor`(무관한 기존
+  `expo` 패치 버전 경고 1건 제외 전부 통과) 확인. 상세는 `M2B-screens-spec.md`
+  변경 이력 2026-09-10(이어서 2). **다음 실기기 확인에서 이음매·성능 둘 다 봐야 한다.**
+
+---
+
+## 2026-09-10 (이어서 2) — 그리드 포스터 해상도 개선 + `MovieDetail` 히어로를 대형 포스터로 교체
+
+- **포스터 화질 문의**: 사용자가 그리드 포스터 화질이 걱정된다고 물었다. 확인해 보니
+  실제 문제가 있었다 — `PosterSize.LIST`(`w185`, 실제 185px 폭)를 3열 그리드(셀 폭
+  보통 120~140dp)에 기본값으로 쓰고 있었는데, 2~3배 밀도 기기에서는 240~420 물리
+  픽셀이 필요해 **2배 밀도에서도 이미 부족한 상태**였다. `MyRecords`·`Wishlist`·
+  `CollectionDetail`·컬렉션 편집 "현재 영화" 탭이 전부 `MovieGridItem`을 공유해 같은
+  문제를 안고 있었다 — M2-B `MyRecordsScreen`부터 있던 문제를 M2-C 화면들이 그대로
+  물려받은 것. **`w342`로 올려 해결**(3배 밀도까지 커버). `CollectionShelfCard`(`w92`,
+  홈 배경과 캐시 공유 목적으로 의도적 선택)는 3배에서 살짝 부족하지만 그대로 뒀다 —
+  캐시 공유 이점을 포기할 정도는 아니라고 판단했다.
+- **`MovieDetail` 히어로 재설계**: 같은 대화에서 "히어로 포스터가 배경 이미지를
+  말하는 거냐"는 질문을 받고, 기존 구조(작은 배경 이미지 256px + 옆에 작은 포스터
+  112×160 + 제목)를 설명했다. 사용자가 **배경 이미지를 없애고 포스터를 화면 폭 그대로
+  키워서 히어로로 쓰고, 하단은 블러 처리해 그 위에 제목·년도·러닝타임을 중앙 배치**하는
+  디자인으로 바꿔 달라고 요청 — 비용이 크면 미리 알려달라고 했다.
+- **비용 판단**: 새 라이브러리가 필요 없다고 판단해 바로 진행했다. `expo-blur`
+  (`BlurView`)를 쓰면 진짜 연속 블러를 만들 수 있지만, 홈 배경 작업 때 이미 "Android
+  성능 이슈로 마지막 수단"이라고 판단한 전례가 있고(§9.1) `MovieDetail`은 방문 빈도가
+  더 높은 화면이라 같은 우려가 더 크게 적용된다. 대신 **이미 쓰고 있던 `<Image
+  blurRadius>`(RN 내장)와 `LinearGradient`(기존 의존성)만으로** 근사치를 만들었다 —
+  같은 포스터 이미지를 하단 밴드 높이만큼 `overflow: hidden` + 음수 `top`으로 잘라
+  블러 걸린 두 번째 레이어로 얹고, 3단 그라디언트로 이음매를 가렸다. **RN에 알파
+  마스크가 없어 진짜 점진적 블러는 못 만든다는 것**을 근사치 채택의 근거로 명시해 뒀다.
+- 포스터 사이즈는 `BackdropSize.DETAIL`(`w780`)을 없애고 `PosterSize.HERO`로 재명명 —
+  이름이 "배경"을 가리키는 게 더 이상 사실과 안 맞았다(실제로는 큰 포스터).
+- `npx tsc --noEmit`·`expo export --platform android` 통과. 상세 설계 근거는
+  `M2B-screens-spec.md` 변경 이력 2026-09-10. **실기기 재검증 필요** — 특히 블러
+  이음매가 실제로 어색해 보이는지, 밝은 포스터에서 하단 텍스트 대비가 충분한지는
+  번들 확인만으로는 알 수 없다.
+
+---
+
+## 2026-09-10 (이어서) — 컬렉션 편집 저장 방식 전환 + 드래그 정렬은 B-19로 보류
+
+- **버그 리포트**: "컬렉션 편집에서 영화 목록을 바꾸면 저장 버튼 없이 곧바로 수정이
+  적용된다." 실제로는 의도한 동작이었다(영화 추가/제거는 탭 즉시 mutate) — 문제는
+  이름/설명만 별도 "저장" 버튼이 있어서 **화면 안에서 동작이 갈렸다는 것**이었다.
+  사용자에게 선택지를 물었고("이름/설명도 즉시 적용으로 통일" vs "영화 변경도 저장
+  시점에만 반영") **후자를 선택**했다.
+- **구현**: `pendingAdd`/`pendingRemove` 로컬 상태로 화면 표시만 즉시 갱신하고, 실제
+  서버 호출(`updateCollection`→`addMovies`→`removeMovie` 순서)은 "저장" 한 번에 몰아
+  나가도록 `CollectionEditModal`을 다시 짰다. "닫기"는 로컬 상태만 버리므로 아무 것도
+  서버에 나가지 않는다. 같은 세션 안에서 뺐다 다시 담거나 담았다 다시 빼는 경우는 서로
+  상쇄시켜 불필요한 호출을 만들지 않는다. `sync`(미등록 영화 등록)만은 편집 취소와
+  무관한 전역 동작이라 그대로 즉시 실행한다 — 취소해도 "그 영화가 우리 카탈로그에
+  등록된 상태"까지 되돌릴 이유가 없다고 판단했다.
+- **드래그 정렬 요청**: 같은 메시지에서 "영화를 길게 눌러 순서를 바꾸는 기능"을 요청받았다.
+  확인해 보니 `CollectionMovie`에 순서를 저장할 컬럼이 없다 — 이미 M2C-screens-spec.md
+  §8에 "드래그 정렬은 하지 않는다"로 문서화돼 있던 것과 정확히 같은 이유다. 클라이언트만
+  순서를 바꾸는 반쪽짜리 구현은 새로고침하면 되돌아가 사용자를 속이므로 만들지 않았고,
+  대신 **B-19**로 등록해 백엔드에 순서 컬럼 + 저장 엔드포인트를 요청했다
+  (`M2-frontend-spec.md` §11, `M2C-screens-spec.md` §6에 반영).
+- `tsc --noEmit` 통과. **다음 실기기 확인 때 7·8번을 다시 봐야 한다** — 특히 "저장" 없이
+  닫았을 때 정말 아무 변경도 안 남는지가 이번 변경의 핵심 확인 포인트다.
+
+---
+
+## 2026-09-10 — M2-C §7.1 실기기 검증 진행 중 — 7·8번에서 재설계
+
+- **1~6·9번 통과.** 1번은 마이페이지 탭 자체가 `<AuthRequired>`로 막혀 있어 게스트가
+  `Wishlist`/`CollectionList` 개별 탭에 못 들어가는 형태로 확인됐는데, 이건 화면 게이트
+  구조상 의도된 동작이라 통과로 판정했다.
+- **7번 — 설명이 안 보임.** 이름 수정은 즉시 반영되는데 설명을 표시하는 곳이 상세 화면
+  어디에도 없어서 "설명이 남아 있는지" 자체를 확인할 방법이 없었다. 처음엔 상세 화면
+  제목 밑에 고정 블록으로 추가했는데, 사용자가 재차 "내 컬렉션 탭(목록)의 각 박스에
+  표시해 달라"고 요청 — `CollectionShelfCard`(목록 카드)에 이름/편수 밑 한 줄로 추가했다.
+- **8번 — 제거 버튼이 실기기에서 안 좋아 보임.** 처음엔 길게 누르기만 지원했다가(발견성
+  없음 지적으로) 그리드/리스트에 X 버튼을 오버레이했는데, 이번엔 "UI상 보기 안 좋다"는
+  피드백을 받았다. 동시에 "컬렉션 수정 기능에 영화 삭제·추가를 포함하자"는 방향 전환
+  요청이 있어 **범위를 물어봤다** — 추가를 기존 방식(영화 상세의 "컬렉션에 추가")으로
+  유지할지, 컬렉션 수정 화면 안에 검색 UI를 새로 만들지. 사용자가 **후자를 선택**하면서
+  구체적으로 지정했다: 이름/설명 수정 + 영화 X 삭제 + 검색바로 추가 + "내 기록 보기"에서
+  추가.
+- **재설계**: `CollectionFormModal`을 생성 전용으로 되돌리고(수정 코드 경로가 죽은 코드가
+  될 상황), `CollectionEditModal`을 신설해 이름/설명 필드 + 3탭(현재 영화·검색해서 추가·
+  내 기록에서 추가)으로 구성했다. 검색 탭은 `SearchResultScreen`과 같은 로직
+  (`useMovieSearch`, registered/suggestion 2섹션, suggestion은 sync 후 추가)을 재사용하되
+  탭하면 이동이 아니라 담기가 일어나도록 별도 `PickerRow`를 만들었다. 브라우징 화면
+  (`CollectionDetailScreen`)에서는 제거 관련 UI를 전부 걷어내 포스터 탭 → 이동만 남겼다.
+  `MovieGridItem`의 `onRemove`는 편집 모달 전용으로 남기고, 안 쓰이게 된
+  `MovieListItem.onRemove`·양쪽의 `onLongPress`는 삭제했다.
+- 상세 설계 근거는 `M2C-screens-spec.md` §5.3-A·변경 이력(2026-09-10). `tsc --noEmit`·
+  `expo export --platform android` 통과, **실기기 재검증은 다음 확인 때**(특히 7·8번을
+  다시 봐야 한다).
+
+---
+
+## 2026-09-09 — 브랜치 정리(SDK57 미병합 발견) + M2-C §1 1~6번 구현
+
+- **M2-C 착수 전 브랜치 상태를 점검하다 실행 자체가 막혀 있던 문제를 발견했다.**
+  `feature/mypage-settings-home`(당시 작업 브랜치)이 `develop`에서 갈라진 뒤, 같은 지점에서
+  갈라진 `feature/expo-57`(SDK 56→57 업그레이드, 기기 Expo Go가 57로 고정돼 필수였고
+  실기기 검증도 이미 통과한 상태)이 한 번도 병합되지 않았다. 그런데 막 작성된
+  `M2C-screens-spec.md`는 스택을 이미 "Expo SDK 57"로 전제하고 있어서, 그대로 진행하면
+  코드는 SDK 56인 채로 SDK 57 전제의 스펙을 구현하는 셈이 되고 애초에 기기에서 열리지도
+  않는 상태였다.
+- **조치**: ① `feature/mypage-settings-home`에 `feature/expo-57`을 병합 — `docs/DevLog.md`·
+  `docs/M2-frontend-spec.md`의 변경 이력 표 충돌만 있었고(둘 다 파일 상단에 새 절을 추가하는
+  구조라 겹쳤다), 내용 손실 없이 둘 다 보존하는 방향으로 해결했다(날짜·연속 번호 순서 유지).
+  `npm install`·`tsc --noEmit` 재확인. ② M2-B 전체(1군 화면)와 SDK57이 이제 한 브랜치에
+  모였으므로 `develop`에 병합(fast-forward). ③ `feature/m2c-wishlist-collection`을 `develop`에서
+  새로 잘라 M2-C 작업 전용 브랜치로 전환 — 기존 브랜치명(`feature/mypage-settings-home`)은
+  M2-B 범위를 가리키는 이름이라 M2-C를 얹기에 부적절했다. `main`은 이번에도 갱신하지 않고
+  남겨 뒀다(별도 릴리스 시점 정책으로 보여 판단을 보류).
+- **M2-C 구현**: `M2C-screens-spec.md` §1의 실행 순서(의존 방향)를 그대로 따랐다 —
+  collection API/훅 보강 → `Wishlist` → `CollectionList`/`Detail` → `MovieDetail` 컬렉션 연결.
+  단계마다 `tsc --noEmit`으로 즉시 확인했고 마지막에 `expo export --platform android`로
+  번들 자체가 끝까지 도는 것까지 확인했다. 상세 내용은 `M2C-screens-spec.md`·
+  `M2-frontend-spec.md` 변경 이력(둘 다 2026-09-09).
+- **남은 것 — §7(검증 절차) 전체가 실기기가 필요해 이번 세션에서 못 했다.** 특히 §7.1의
+  7·8번(컬렉션 수정 시 헤더 제목 즉시 갱신, 영화 제거 시 카드 편수 갱신)은 스펙 자체가
+  "실제로 자주 깨진다"고 짚어 둔 지점이라 다음 실기기 세션에서 우선 확인할 것.
+
+---
+
 ## 2026-09-06 (이어서 5) — Expo SDK 56 → 57 업그레이드
 
 - **발단은 개발 편의 문제였다.** 사용자가 프로젝트를 SDK 56으로 유지하려 했는데 기기 쪽
@@ -36,6 +268,269 @@ narrative로 남긴다.
 - 문서 반영: `M2-frontend-spec.md` 헤더·§10, `M2A-foundation-spec.md` §0.1 버전표(56 vs 57
   대조) · §1 채택 결과, `M2B-screens-spec.md` 헤더, 세 문서의 변경 이력.
 - **다음**: 홈 화면 작업이 끝났으므로 M2-C 스펙 작성으로 넘어간다.
+
+---
+
+## 2026-09-06 (이어서 4) — 홈 배경 첫 행·마지막 행 중복 출력 버그 발견·수정
+
+- **증상(사용자 보고)**: "반복되는 4열 그리드의 첫 행과 마지막 행이 중복 출력" — 같은
+  포스터 배열이 두 번 보인다.
+- **원인**: `useHomeBackground`가 포스터를 고정 20장(`RANDOM_SIZE`)만 받아 왔는데,
+  `PosterBackdrop`은 화면을 채우려고 `cellsPerSet`(보통 24~28, 기기 높이에 따라 다름)개
+  셀에 `posters[i % posters.length]`로 순환시켰다. `COLUMNS=4`라 `cellsPerSet`도 포스터
+  개수(20)도 전부 4의 배수였던 탓에, **20을 넘는 지점부터의 순환이 정확히 행 경계에서
+  다시 인덱스 0으로 돌아갔다** — 예: `cellsPerSet=24`면 마지막 행(인덱스 20~23)이
+  `% 20`으로 0~3이 되어 **첫 행과 완전히 같은 포스터 4장**이 그대로 반복됐다. 우연이 아니라
+  4의 배수끼리 나눈 구조상 항상 재현되는 문제였다.
+- **수정**: `useHomeBackground(minCount)`로 시그니처를 바꿔 **한 세트를 채우는 데 필요한
+  셀 수(`cellsPerSet`)만큼은 반드시 받아 오도록** 했다 — `PosterBackdrop`이 자신이 계산한
+  `cellsPerSet`을 훅에 그대로 넘긴다. 요청 크기는 `RECORDS_THRESHOLD`(12)~`MAX_POOL`(50,
+  백엔드 `cinemory.movie.random.max-size`와 동일)로 clamp. 포스터 수가 `cellsPerSet` 이상이면
+  한 세트 안에서 인덱스가 절대 겹치지 않아 행 반복 자체가 구조적으로 불가능해진다.
+  `useMyRecords`(무한스크롤용, 캐시 모양이 다름)를 재사용하는 대신 홈 전용
+  `queryKeys.records.homeBackground(userId, size)` 키로 별도 `useQuery`를 뽑아냈다.
+- 전형적인 폰 화면 기준 요청 개수가 20 → 24 안팎으로 소폭 늘었다(포스터 1~2장 추가 다운로드
+  정도) — 어제 지적된 로딩 지연(TMDB CDN 자체 지연)에 미미하게 더할 수는 있지만, 화면을
+  가득 채우는 데 필요한 최소량이라 더 줄이면 다시 반복 문제로 돌아간다.
+- `tsc --noEmit` 통과. 재검증은 다음 실기기 확인 때.
+
+---
+
+## 2026-09-06 (이어서 3) — `OutlinedText` 겹침 순서 수정 — 로고 디자인 미세 조정
+
+사용자가 로고를 보다가 지적 — 좌상단(`brandDeep`) 겹침 부위가 `brandLight`에 덮여 있었다.
+`OutlinedText`가 `CORNERS` 배열 순서(좌상→우상→좌하→우하)대로 그렸는데, RN은 나중에 그린
+형제가 위에 쌓이는 구조라 **배열 뒤쪽(우하단)이 항상 위로** 올라오고 있었다 — CSS
+`text-shadow`가 "목록의 첫 그림자가 가장 위" 규칙인 것과 정반대였다. 배경 4겹을 `CORNERS`
+역순으로 그리도록 뒤집어서, `outlineColor` 배열의 **앞쪽(기본 배치의 좌상단)이 겹침에서
+항상 위로 오도록** 통일했다 — CSS 규칙과 동작이 같아져서 향후 스플래시·로그인에서 재사용할
+때도 직관을 그대로 옮길 수 있다. `tsc --noEmit` 통과.
+
+---
+
+## 2026-09-06 (이어서 2) — `Home` 배경 실기기 검증: 4열이 3열로 보이는 레이아웃 버그 발견·수정
+
+애니메이션·검색바 그림자·로그인/로그아웃 크로스페이드·로고 디자인은 전부 정상. 이슈 둘.
+
+- **포스터 로딩이 느리다 — 백엔드 한계 아님.** `GET /api/movies/random`을 curl로 3회 재보니
+  30~40ms로 즉시 응답한다. curl로 `w92` 포스터 1장을 직접 받아보니 5KB짜리 이미지에도
+  **~700ms**가 걸렸다 — TMDB CDN 왕복 자체의 지연이라 우리 백엔드·프론트 코드로 줄일 수
+  있는 종류가 아니다. 이미 가장 작은 이미지 크기(`w92`)를 쓰고 있고, 배경엔 최대 20장만
+  필요해 중복 다운로드도 없다 — 할 수 있는 최적화는 이미 돼 있는 상태.
+- **4열 그리드인데 포스터가 3열만 보인다 — 실제 레이아웃 버그였다.** 원인은
+  `PosterBackdrop.tsx`의 셀 스타일이 **마지막 열에도 `marginRight: GAP`을 걸고 있던 것.**
+  `cellWidth` 계산식(`(width - GAP*(COLUMNS+1))/COLUMNS`)은 "열 *사이*에만 gap이 있다"는
+  전제였는데, 렌더링은 모든 셀(4번째 포함)에 오른쪽 마진을 줘서 **한 행의 실제 너비가
+  컨테이너보다 정확히 `GAP`(4px)만큼 커졌다.** RN Yoga는 고정 너비 자식에 `flexShrink`가
+  없으면 아주 작은 초과에도 관대하게 봐주지 않고 곧바로 다음 셀을 다음 줄로 밀어낸다 —
+  그 결과 4번째 셀이 항상 다음 행으로 밀려 시각적으로 3열처럼 보였다(그리드 자체 크기가
+  균일해 "그리드는 4열 같은데 포스터만 3열"로 보인 이유). 마지막 열엔 `marginRight: 0`을
+  주도록 고쳐 해결. `tsc --noEmit` 통과. 재검증은 다음 실기기 확인 때.
+
+---
+
+## 2026-09-06 (이어서) — `Home` 화면 디자인 고도화 (M2-B 완료 후 사용자 요청)
+
+- 사용자가 `M2-frontend-spec.md` §9.1에 직접 스펙(배경 소스 분기 표, 5겹 아웃라인, 60초 루프,
+  blur 대체 기법 등, 2026-09-06 신설분)을 채워 넣고, 컴포넌트 분할까지 지정해서 요청했다 —
+  `src/components/home/PosterBackdrop.tsx`(그리드+루프+소스 분기) · `src/components/common/
+  OutlinedText.tsx`(5겹, 스플래시·로그인 재사용 가능) · `src/screens/home/HomeScreen.tsx`(조립).
+- **배경 소스 분기(`useHomeBackground` 훅, 신규)**: 로그인 + 기록 12편 이상이면
+  `useMyRecords`(이미 있는 훅, `MyRecordsScreen`과 캐시 공유)의 첫 페이지에서 `posterPath`를
+  뽑고, 그 외(게스트·기록 부족·0건)는 `useRandomMovies`(신규, `GET /api/movies/random` = B-17)
+  로 폴백한다. 로그인 사용자는 기록이 12편 이상인지 알기 전엔 `useRandomMovies`를 `enabled`로
+  묶어 미뤄서, 어차피 안 쓸 랜덤 호출을 낭비하지 않게 했다.
+- **B-17이 이미 백엔드에 구현돼 있었다** — `cinemory-backend`의 `MovieController`·
+  `MovieQueryService`·`application.yml`(`cinemory.movie.random.*`)에 전부 반영돼 있었는데,
+  정작 `GET /api/movies/random`을 curl로 처음 때렸을 때 `INVALID_TYPE_VALUE`(마치
+  `/{movieId}`로 라우팅된 것 같은 에러)가 났다. 원인은 라우팅 버그가 아니라 **§7.3 검증용으로
+  띄워 둔 백엔드 프로세스가 이 엔드포인트가 소스에 추가되기 *전* 시점(15:54)에 이미 떠 있던
+  것**이었다 — 컴파일된 `.class`는 16:30로 최신이었지만 실행 중인 JVM은 여전히 구버전을
+  메모리에 들고 있었다. 백엔드를 재기동하니 바로 정상 동작했다. `npm run gen:api`로
+  `api.d.ts`에 `getRandomMovies` 오퍼레이션을 추가 생성(39줄, 순수 추가— 기존 타입 변경 없음).
+- **구현 중 §3.4 위반 1건 발견 — `useMyRecords`에 `enabled: isAuthed` 누락.** 상위 문서 §3.4
+  표에 `useMyRecords`가 이미 "필수" 항목으로 올라가 있었는데 실제 구현엔 빠져 있었다.
+  `useHomeBackground`가 게스트에서도 이 훅을 호출하게 되면서 처음 눈에 띄었지만, **어제(§7.3)
+  로그의 `GET /api/users/0/records` 404가 실은 이 버그가 이미 새고 있었다는 증거**였다는 것도
+  뒤늦게 확인했다 — 당시엔 로그인 직후의 사소한 타이밍 이슈로 넘겼었다. `enabled: isAuthed`를
+  추가해 막았다.
+- **레이아웃 — `Home`만 `Screen` 프리미티브를 쓰지 않는다.** `Screen`의 루트가
+  `SafeAreaView`라 배경(포스터 그리드)까지 안전영역 안쪽으로 잘려 노치 위아래에 어색한 여백이
+  생긴다는 걸 사용자가 미리 지적했다. `<View className="flex-1">` 루트에 `PosterBackdrop`을
+  `absolute inset-0`로 꽉 채우고, 로고·검색바만 안쪽 `SafeAreaView`(`edges: ['top','left',
+  'right']`)로 감쌌다 — 어제(§7.2) `Screen` 기본 `edges`로 겪은 것과 정반대 방향의 같은 종류
+  문제라 바로 적용할 수 있었다.
+- `OutlinedText`는 배경 4겹(코너별 다른 색 지원 — 좌상단만 `brandDeep`, 나머지 3방향은
+  `brandLight`, 와이어프레임 그대로) + 본체 1겹으로 구현하고 배경 4겹엔
+  `accessibilityElementsHidden`을 걸었다. 홈 전용 색을 하드코딩하지 않아 스플래시·로그인에서도
+  그대로 재사용 가능하다.
+- `PosterBackdrop`은 같은 세트를 두 번 쌓고 한 세트 높이만큼 `translateY`로 올리는 방식으로
+  이음매를 없앴다(`withRepeat(withTiming(-setHeight, {duration:60000}), -1, false)` — 세
+  번째 인자 `false` 필수, `true`면 왕복해서 튄다). 탭을 벗어나면 `useFocusEffect` +
+  `cancelAnimation`으로 멈춘다. 로그인/로그아웃으로 소스가 바뀌면(포스터 id 시그니처 변경)
+  같은 opacity 채널로 0→0.2 페이드를 다시 태워 크로스페이드를 흉내냈다(진짜 2겹 크로스디졸브
+  대신 페이드아웃 없는 단순 페이드인 — 배경용으로는 충분하다고 판단).
+- `tsc --noEmit` 통과. **실기기 검증 전이다** — 특히 애니메이션이 부드러운지, 크로스페이드가
+  자연스러운지, 검색바 그림자가 두 플랫폼에서 다 보이는지는 다음에 확인해야 한다.
+
+---
+
+## 2026-09-06 — §7.3 동시 401 실전 재확인 통과 — M2-B 검증 완료
+
+- **환경 준비**: `cinemory-backend/src/main/resources/application.yml`의
+  `access-token-ttl`을 `PT30M`→`PT10S`로 임시 변경. 백엔드가 HTTP 요청을 기본으로는 콘솔에
+  찍지 않아(access log 없음) `POST /api/auth/reissue` 수신 횟수를 셀 수가 없었다 —
+  `logging.level.org.springframework.web.servlet.DispatcherServlet: DEBUG`를 같이 추가해
+  `DispatcherServlet`이 매 요청마다 남기는 `GET/POST "경로"` 라인으로 대체했다. 백엔드는
+  Claude Code가 직접 `./gradlew bootRun`으로 백그라운드 기동해 콘솔 출력을 그대로 관찰했다
+  (사용자 터미널에 의존하지 않아 로그를 사람이 읽어 전달할 필요가 없었다).
+- **결과 — 통과.** 로그인 → 대기 → `MovieDetail`(영화 id 1369) 진입 흐름에서, 5개 병렬 호출
+  (`GET /api/movies/1369` · `.../records/movies/1369` · `.../reviews/me?movieId=1369` ·
+  `.../wishes/me/1369` · `.../movies/1369/reviews`)이 **15:47:55.329~.340의 11ms 창** 안에
+  전부 발사됐고, 그 직전 **15:47:55.255에 `reissue`가 정확히 1회**만 발생해 5개 전부 새
+  토큰으로 성공(200/200/204/200/200)했다. `REFRESH_TOKEN_REUSED`나 로그아웃 흔적은 로그
+  전체에 없었다.
+- **관찰 — 세션 전체로는 `reissue`가 5회 찍혔지만 버그가 아니다.** 로그인 직후
+  `useLogin.onSuccess`의 단독 `userApi.me()` 호출과, 그 직후 마운트되는 화면(`MyPage`류)의
+  `useMe()`+`useMyRecordsCount` 배치가 **서로 다른 시점**에 각각 자기만의
+  단일 비행(`refreshOnce`)을 열어서 두 번 찍힌 것이었다 — **같은 배치 안에서는 여전히
+  1회로 묶였다.** 원인은 `access-token-ttl=10s`가 선제 갱신 버퍼(60초)보다 짧아서, 토큰을
+  발급받은 바로 그 순간부터 이미 "60초 내 만료" 조건을 항상 만족하기 때문이다 — 즉
+  이 세션 동안의 모든 요청 묶음이 각자 한 번씩 갱신을 트리거했을 뿐, **진짜 동시 요청을
+  중복 갱신한 사례는 없었다.** 실사용 TTL(30분)에서는 이런 잦은 트리거 자체가 없다. 부수적으로
+  로그에서 로그인이 두 번(22.5s, 26.9s) 찍힌 것도 확인했는데 첫 시도가 401이라 — 버그가
+  아니라 사용자의 단순 재시도(자격증명 오타 추정)였다.
+- **정리**: 검증 직후 `application.yml`을 원상 복구(`git diff` 무변경 확인)하고 백엔드를
+  재기동해 정상 동작 확인. `access-token-ttl`도 `DispatcherServlet` DEBUG 로깅도 남지 않았다.
+- **M2-B 완료.** §1의 실행 순서 0~10번, §7.1(핵심 동선)·§7.2(경계 케이스, G-5는 재해석해
+  대체 검증)·§7.3(동시 401)까지 전부 통과했다. 남은 알려진 이슈는 없음 — 다음은 M2-C.
+
+---
+
+## 2026-09-05 (이어서 2) — §7.2 경계 케이스 검증 중 무한스크롤 풋터 점프 버그 발견·수정 + G-5 재해석
+
+- **§7.2 진행 중 두 가지가 나왔다.**
+  1. **G-5(인증 전용 화면에서 로그아웃)를 스크립트대로 재현할 수 없음 — 사용자 지적으로 확인.**
+     `MyRecordsStackParamList`에서 `Settings`는 `MyRecords`의 자식이 아니라 `MyPage`(스택
+     루트)의 형제다. `MyRecords`에 있는 채로 `Settings`에 가려면 먼저 `MyPage`로 돌아가야
+     하는데, 네이티브 스택은 그 순간 `MyRecords`를 언마운트한다 — "`MyRecords`가 화면에
+     떠 있는 상태로 로그아웃"이라는 조합 자체가 지금 구조로는 만들 수 없다(게스트 여부와
+     무관한 **스택 토폴로지 문제**). G-5가 실제로 확인하려는 건 "인증 전용 화면이 네비게이션
+     없이 그 자리에서 게이트로 바뀌는가"이므로, **`Settings` 자신을 대상으로 검증**하는
+     쪽으로 대체했다 — `Settings`도 동일한 `isAuthed` 게이트가 있고 로그아웃 버튼이 같은
+     화면 안에 있어 같은 메커니즘을 확인할 수 있다(§5.6 검증 때 이미 관찰됨). §7.2 표의
+     `MyRecords`에서" 문구는 실제 도달 가능한 경로가 아니라는 걸 기록해 둔다.
+  2. **E-10(무한스크롤) 검증 중 "스크롤하면 화면이 순간적으로 튐/깜빡인다"는 실기기 피드백.**
+     처음엔 페이지네이션 자체가 항목을 건너뛰는 데이터 버그를 의심해 백엔드에 curl로
+     `query=의`(전체 565건/29페이지) page=1·page=2를 직접 비교해 겹치는 id가 없음을
+     확인했고, 박스오피스 스케줄러는 새벽 5시라 테스트 시간대와 무관함도 확인했다. 사용자
+     확인 결과 **스크롤 중 다른 영화를 sync하지 않았고, 증상은 데이터 누락이 아니라 순간적인
+     시각적 튐/깜빡임**이었다 — 데이터 정합성 문제가 아니라 렌더링 문제로 좁혀졌다.
+- **원인**: `SearchResultScreen.tsx`·`MyRecordsScreen.tsx` 둘 다
+  `ListFooterComponent={isFetchingNextPage ? <LoadingState /> : null}` 패턴이었다.
+  `LoadingState`(기본 variant)는 `py-12`짜리 블록이라, 페이지를 불러올 때마다 **풋터가
+  통째로 마운트→언마운트**되면서 리스트 콘텐츠 높이가 그 순간 출렁였다 — 정확히 사용자가
+  본 "스크롤 중 화면이 튐"과 일치한다. 두 화면에 동일하게 있던 공용 버그였다.
+- **수정**: `src/components/common/InfiniteScrollFooter.tsx` 신규 — `hasNextPage`인 동안은
+  **항상 같은 높이(`h-16`)**를 차지하고 그 안에서 스피너만 켜고 끈다. 높이가 바뀌는 순간을
+  리스트가 실제로 끝나는(`hasNextPage → false`) 단 한 번으로 줄였다. 두 화면 모두
+  `ListFooterComponent`를 이걸로 교체. `tsc --noEmit` 통과 확인.
+- **남겨둔 것**: `hasNextPage`가 `undefined`인 초기 순간(쿼리 미실행)엔 `?? false`로
+  방어했다. 실기기 재검증(스크롤 시 더 이상 튀지 않는지)은 다음 확인 때 진행.
+
+---
+
+## 2026-09-05 (이어서) — §7.1 핵심 동선 완주 실기기 검증 통과 + `TextField` multiline 높이 버그 발견·수정
+
+- **§7.1(핵심 동선 완주 — M2-B 완료 판정) 전체를 앱 재시작 없이 한 번에 이어서 검증** — 0번(게스트
+  홈 도달)부터 8번(리뷰 upsert 중복 없음)까지 **전 항목 1차 시도에 통과.** `M2B-screens-spec.md`
+  11행이 정의한 M2-B 완료 판정 문구("로그인 → 검색 → 영화 선택 → 시청 기록 저장 → 내 기록에
+  반영 확인까지 한 번에 이어진다")를 그대로 충족했다.
+- 검증 중 질문 두 개가 나왔다.
+  1. **"내 서재에 있는 작품"(`registered`)에 들어오는 기준** — 로그인한 사용자 개인화가 아니다.
+     `cinemory-backend`의 `MovieSearchService`가 **우리 DB(`movie` 테이블)에서
+     `title OR original_title` LIKE 매칭**만 하는 것이라(`service-layer-spec.md` 4-2, 347행),
+     **누구든(다른 유저의 검색·sync, 백엔드 시드 작업) 한 번이라도 TMDB에서 동기화한 적 있으면**
+     이후 모든 사용자의 검색에서 registered로 뜬다. "내 서재"라는 라벨과 달리 실제로는 서비스
+     DB 전체 등록 여부다 — 화면 문구가 오해를 부를 수 있다는 점은 기록해 두되, 이번엔 화면
+     문구를 바꾸지 않았다(요청받은 범위가 질문에 대한 설명이었다).
+  2. **리뷰 입력칸이 좁아서 긴 문장을 쓰기 불편하다** — 실제 버그로 확인.
+- **원인**: `src/components/primitives/TextField.tsx`가 `multiline` 여부와 무관하게 항상
+  `h-12`(48px 고정 높이) 클래스를 걸고 있었다. `ReviewModal`의 `numberOfLines={6}`,
+  `WatchRecordModal`의 메모 필드 `numberOfLines={3}`이 **전부 48px로 눌려서** `numberOfLines`
+  값이 사실상 무시되고 있었다 — 리뷰만의 문제가 아니라 앱에 존재하는 **모든 multiline
+  TextField 공용 버그**였다.
+- **수정**: `TextField`에서 `multiline`이면 `h-12` 대신 `py-3` + `numberOfLines` 기반
+  `minHeight`(`numberOfLines * 24 + 24`)를 적용하도록 바꿨다. `textAlignVertical`도
+  `multiline`일 때 기본값 `'top'`을 주도록 옮겨서, 호출부(`ReviewModal`)가 개별로 넣던
+  `textAlignVertical="top"`을 지울 수 있었다(중복 제거). `numberOfLines={6}` 기준 리뷰
+  입력칸은 이제 최소 168px, `numberOfLines={3}` 메모 필드는 최소 96px로 커진다.
+  단일 줄 입력(`multiline` 미지정)은 기존 `h-12` 그대로라 회귀 없음.
+- `tsc --noEmit` 통과 확인. 스타일 변경뿐이라 리뷰 upsert 동작 자체(§7.1 8번)는 재검증
+  필요 없다고 판단했고, 사용자에게는 입력칸 크기만 눈으로 재확인 요청.
+- **남은 것 — §7.2(경계 케이스 E/G 시리즈)·§7.3(MovieDetail 실제 5개 병렬 호출에서의 동시
+  401 재확인, `access-token-ttl` 임시 조정 필요)는 아직 체계적으로 훑지 않았다.** §7.1
+  기준으로는 M2-B 완료 판정을 충족했지만, §7 전체(§1 10번 "검증")를 다 돈 것은 아니다 —
+  다음 세션에서 진행 여부를 사용자와 정할 것.
+
+---
+
+## 2026-09-05 — `MyPage`/`Settings` 구현 (§5.6, M2-B §1 마지막 화면)
+
+- `MyPageScreen`을 로그아웃 검증용 임시 화면에서 본구현으로 교체했다: 커버(그라데이션)
+  + 프로필 이미지(96, 카카오 URL 없으면 아이콘 폴백) + 닉네임 + "N편 관람", 그 아래 메뉴
+  6개(내 기록·내 컬렉션·찜 목록·시청 분석·프로필 수정·설정). "N편 관람"은
+  `UserProfileResponse`에 없어서 `GET /api/users/{myId}/records?size=1`의
+  `totalElements`로 얻는다 — `useMyRecordsCount` 훅을 새로 추가했고, `recordApi.ofUser`에
+  `size` 파라미터를 옵션으로 얹었다(기존 무한스크롤 호출은 영향 없음, axios가 `undefined`
+  파라미터를 자동으로 뺀다).
+- `Settings`를 플레이스홀더에서 실제 화면으로 교체했다: 닉네임 변경(max 30, 가입 max 50과
+  비대칭 — §5.1 재확인) · 공개범위 변경(`ActionSheet`로 3택) · 비밀번호 변경(react-hook-form
+  + zod, `SignUpScreen`과 동일한 `applyServerErrors` 패턴) · 로그아웃.
+- **비밀번호 변경 성공 시 처리가 스펙에서 특별 취급된다** — 서버가 204(실제 생성 스키마는
+  200)로 전 세션을 폐기하므로, 일반 로그아웃(§5.1 — "화면 전환 없음, status만 바뀜")과
+  달리 **명시적으로 로그인 화면으로 보내야** 한다. `useChangePassword`의 `onSuccess`에서
+  `authStore.logout()`을 호출해 로컬 세션도 같이 정리하고, 화면에서는 `AuthRequired`와
+  같은 방식으로 `NavigationProp<RootStackParamList>`를 받아
+  `navigate('AuthModal', { screen: 'Login' })`으로 로그인 모달을 직접 띄운다.
+- `EditProfile`은 이번에 손대지 않고 플레이스홀더로 남겼다 — §5.6 본문이 `MyPage`의 메뉴
+  목록과 `Settings`만 구체적으로 규정하고 있고, 정작 닉네임/공개범위 변경 같은 "프로필
+  수정"에 해당할 법한 동작은 전부 `Settings` 테이블에 배정돼 있어서 별도 화면에 넣을
+  내용이 없었다. 프로필 사진 업로드도 여전히 금지(L-13 미결)라 더더욱 빈 화면이라 판단.
+  나중에 이 판단이 틀렸다면(예: 기획이 EditProfile에 별도 필드를 원하면) 재검토.
+- 새 화면 둘 다 `edges={['left', 'right']}`로 만들었다 — 어제(2026-09-04) 발견한 `Screen`
+  기본 `edges`의 헤더 밑 중복 여백 문제를 처음부터 피해 갔다.
+- `tsc --noEmit` 통과 확인.
+
+**후속 업데이트 (같은 날) — 실기기 검증 중 인터셉터 버그 발견·수정**
+
+닉네임 변경(빈 값·31자·무변경 disabled 포함)·공개범위 변경·로그아웃·메뉴 이동은 전부
+1차 시도에 통과했다. **비밀번호 변경 검증(현재 비밀번호를 틀리게 입력하는 케이스) 중
+심각한 버그를 발견했다** — 틀린 현재 비밀번호를 넣으면 폼 에러 대신 **로그인 모달로
+튕기며 강제 로그아웃**됐다(비밀번호 변경 *성공* 시나리오와 동일한 결과).
+
+- **원인**: `PATCH /api/users/me/password`가 현재 비밀번호 불일치 시 반환하는
+  `401 INVALID_CREDENTIALS`는 입력값 문제일 뿐 토큰/세션 문제가 아니다. 그런데
+  `src/api/client.ts`의 401 인터셉터는 *"`TOKEN_EXPIRED`가 아닌 401은 전부 강제
+  로그아웃"* 으로 짜여 있었다 — `docs/M2-frontend-spec.md` §6.3의 에러 코드 표(
+  `INVALID_TOKEN`·`REFRESH_TOKEN_NOT_FOUND`·`REFRESH_TOKEN_REUSED`만 강제 로그아웃,
+  `INVALID_CREDENTIALS`는 "인터셉터 개입 없음")와 **정반대로 구현돼 있었다.** M2-A 이후
+  이 화면이 처음으로 *인증된 요청 안에서* 비즈니스 401을 반환하는 엔드포인트였던 탓에
+  지금까지 드러나지 않았다(`/api/auth/login`의 `INVALID_CREDENTIALS`는 `/api/auth/` 접두사
+  예외로 애초에 인터셉터를 안 탄다).
+- **수정**: `SESSION_INVALID_CODES` 허용목록(`INVALID_TOKEN`·`REFRESH_TOKEN_NOT_FOUND`·
+  `REFRESH_TOKEN_REUSED`·`UNAUTHORIZED`)을 두고 이 안에 있을 때만 `authStore.logout()`을
+  호출하도록 뒤집었다. `UNAUTHORIZED`는 §6.3 표에는 없지만 백엔드의
+  `requireAuthenticated`(viewerId null 방어 코드, 정상 흐름에선 SecurityFilterChain이 먼저
+  막아 도달하지 않는 이중 방어)에서만 나와 토큰 문제와 동치로 판단해 포함시켰다. 그 외
+  코드(예: `INVALID_CREDENTIALS`)는 인터셉터가 개입하지 않고 호출부로 그대로 넘어간다.
+  단일 비행(refreshOnce) 자체와 `TOKEN_EXPIRED` 재시도 경로는 손대지 않았다.
+- 수정 후 재검증 — 틀린 현재 비밀번호는 폼에 인라인 에러로 표시되고 세션은 유지된다.
+  이후 정상 비밀번호 변경 → 로그인 모달로 이동 → 새 비밀번호로 재로그인까지 포함해
+  **10개 검증 항목 전부 통과.** `tsc --noEmit` 재확인 완료.
+- **범위 밖으로 남긴 것**: 이 인터셉터가 앞으로 붙을 다른 인증된 쓰기 엔드포인트에서도
+  비즈니스 401을 반환할 가능성이 있다 — 새 엔드포인트를 붙일 때마다 401의 의미(토큰 문제 vs
+  입력값 문제)를 확인하고 필요하면 `SESSION_INVALID_CODES`를 갱신할 것.
 
 ---
 

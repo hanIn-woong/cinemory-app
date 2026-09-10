@@ -23,4 +23,16 @@ export const posterFallbackPalette = [
   '#4A90E2', '#7B68EE', '#FF69B4', '#FFD700', '#FF6347', '#32CD32', '#9370DB', '#FF8C00',
 ] as const;
 
+// CollectionShelfCard 전용 — 선반 색은 반드시 여기를 참조한다(docs/M2C-screens-spec.md §5.2).
+// A(나무 선반) ↔ B(뉴트럴 렛지, 현재 채택) 전환을 hex 6개 교체로 끝내기 위한 것 —
+// 컴포넌트에 색을 박으면 카드·빈 상태·스켈레톤을 전부 찾아다녀야 한다.
+export const shelf = {
+  boardTop: '#FFFFFF',
+  boardMid: '#E4E6EB',
+  boardBottom: '#D3D6DD',
+  edgeTop: '#C2C6CE',
+  edgeBottom: '#AFB4BE',
+  groundShadow: 'rgba(0,0,0,0.34)',
+} as const;
+
 // typography variant 클래스의 단일 출처는 src/components/primitives/Txt.tsx다 (§2).

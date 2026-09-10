@@ -1,20 +1,23 @@
 import { useRoute, type RouteProp } from '@react-navigation/native';
-import { Heart, User as UserIcon } from 'lucide-react-native';
+import { LinearGradient } from 'expo-linear-gradient';
+import { StatusBar } from 'expo-status-bar';
+import { Heart, Maximize2, User as UserIcon, X } from 'lucide-react-native';
 import { useState } from 'react';
-import { Alert, Image, Pressable, ScrollView, View } from 'react-native';
+import { Alert, Image, Modal, Pressable, ScrollView, useWindowDimensions, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ActionSheet, EmptyState, ErrorState, LoadingState, type ActionSheetOption } from '../../components/common';
-import { PosterImage } from '../../components/movie/PosterImage';
+import { CollectionPickerSheet } from '../../components/collection/CollectionPickerSheet';
 import { RatingStars } from '../../components/movie/RatingStars';
 import { Button, Card, Divider, Screen, Spacer, Txt } from '../../components/primitives';
-import { BackdropSize, ProfileSize, tmdbImageUrl } from '../../constants/tmdb';
+import { PosterSize, ProfileSize, tmdbImageUrl } from '../../constants/tmdb';
 import { useMovieDetail } from '../../hooks/useMovies';
-import { useDeleteRecord, useSetRepresentative, useWatchLog } from '../../hooks/useRecords';
+import { useDeleteRecord, useSetRepresentative, useUpdateRecord, useWatchLog } from '../../hooks/useRecords';
 import { useRequireAuth } from '../../hooks/useRequireAuth';
 import { useMovieReviews, useMyReview } from '../../hooks/useReview';
 import { useIsWished, useWishToggle } from '../../hooks/useWishlist';
 import type { HomeStackParamList } from '../../navigation/types';
 import { useAuthStore } from '../../store/authStore';
-import { colors } from '../../theme/tokens';
+import { colors, layout } from '../../theme/tokens';
 import type { WatchRecordResponse, WatchType } from '../../types';
 import { ReviewModal } from './ReviewModal';
 import { WatchRecordModal } from './WatchRecordModal';
@@ -27,8 +30,21 @@ const WATCH_TYPE_LABEL: Record<WatchType, string> = {
   ETC: '기타',
 };
 
+// ⚠️ 이음매 문제와 텍스트 배치 문제가 같은 문제였다(2026-09-10 재설계, 상위 §9.3) —
+// 제목을 포스터 위에 얹으려면 흰 글씨→어두운 스크림→흰 배경으로 이어질 때 값이
+// 반전돼 탁한 회색 띠가 생긴다. 텍스트를 히어로 밖으로 빼서 이 사슬을 끊었다 —
+// 스크림이 필요 없어지고 포스터를 배경색으로 그대로 페이드하면 이을 경계 자체가 없다.
+// 4:5로 상단 기준 크롭하는 이유는 2:3 full-bleed(390px 기기에서 585px, 화면의 69%)면
+// 장르·감독·출연이 전부 스크롤 밖으로 밀리기 때문이다.
+// ⚠️ 1:1(46%)까지 줄여봤으나 실기기에서 "너무 줄였다"는 피드백으로 4:5로 롤백했다
+// (2026-09-10) — 정보 박스 노출과 포스터 비중 사이의 정확한 지점은 추후 미세조정 예정.
+const HERO_ASPECT_RATIO = 4 / 5; // width:height
+const HERO_FADE_RATIO = 0.38; // 하단 페이드 밴드 높이 비율
+
 export function MovieDetailScreen() {
   const { movieId } = useRoute<Rt>().params;
+  const { width: windowWidth } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
   const isAuthed = useAuthStore((s) => s.status === 'authenticated');
   const myId = useAuthStore((s) => s.user?.id);
   const requireAuth = useRequireAuth();
@@ -42,12 +58,15 @@ export function MovieDetailScreen() {
   const wishToggle = useWishToggle();
   const deleteRecord = useDeleteRecord();
   const setRepresentative = useSetRepresentative();
+  const updateRecord = useUpdateRecord();
 
   const [recordModalVisible, setRecordModalVisible] = useState(false);
   const [editingRecord, setEditingRecord] = useState<WatchRecordResponse | null>(null);
   const [editingMinDate, setEditingMinDate] = useState<string | null>(null);
   const [reviewModalVisible, setReviewModalVisible] = useState(false);
   const [recordSheet, setRecordSheet] = useState<WatchRecordResponse | null>(null);
+  const [collectionSheetVisible, setCollectionSheetVisible] = useState(false);
+  const [posterModalVisible, setPosterModalVisible] = useState(false);
 
   function closeRecordModal() {
     setRecordModalVisible(false);
@@ -55,9 +74,15 @@ export function MovieDetailScreen() {
     setEditingMinDate(null);
   }
 
+  // ⚠️ 로딩·에러·완료 3상태가 전부 같은 Screen 껍데기(edges/scroll/padded)를 쓴다 —
+  // 예전엔 로딩·에러가 <Screen>(View), 완료가 <Screen scroll>(ScrollView)로 갈라져
+  // 데이터 도착 순간 하위 트리 전체가 View→ScrollView로 remount됐다. 뒤로가기 빈 화면
+  // 버그(docs/M2-frontend-spec.md §8.6)의 후보 원인 중 하나로 의심해 정리했으나, 실제
+  // 원인은 이게 아니라 전 화면에 걸친 전환 애니메이션 경합으로 밝혀졌다(§8.6) — 이
+  // 정리 자체는 불필요한 remount를 없앤다는 점에서 유효해 그대로 남긴다.
   if (detail.isLoading) {
     return (
-      <Screen>
+      <Screen edges={['left', 'right']} scroll padded={false}>
         <LoadingState variant="detail" />
       </Screen>
     );
@@ -65,7 +90,7 @@ export function MovieDetailScreen() {
 
   if (detail.isError || !detail.data) {
     return (
-      <Screen>
+      <Screen edges={['left', 'right']} scroll padded={false}>
         <ErrorState message={detail.error?.message} onRetry={() => detail.refetch()} />
       </Screen>
     );
@@ -73,7 +98,42 @@ export function MovieDetailScreen() {
 
   const movie = detail.data;
   const year = movie.releaseDate ? movie.releaseDate.slice(0, 4) : null;
-  const heroUri = tmdbImageUrl(movie.posterPath, BackdropSize.DETAIL);
+  // 대표 기록 → (null이면) 별점 있는 가장 최근 기록 → 없으면 별점 없음. 공개 리뷰의
+  // 파생 별점과 같은 폴백 규칙이다(2026-09-01 확정, watchLog는 이미 id DESC로 온다).
+  // 리뷰를 안 썼어도(myReview 없음) 시청 기록만으로 뜨게 하려고 watchLog에서 직접 뽑는다.
+  const representativeRecord = watchLog.data?.find((r) => r.representative);
+  const myRating = representativeRecord?.rating ?? watchLog.data?.find((r) => r.rating != null)?.rating ?? null;
+  const heroUri = tmdbImageUrl(movie.posterPath, PosterSize.HERO);
+  // 히어로 컨테이너는 4:5 — 원본 포스터(2:3)를 top:0에 두고 컨테이너로 아래쪽만 자른다.
+  const heroHeight = windowWidth / HERO_ASPECT_RATIO;
+  const posterNaturalHeight = windowWidth / layout.posterAspectRatio;
+  const heroFadeHeight = heroHeight * HERO_FADE_RATIO;
+
+  // ⚠️ PATCH /api/records/{id}는 전체 치환이다(B-15) — rating만 보내면 나머지 필드가
+  // null로 지워진다. 대표 기록의 기존 값을 그대로 다시 실어 보낸다(WatchRecordModal의
+  // 수정 흐름과 동일한 이유).
+  //
+  // ⚠️ RatingStars는 "같은 별을 다시 탭하면 0(해제)"을 보낸다 — WatchRecordModal처럼
+  // "저장" 전 임시 상태에서는 안전하지만, 여기는 탭마다 바로 저장이라 현재 별점과 같은
+  // 위치를 탭하면 그대로 지워져 저장되는 버그가 됐다(실기기 확인). 0은 무시한다 —
+  // 별점을 지우고 싶으면 "시청 기록 수정" 모달을 쓴다.
+  function handleChangeMyRating(nextRating: number) {
+    if (!representativeRecord || nextRating <= 0) return;
+    updateRecord.mutate(
+      {
+        recordId: representativeRecord.id!,
+        movieId,
+        body: {
+          watchDate: representativeRecord.watchDate ?? undefined,
+          watchType: representativeRecord.watchType ?? undefined,
+          placeDetail: representativeRecord.placeDetail ?? undefined,
+          rating: nextRating,
+          note: representativeRecord.note ?? undefined,
+        },
+      },
+      { onError: (error) => Alert.alert('저장 실패', error.message) },
+    );
+  }
 
   function recordSheetOptions(record: WatchRecordResponse): ActionSheetOption[] {
     const options: ActionSheetOption[] = [
@@ -113,24 +173,67 @@ export function MovieDetailScreen() {
 
   return (
     <Screen edges={['left', 'right']} scroll padded={false}>
-      {/* 히어로 — MovieDetailResponse엔 backdropPath가 없어 posterPath로 대신한다 */}
-      <View style={{ height: 256, backgroundColor: colors.muted }}>
-        {heroUri && <Image source={{ uri: heroUri }} style={{ width: '100%', height: '100%' }} blurRadius={2} />}
-      </View>
+      {/* 히어로 — 4:5로 상단 기준 크롭한 대형 포스터. MovieDetailResponse엔 backdropPath가
+          없어 posterPath를 그대로 키운다. 원본(2:3)을 top:0에 두고 컨테이너(overflow
+          hidden)로 아래쪽만 잘라낸다 — resizeMode="cover"는 가운데 기준이라 인물·타이틀이
+          있는 위쪽이 잘리므로 쓰지 않는다. 잘리는 하단은 어차피 페이드가 덮는다.
+          탭하면 크롭 전 원본을 볼 수 있다(§9.3 "히어로 탭 → 포스터 전체 보기"). */}
+      <Pressable
+        onPress={() => setPosterModalVisible(true)}
+        disabled={!movie.posterPath}
+        accessibilityRole="imagebutton"
+        accessibilityLabel="포스터 전체 보기"
+      >
+        <View style={{ width: windowWidth, height: heroHeight, overflow: 'hidden', backgroundColor: colors.muted }}>
+          {heroUri && (
+            <Image
+              source={{ uri: heroUri }}
+              style={{ position: 'absolute', top: 0, left: 0, width: windowWidth, height: posterNaturalHeight }}
+            />
+          )}
+          {/* ⚠️ 검정 스크림이 아니라 화면 배경색 자체로 페이드한다 — 제목을 히어로 밖으로
+              뺐기 때문에 대비를 위한 어두운 스크림이 필요 없고, 그래서 이을 경계 자체가
+              없다(이전엔 검정→흰색 전환 구간이 탁한 회색 띠로 보였다). */}
+          <LinearGradient
+            colors={['rgba(255,255,255,0)', 'rgba(255,255,255,0.72)', colors.background]}
+            locations={[0, 0.55, 1]}
+            style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: heroFadeHeight }}
+          />
+          {movie.posterPath && (
+            // ⚠️ 크롭된 화면은 잘렸다는 티가 안 나 힌트가 없으면 아무도 안 누른다.
+            <View className="absolute bottom-3 right-3 h-7 w-7 items-center justify-center rounded-full bg-black/40">
+              <Maximize2 size={14} color={colors.primaryForeground} />
+            </View>
+          )}
+        </View>
+      </Pressable>
 
       <View className="px-4">
-        <View style={{ marginTop: -56 }} className="flex-row items-end">
-          <PosterImage id={movie.id!} posterPath={movie.posterPath} width={112} height={160} size="DETAIL" />
-          <View className="ml-3 flex-1 pb-1">
-            <Txt variant="h2" numberOfLines={2}>
-              {movie.title}
-            </Txt>
-            <Spacer size="xs" />
-            <Txt variant="caption" color="mutedForeground">
-              {[year, movie.runtime ? `${movie.runtime}분` : null].filter(Boolean).join(' · ')}
-            </Txt>
-          </View>
-        </View>
+        <Spacer size="md" />
+        <Txt variant="h2" numberOfLines={2} className="text-center">
+          {movie.title}
+        </Txt>
+        <Spacer size="xs" />
+        <Txt variant="caption" color="mutedForeground" className="text-center">
+          {[year, movie.runtime ? `${movie.runtime}분` : null].filter(Boolean).join(' · ')}
+        </Txt>
+
+        {myRating != null && (
+          <>
+            <Spacer size="md" />
+            <View className="items-center">
+              {/* 탭해서 바로 수정 — 대표 기록의 별점을 갱신한다. 기록이 여러 개면
+                  대표만 바뀐다(다른 회차의 별점은 그대로). */}
+              <RatingStars
+                rating={myRating}
+                size={40}
+                onChange={
+                  representativeRecord && !updateRecord.isPending ? handleChangeMyRating : undefined
+                }
+              />
+            </View>
+          </>
+        )}
 
         <Spacer size="lg" />
         <Card>
@@ -144,7 +247,10 @@ export function MovieDetailScreen() {
                 출연
               </Txt>
               <Spacer size="xs" />
-              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+              {/* ⚠️ 첫 아이템이 스크롤뷰 경계에 딱 붙으면 원형 아바타 왼쪽 끝이 살짝
+                  잘려 보인다(실기기 확인) — 약간의 왼쪽 여백으로 해결한다.
+                  3px로는 부족해 8px로 늘렸다(2026-09-10 재확인). */}
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingLeft: 8 }}>
                 {movie.actors.map((actor) => (
                   <View key={actor.id} className="mr-4 w-16 items-center">
                     <ActorAvatar profilePath={actor.profilePath} />
@@ -191,6 +297,12 @@ export function MovieDetailScreen() {
             </Pressable>
           </View>
 
+          {/* 찜과 마찬가지로 게스트에게도 항상 보인다 — 탭 시 requireAuth가 모달을 띄운다(G-1). */}
+          <Spacer size="sm" />
+          <Button variant="secondary" onPress={() => requireAuth(() => setCollectionSheetVisible(true))}>
+            컬렉션에 추가
+          </Button>
+
           {!isAuthed ? (
             <>
               <Spacer size="md" />
@@ -206,11 +318,6 @@ export function MovieDetailScreen() {
             </>
           ) : (
             <>
-              <Spacer size="sm" />
-              <Button variant="secondary" onPress={() => Alert.alert('준비 중', '컬렉션 기능은 곧 제공됩니다')}>
-                컬렉션에 추가
-              </Button>
-
               <Spacer size="md" />
               <Divider />
               <Spacer size="md" />
@@ -326,6 +433,45 @@ export function MovieDetailScreen() {
         onClose={() => setRecordSheet(null)}
         options={recordSheet ? recordSheetOptions(recordSheet) : []}
       />
+      <CollectionPickerSheet
+        visible={collectionSheetVisible}
+        onClose={() => setCollectionSheetVisible(false)}
+        movieId={movieId}
+      />
+      {/* 히어로에서 크롭된 원본을 그대로 보여준다 — w780을 재사용하므로 추가 다운로드가
+          없다(§9.3). Android 뒤로가기는 onRequestClose로 받는다.
+          ⚠️ 탭-배경-닫기 대신 명시적 닫기 버튼을 둔다 — 포스터를 자세히 보려는 화면에서
+          아무 데나 탭하면 닫히는 게 오히려 불편하다는 실기기 피드백을 반영했다.
+          ⚠️ Android는 statusBarTranslucent 없이는 Modal이 상태바 아래부터만 그려져
+          최상단이 어두워지지 않는다(갤럭시 실기기 확인) — 켜서 검정 배경이 상태바까지
+          덮게 한다. */}
+      {posterModalVisible && <StatusBar style="light" />}
+      <Modal
+        visible={posterModalVisible}
+        transparent
+        animationType="fade"
+        statusBarTranslucent
+        onRequestClose={() => setPosterModalVisible(false)}
+      >
+        <View className="flex-1 items-center justify-center bg-black/90">
+          {heroUri && (
+            <Image
+              source={{ uri: heroUri }}
+              style={{ width: windowWidth, height: posterNaturalHeight }}
+              resizeMode="contain"
+            />
+          )}
+          <Pressable
+            onPress={() => setPosterModalVisible(false)}
+            hitSlop={8}
+            accessibilityLabel="닫기"
+            className="absolute right-4 h-10 w-10 items-center justify-center rounded-full bg-black/60"
+            style={{ top: insets.top + 12 }}
+          >
+            <X size={22} color={colors.primaryForeground} />
+          </Pressable>
+        </View>
+      </Modal>
     </Screen>
   );
 }
