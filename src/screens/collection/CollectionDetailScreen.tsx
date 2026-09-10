@@ -95,14 +95,6 @@ export function CollectionDetailScreen() {
 
   return (
     <Screen padded={false} edges={['left', 'right']}>
-      {/* 컬렉션 제목 밑 설명 — 접기 대상이 아니다(항상 보인다). */}
-      {description && (
-        <View className="border-b border-border px-4 py-2">
-          <Txt variant="caption" color="mutedForeground" numberOfLines={2}>
-            {description}
-          </Txt>
-        </View>
-      )}
       <View className="flex-1 overflow-hidden">
         <Animated.View
           pointerEvents="box-none"
@@ -131,7 +123,9 @@ export function CollectionDetailScreen() {
             contentContainerStyle={{
               paddingTop: TOOLBAR_HEIGHT,
               paddingHorizontal: viewMode === 'grid' ? 0 : layout.screenPadding,
-              paddingBottom: 24,
+              // 그리드는 화면 가장자리까지 채우는 게 목적이라 바닥도 예외를 두지 않는다
+              // (MyRecordsScreen과 동일, docs/M2C-screens-spec.md·M2B 변경 이력 참고).
+              paddingBottom: viewMode === 'grid' ? 0 : 24,
               gap: viewMode === 'grid' ? GRID_GAP : 0,
             }}
             keyExtractor={(item) => String(item.movieId)}

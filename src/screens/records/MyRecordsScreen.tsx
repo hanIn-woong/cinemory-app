@@ -97,7 +97,9 @@ export function MyRecordsScreen() {
             contentContainerStyle={{
               paddingTop: TOOLBAR_HEIGHT,
               paddingHorizontal: viewMode === 'grid' ? 0 : layout.screenPadding,
-              paddingBottom: 24,
+              // 그리드는 화면 가장자리까지 채우는 게 목적이라(위 GRID_GAP 주석) 바닥도
+              // 예외를 두지 않는다 — 리스트는 마지막 항목이 화면 끝에 붙지 않게 24 유지.
+              paddingBottom: viewMode === 'grid' ? 0 : 24,
               gap: viewMode === 'grid' ? GRID_GAP : 0,
             }}
             keyExtractor={(item) => String(item.movieId)}
