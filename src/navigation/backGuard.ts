@@ -8,13 +8,25 @@
 // 카운터를 쓰는 이유 — 화면 전환 하나에 나가는 화면(closing:true)과 들어오는 화면
 // (closing:false) 양쪽에서 transitionStart/End가 한 쌍씩 따로 온다. boolean이면 둘 중
 // 하나가 먼저 끝났을 때 다른 하나가 진행 중이어도 꺼져버린다.
+//
+// ⚠️ 천장(MAX_TRANSITION_MS)이 없으면 카운터가 샐 때 뒤로가기가 영구히 막힌다 —
+// transitionStart가 짝 없이 끝나면(전환 중 화면 파괴·앱 백그라운드 전환·네비게이터
+// 언마운트) transitionCount가 1 이상으로 남아 원래 버그보다 나쁜 상태(영구 잠금, 앱
+// 재시작 전엔 복구 불가)가 된다. 7개 네비게이터가 이 카운터를 전역으로 공유해 누수
+// 기회가 그만큼 많다 — 정상 경로는 이벤트 기반 그대로 두고, 누수했을 때만 시간으로
+// 강제 해제한다(§8.6).
+const MAX_TRANSITION_MS = 1000; // 어떤 전환도 이보다 길 수 없다
+// ⚠️ 개발 중 Fast Refresh는 이 모듈 레벨 상태를 초기화하지 않는다 — 갑자기 뒤로가기가
+// 안 먹으면 코드 문제가 아니라 누수된 카운터일 수 있다. 풀 리로드부터 의심할 것.
 let transitionCount = 0;
+let lastStartAt = 0;
 
 type TransitionEvent = { data: { closing: boolean } };
 type BeforeRemoveEvent = { preventDefault: () => void };
 
 function markTransitionStart(_e: TransitionEvent) {
   transitionCount += 1;
+  lastStartAt = Date.now();
 }
 
 function markTransitionEnd(_e: TransitionEvent) {
@@ -22,7 +34,7 @@ function markTransitionEnd(_e: TransitionEvent) {
 }
 
 function guardBeforeRemove(e: BeforeRemoveEvent) {
-  if (transitionCount > 0) {
+  if (transitionCount > 0 && Date.now() - lastStartAt < MAX_TRANSITION_MS) {
     e.preventDefault();
   }
 }
