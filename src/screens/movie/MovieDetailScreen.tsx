@@ -74,9 +74,15 @@ export function MovieDetailScreen() {
     setEditingMinDate(null);
   }
 
+  // ⚠️ 로딩·에러·완료 3상태가 전부 같은 Screen 껍데기(edges/scroll/padded)를 쓴다 —
+  // 예전엔 로딩·에러가 <Screen>(View), 완료가 <Screen scroll>(ScrollView)로 갈라져
+  // 데이터 도착 순간 하위 트리 전체가 View→ScrollView로 remount됐다. 뒤로가기 빈 화면
+  // 버그(docs/M2-frontend-spec.md §8.6)의 후보 원인 중 하나로 의심해 정리했으나, 실제
+  // 원인은 이게 아니라 전 화면에 걸친 전환 애니메이션 경합으로 밝혀졌다(§8.6) — 이
+  // 정리 자체는 불필요한 remount를 없앤다는 점에서 유효해 그대로 남긴다.
   if (detail.isLoading) {
     return (
-      <Screen>
+      <Screen edges={['left', 'right']} scroll padded={false}>
         <LoadingState variant="detail" />
       </Screen>
     );
@@ -84,7 +90,7 @@ export function MovieDetailScreen() {
 
   if (detail.isError || !detail.data) {
     return (
-      <Screen>
+      <Screen edges={['left', 'right']} scroll padded={false}>
         <ErrorState message={detail.error?.message} onRetry={() => detail.refetch()} />
       </Screen>
     );

@@ -24,6 +24,55 @@ narrative로 남긴다.
 
 ---
 
+## 2026-09-10 (이어서 12) — 진입 직후 빠른 뒤로가기 시 빈 화면 — 이분 탐색으로 원인 확정·해결
+
+- 사용자가 시간이 나서 위 백로그를 다시 열었다. **"간단한 방안부터 시도"** 로 시작해
+  `freezeOnBlur: true`를 `HomeStack`·`MyPageStack`의 `MovieDetail`에 추가했으나 실기기
+  재현 결과 **효과 없음.**
+- 사용자가 직접 이분 탐색 계획을 세워 순서를 지시했다 — ① `freezeOnBlur` 제거 ②
+  `headerTransparent` 임시로 끄기(사라지면 확정, 그대로면 ③) ③ `animation: 'none'`
+  임시로 걸기(사라지면 애니메이션 경합 확정 → `detachPreviousScreen: false` 시도, 그대로면
+  렌더 쪽 문제로 방향 전환) ④ `MovieDetailScreen`의 로딩·에러·완료 3상태가 `<Screen>`(View)
+  ↔ `<Screen scroll>`(ScrollView)로 갈라져 있어 데이터 도착 순간 하위 트리가 remount되는
+  걸 결과와 무관하게 통일. 함께 **구조 문제**도 지적받았다 — `MovieDetail` 옵션이 4개
+  스택(Home·MyPage·Social·Recommend)에 복붙돼 있어 실험할 때마다 4곳을 따로 고쳐야
+  했다. `src/navigation/movieDetailScreenOptions.ts`(단일 상수)로 추출해 이후 모든 실험이
+  한 곳만 고치면 되게 만들었다.
+- **②(headerTransparent 끔) → 그대로 재현.** `MovieDetail`의 투명 헤더는 원인이 아님을
+  확정.
+- **③(animation: 'none') → 사라짐.** 전환 애니메이션 경합이 원인임을 확정한 지점. 이
+  결과를 보고하니 사용자가 **"영화 상세 화면뿐 아니라 모든 화면의 뒤로가기에서 이
+  버그가 발생한다"** 고 알려왔다 — `MovieDetail`의 무거운 로딩 때문이라는 애초 가설이
+  틀렸고, native-stack 전체에 걸친 문제로 범위가 넓어졌다. 실험 옵션도 화면별
+  (`movieDetailScreenOptions.ts`)이 아니라 스택 전체(`defaultStackScreenOptions.ts` 신설,
+  7개 네비게이터 — Root·Auth·Home·MyPage·Social·Recommend·CineMap — 의 `screenOptions`에
+  전부 연결)로 옮겼다.
+- **다음 단계로 지시받은 `detachPreviousScreen: false`가 타입 에러로 막혔다.** 확인해보니
+  `react-native-screens` 공식 README에 이 옵션은 JS 기반 `@react-navigation/stack`
+  (미설치) 전용이라고 명시돼 있었다 — native-stack은 네이티브 컨트롤러가 전환을
+  담당해서 이 개념 자체가 없다. 사용자에게 이 사실과 대안 네 가지(애니메이션 지속시간
+  단축, 뒤로가기 디바운스, 패키지 버전 확인, `animation: 'none'` 영구 적용)를 제시했다.
+- 사용자가 **애니메이션 지속시간 단축**(`animationDuration: 150`)을 골랐다 — 실기기
+  재현 결과 **여전히 재현됨**(창을 좁혔을 뿐 닫지는 못했다는 뜻).
+- 사용자가 원리를 물어 **뒤로가기 디바운스**(전환 중엔 뒤로가기 자체를 막는 방식)를
+  설명했다 — react-navigation의 `beforeRemove` 이벤트가 하드웨어 back·헤더 back
+  버튼·스와이프 제스처를 전부 같은 지점에서 가로채는 표준 API임을 소스(native-stack의
+  `onHeaderBackButtonClicked`가 `StackActions.pop()`을 dispatch하는 경로, iOS
+  `preventNativeDismiss`의 연동)로 확인한 뒤 설명에 반영했다.
+- "비용이 싸면 구현, 테스트 후 아니면 `animation: 'none'`으로" 라는 조건부 지시를
+  받고 **비용이 낮다고 판단해 바로 구현**했다 — `src/navigation/backGuard.ts` 신설.
+  `transitionStart`/`transitionEnd`(나가는 화면·들어오는 화면 양쪽에서 한 쌍씩 오므로
+  boolean이 아니라 카운터로 추적)로 "전환 중" 상태를 잡고, `beforeRemove`에서 전환
+  중이면 `preventDefault()`로 막는다. `BACK_GUARD_SCREEN_LISTENERS`를 7개
+  네비게이터의 `screenListeners`에 전부 연결. `animationDuration: 150`은 되돌리고
+  (`defaultStackScreenOptions.ts` 다시 빈 객체) 디바운스만으로 막히는지 깨끗하게
+  확인했다.
+- **실기기 확인 결과 버그 재현 안 됨 — 해결.** `npx tsc --noEmit` 통과 확인.
+  `M2-frontend-spec.md` §8.6 신설(단일 출처), `M2B-screens-spec.md` §5.4는 요약 +
+  링크로 축약하고 양쪽 변경 이력에 기록했다.
+
+---
+
 ## 2026-09-10 (이어서 3) — 히어로 블러를 `Image blurRadius` 근사에서 `expo-blur`로 교체
 
 - 5단계 `blurRadius` 밴드 + 배경색 그라디언트로 고쳐도 실기기에서 "경계가 뚜렷이

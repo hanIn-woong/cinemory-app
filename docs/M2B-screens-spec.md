@@ -399,16 +399,13 @@ TMDB 한글화 커버리지 한계이며 우리 버그가 아니다.
 (대표 시청 기록 기준)은 다른 데이터라 B-4와 무관하게 이미 표시한다 — 2026-09-10
 변경 이력 참고.
 
-🔖 **백로그 — 진입 직후 빠른 뒤로가기 시 빈 화면(2026-09-10, 실기기 발견).** `MovieDetail`
-진입 후 화면 전환 애니메이션이 끝나기 전에 곧바로 뒤로가기를 누르면 빈 화면이 떴다가,
-다시 한 번 뒤로가기를 눌러야 정상 동작한다("한 번 더 누르면 된다"는 것이 단서). **원인은
-추정만 가능하고 확정하지 못했다** — 이 화면이 `headerTransparent: true`(`HomeStack`
-등 4곳에 등록)로 떠 있고 진입 시 API 호출 5개 + 히어로 이미지 로딩이 동시에 걸리는
-무거운 화면이라, Android `react-native-screens`의 push 전환이 끝나기 전 pop이 들어오면
-전환 상태가 꼬여 한 프레임이 비는 알려진 패턴과 증상이 일치한다. **실기기로 반복
-재현하며 좁혀야 확정할 수 있어 지금은 보류**한다 — 시도해볼 만한 저비용 후보는
-`freezeOnBlur`(native-stack 화면 옵션) 추가지만, 효과가 있다는 보장은 없다. 사용자가
-시간 부족으로 지금은 착수하지 않기로 하고 기록만 남긴다.
+✅ **해결됨(2026-09-10) — 진입 직후 빠른 뒤로가기 시 빈 화면.** 위 백로그로 등록됐던
+문제는 `MovieDetail` 전용이 아니라 **모든 화면의 뒤로가기에서 재현되는 native-stack
+전체 문제**로 실기기 이분 탐색 끝에 밝혀졌다 — 그래서 원인·해결 기록은 화면별 스펙이
+아니라 네비게이션 절인 `M2-frontend-spec.md` §8.6으로 옮겼다(**단일 출처**). 요약만
+남긴다: push 전환 애니메이션이 끝나기 전 pop이 들어오면 native-stack의 `Fragment`
+트랜잭션이 겹치는 것이 원인이었고, `src/navigation/backGuard.ts`가 `beforeRemove`로
+그 시간 창의 뒤로가기를 막아 해결했다. 실기기 확인 완료.
 
 ### 5.5 `MyRecords`
 
@@ -666,6 +663,7 @@ M2-B가 끝나면 2군으로 간다. 미리 알아둘 것.
 
 | 날짜 | 내용 |
 |---|---|
+| 2026-09-10 (이어서 12) | **§5.4 백로그(진입 직후 빠른 뒤로가기 시 빈 화면) 해결 — 실기기 확인.** `이어서 11`에서 `MovieDetail` 전용으로 보고 보류했던 문제를 재실험 중 **모든 화면의 뒤로가기에서 재현됨**을 확인해 native-stack 전체 문제로 재정의했다. `freezeOnBlur`·`headerTransparent` 끄기는 효과 없음, `animation: 'none'`은 사라져 전환 애니메이션 경합을 확정, `detachPreviousScreen`은 native-stack에 없는 개념(JS 기반 `@react-navigation/stack` 전용)이라 시도 불가, `animationDuration` 단축도 재현 지속. 최종적으로 `src/navigation/backGuard.ts`를 신설해 애니메이션은 유지하되 `beforeRemove`로 전환 중 뒤로가기만 막아 해결했다. 원인·해결 상세는 `M2-frontend-spec.md` §8.6(단일 출처)으로 옮겨 기록, 여기 §5.4는 요약과 링크만 남김. 겸사겸사 4개 스택에 복붙돼 있던 `MovieDetail` 옵션을 `movieDetailScreenOptions.ts`/`defaultStackScreenOptions.ts`로 추출. 상세 경위는 `docs/DevLog.md` 2026-09-10 |
 | 2026-09-10 (이어서 10) | **"내 별점 탭 수정" 중 별점이 사라지는 버그 수정(실기기 확인).** `RatingStars`는 "같은 별을 다시 탭하면 0(해제)"을 보내는 내장 동작이 있다 — `WatchRecordModal`처럼 "저장"을 누르기 전 임시 상태에서는 안전하지만, 이번엔 탭마다 바로 `PATCH`가 나가도록 연결해서 **현재 별점과 같은 위치를 탭하면 그대로 지워져 저장**됐다. `handleChangeMyRating`에서 `nextRating <= 0`이면 무시하도록 수정 — 이 빠른 수정 경로에서는 지우기를 지원하지 않고, 별점을 지우려면 "시청 기록 수정" 모달을 쓴다. `npx tsc --noEmit`·`expo export --platform android` 통과 |
 | 2026-09-10 (이어서 9) | **"내 별점" 탭해서 수정 + 실기기 크기 조정(28→40).** `RatingStars`가 이미 지원하는 탭 입력 모드(`onChange`)와 대표 기록 수정에 쓰던 `useUpdateRecord`를 연결하기만 해서 비용이 낮았다 — 새 API·새 컴포넌트 없음. 탭하면 **항상 대표 기록**의 별점을 갱신한다(기록이 여러 개여도 다른 회차는 그대로). ⚠️ `PATCH /api/records/{id}`가 전체 치환이라(B-15) 대표 기록의 기존 `watchDate`·`watchType`·`placeDetail`·`note`를 그대로 다시 실어 보낸다 — `rating`만 보내면 나머지가 지워진다. 저장 중에는 `onChange`를 `undefined`로 바꿔 표시 전용으로 전환해 중복 탭을 막는다. `npx tsc --noEmit`·`expo export --platform android` 통과 |
 | 2026-09-10 (이어서 8) | **"내 별점" 크게 표시 신설(상위 §9.3).** 제목·년도·러닝타임 아래, 정보 카드 위에 대표 시청 기록의 별점을 `RatingStars`(size 28)로 크게 보여준다. 데이터는 이미 이 화면이 불러오는 `watchLog`에서 직접 뽑는다(대표 기록 → 없으면 별점 있는 최근 기록 → 없으면 생략, §7.3과 동일 폴백) — 리뷰를 안 썼어도(`myReview` 없음) 시청 기록만으로 뜬다. 새 API 호출·새 컴포넌트 없이 기존 데이터·컴포넌트 재사용이라 비용이 작았다. `npx tsc --noEmit`·`expo export --platform android` 통과 |
