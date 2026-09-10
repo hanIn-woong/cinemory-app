@@ -42,3 +42,6 @@ yarn-error.*
 
 # local env (LAN IP 등 머신별 값)
 .env
+
+android/
+ios/
