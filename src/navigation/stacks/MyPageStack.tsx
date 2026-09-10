@@ -7,8 +7,6 @@ import { MyPageScreen } from '../../screens/mypage/MyPageScreen';
 import { SettingsScreen } from '../../screens/mypage/SettingsScreen';
 import { MyRecordsScreen } from '../../screens/records/MyRecordsScreen';
 import { WishlistScreen } from '../../screens/wishlist/WishlistScreen';
-import { BACK_GUARD_SCREEN_LISTENERS } from '../backGuard';
-import { DEFAULT_STACK_SCREEN_OPTIONS } from '../defaultStackScreenOptions';
 import { MOVIE_DETAIL_OPTIONS } from '../movieDetailScreenOptions';
 import type { MyPageStackParamList } from '../types';
 
@@ -16,7 +14,7 @@ const Stack = createNativeStackNavigator<MyPageStackParamList>();
 
 export function MyPageStack() {
   return (
-    <Stack.Navigator screenOptions={DEFAULT_STACK_SCREEN_OPTIONS} screenListeners={BACK_GUARD_SCREEN_LISTENERS}>
+    <Stack.Navigator>
       <Stack.Screen name="MyPage" component={MyPageScreen} options={{ title: '마이페이지' }} />
       <Stack.Screen name="EditProfile" component={makePlaceholder('프로필 수정')} options={{ title: '프로필 수정' }} />
       <Stack.Screen name="Settings" component={SettingsScreen} options={{ title: '설정' }} />
