@@ -1,6 +1,6 @@
 # CineMory M2 — 프론트엔드 설계 스펙
 
-> 대상 리포: `cinemory-app` (Expo SDK 56 / RN 0.85 / React 19.2 / TypeScript)
+> 대상 리포: `cinemory-app` (**Expo SDK 57 / RN 0.86 / React 19.2** / TypeScript — 2026-09-06 업그레이드)
 > 시각 기준: `cinemory-wireframe` (Figma Make 산출물, React + Vite + Tailwind v4)
 > API 기준: `cinemory-backend` — **`docs/controller-layer-spec.md`가 API 표면의 단일 출처**
 > 우선순위 기준: `CineMory_기획노트.md` **4-M2절**
@@ -124,7 +124,7 @@ M2 문서는 **우산 문서 1개 + 단계 문서 N개**로 나눈다. 백엔드
 
 | 항목 | 결정 | 근거 |
 |---|---|---|
-| 스타일링 | **NativeWind v4** (Expo 56 빌드 실패 시 **Uniwind**) | 와이어프레임 Tailwind 클래스 이식. 토큰+프리미티브로 격리 |
+| 스타일링 | **NativeWind v4.2.6** + `tailwindcss@^3.4` (✅ SDK 57 / RN 0.86 검증 완료 — Uniwind 폴백 불요) | 와이어프레임 Tailwind 클래스 이식. 토큰+프리미티브로 격리 |
 | 네비게이션 | `@react-navigation/native-stack` + `bottom-tabs` (설치 완료) | 와이어프레임의 `useState` 조건부 렌더링을 스택으로 평탄화 |
 | 타입 | **`openapi-typescript`로 `/v3/api-docs`에서 생성** | 5-7 D에서 검증된 경로. 손으로 쓰면 즉시 어긋난다 |
 | 서버 상태 | `@tanstack/react-query` v5 | 기획노트 6절이 이미 지정 |
@@ -1113,7 +1113,7 @@ npm i react-native-gifted-charts
 npm i nativewind && npm i -D tailwindcss
 ```
 
-> ⚠️ Expo SDK 56 / RN 0.85 / React 19.2는 최신이다. **`npx expo install`로 SDK 호환 버전이
+> ⚠️ Expo SDK 57 / RN 0.86 / React 19.2는 최신이다. **`npx expo install`로 SDK 호환 버전이
 > 선택되게** 하고 `npx expo-doctor`로 검증한다. `AGENTS.md` 지침대로
 > https://docs.expo.dev/versions/v56.0.0/ 를 확인한 뒤 코드를 작성한다.
 
@@ -1318,7 +1318,7 @@ export { CineMapWebView as CineMapView } from './CineMapWebView';
 |---|---|---|
 | 한국 지도 품질 | 최상 | 구글 지도는 국내 데이터 반출 규제로 상세도 낮음. iOS `PROVIDER_DEFAULT`(Apple Maps)는 상대적으로 나음 |
 | 생태계 | 커뮤니티 래퍼 (비공식). 착수 전 다운로드 수·최근 커밋·이슈 확인 필요 | 표준, 문서 풍부 |
-| Expo SDK 56 | 확인 필요 | ⚠️ config plugin이 SDK 56에서 깨짐 (`@expo/config-plugins` 경로 문제, 미해결). 워크어라운드: `npx expo install @expo/config-plugins` |
+| Expo SDK 호환 | 확인 필요 | ⚠️ SDK 56 시점에 config plugin이 깨짐 (`@expo/config-plugins` 경로 문제). 워크어라운드: `npx expo install @expo/config-plugins`. **현재 스택은 SDK 57이므로 착수 시 재확인 필요** |
 
 > 좌표를 백엔드가 공급하므로 앱의 지도는 "아는 좌표에 마커 찍기"만 합니다. 카카오의 POI 검색 정확도는 이미 백엔드에서 확보된 상태라, 렌더링 레이어 선택은 **지도 배경 품질**과 **Expo 호환성**만 보고 판단하면 됩니다.
 
@@ -1334,9 +1334,7 @@ export { CineMapWebView as CineMapView } from './CineMapWebView';
 
 | 날짜 | 내용 |
 |---|---|
-| 2026-09-06 | **「📍 진행 현황」·§12 갱신 — M2-B 완료, M2-C 착수 대기로 전환.** `M2B-screens-spec.md` §7(§7.1·§7.2·§7.3) 실기기 검증이 전부 끝나 현재 위치 마커·단계 표·§12 색인을 갱신했다. B-4(상세 평점)는 여전히 미해소임을 명시해 뒀다 — M2-B가 "완료"인 것은 B-4를 화면 자리 비움으로 우회했기 때문이지 B-4 자체가 해소된 게 아니다. 근거는 M2-B 완료 근거 절 신설로 §7 결과 요약(§6.3 갱신 2건 포함 버그 4건)을 남겼다 |
-| 2026-09-05 | **§6.3 에러 코드 표 정정 — `UNAUTHORIZED` 추가 + "표에 없으면 개입 없음" 명시.** `Settings`(§5.6, M2-B) 실기기 검증 중 `src/api/client.ts`의 401 인터셉터가 이 표와 **정반대로 구현돼 있던 것**을 발견했다 — "표에 있는 코드만 로그아웃"이 아니라 "`TOKEN_EXPIRED`가 아니면 전부 로그아웃"으로 짜여 있어, 비밀번호 변경 폼에서 현재 비밀번호를 틀리면(`401 INVALID_CREDENTIALS`) 폼 에러 대신 강제 로그아웃됐다. `/api/auth/login`의 `INVALID_CREDENTIALS`는 애초에 `/api/auth/` 접두사 예외로 인터셉터를 안 타서 이 표가 처음 작성됐을 때는 이 구현 오류가 드러나지 않았다. 코드를 표에 맞게 수정하면서(`SESSION_INVALID_CODES` 허용목록으로 전환), 표에 없던 `UNAUTHORIZED`(백엔드 `requireAuthenticated` 이중 방어 코드 — 정상 흐름에선 도달하지 않음)도 토큰 문제로 판단해 로그아웃 대상에 추가했다. 상세 경위는 `docs/DevLog.md` 2026-09-05 항목 |
-| 2026-09-06 | **§9.1 홈 화면 배경 설계 확정 + B-17 등록.** M2-B 검증 완료 후 홈 화면을 와이어프레임에 맞춰 보완하기로 하면서 배경 포스터의 **소스를 로그인 여부로 나누기로** 확정했다 — 로그인 + 기록 12편 이상이면 내 기록, 그 외(게스트·기록 부족·0건)는 랜덤 영화. **12편 임계값은 80칸을 5장으로 채우면 반복이 눈에 띄기 때문**이고, **기록 0건 폴백은 가입 직후가 인상이 가장 중요한 순간인데 배경이 비어버리는 것**을 막기 위해서다. ⚠️ **게스트 소스에서 막혔다 — 랜덤 정렬 수단이 없다.** `getMovieList`가 `findAll(pageable)`이고 정렬을 지정하지 않아 사실상 PK 순으로 고정되며 5-0-D가 클라이언트 `sort`를 의도적으로 미지원으로 확정했다. 즉 그대로 쓰면 *"무작위"* 가 아니라 **"항상 같은 20편"** 이 된다. 검토한 우회 넷(A 클라이언트 랜덤 페이지 / B `size=100` 셔플 / C 백엔드 엔드포인트 / D 박스오피스 대체) 중 **C를 채택**했고, 결정적 이유는 **`poster_path IS NOT NULL` 필터가 서버에서만 가능**하다는 점이다 — A는 백엔드 변경이 0이지만 포스터 없는 영화가 섞여 배경에 빈칸이 생긴다. **D는 폴백으로 보류 기록**했다(변경 0이고 *"오늘의 박스오피스"* 라는 의미도 있으나 매칭률 90.7%라 `linked == false` 항목의 `posterPath`가 null이다). 설계 확정본은 백엔드 docs에 두고 여기엔 화면 요구사항만 남겼다. 함께 정한 것 셋 — **blur를 라이브러리 없이 해결**(`w92` 타일을 큰 셀에 넣어 업스케일로 뭉갠다. `expo-blur`는 Android 성능 이슈로 마지막 수단), **4방향 아웃라인은 텍스트 5겹**(RN `Text`는 `textShadowOffset`이 하나뿐), **배경 4겹의 접근성 숨김**(안 걸면 스크린 리더가 로고를 다섯 번 읽는다). 탭 이탈 시 애니메이션 정지와 로그인/로그아웃 시 배경 크로스페이드도 명시했다 |
+| 2026-09-06 | **문서 전체의 스택 표기를 Expo SDK 57 / RN 0.86 / React 19.2로 갱신**(헤더 · §10 설치 주의). 업그레이드의 계기는 성능·기능이 아니라 **Expo Go가 SDK를 1:1로 고정**한다는 점이었다 — 프로젝트를 56으로 되돌려도 기기의 Expo Go가 57이면 열리지 않으므로 롤백은 해결책이 되지 못한다. **React가 19.2에서 움직이지 않았고** `svg`·`datetimepicker`·`nativewind`·`tailwindcss` 버전이 56과 동일해 화면 코드에 미친 영향은 없었다. 상세 근거와 버전 대조표는 `M2A-foundation-spec.md` §0.1 · §1 채택 결과 · 변경 이력 2026-09-06, 경위는 `docs/DevLog.md` 2026-09-06(이어서 5) |
 | 2026-09-04 | **B-15·B-16 해소 확인.** 백엔드가 `PATCH /api/records/{recordId}`를 구현했다는 보고를 받고 `npm run gen:api`로 확인 — `WatchRecordUpdateRequest`(전체 치환, `movieId`·`representative` 제외)와 `updateWatchRecord` 오퍼레이션이 §11.2 설계 확정본 그대로 반영돼 있었다. 프론트도 연동 완료(실행 내역은 `M2B-screens-spec.md` 변경 이력 참고). 둘 다 §11 표에서 ✅ 완료로 갱신 |
 | 2026-09-04 | **§11에 B-15 추가.** `MovieDetail` 실기기 재검증 중 발견 — 시청 기록에 update API가 없다. `POST /api/records`·`DELETE /api/records/{id}`·`PATCH .../representative`뿐이라 잘못 기록한 시청 기록(날짜·방식·장소·별점·메모)을 고칠 방법이 없다. 삭제 후 재생성하는 우회안을 검토했으나, §7.3의 "새 기록 INSERT 시 대표 자동 승격" 규칙 때문에 대표가 아니던 기록을 이 방식으로 "수정"해도 재생성 순간 대표로 바뀌는 부작용이 있어 채택하지 않고 백엔드에 `PATCH /api/records/{recordId}` 신설을 요청하기로 했다. 항목 수 표기를 14건→15건으로 갱신(§0) |
 | 2026-08-31 | **§11에 B-13·B-14 추가.** `MovieDetail` 구현 중 새로 드러난 백엔드 갭 2건. **B-13(1군, 상세 화면 블로커)** — OTT 플랫폼 목록을 조회하는 엔드포인트가 없다. `WatchRecordCreateRequest.ottPlatformId`는 `watchType=OTT`일 때 필수인데 유효한 ID를 얻을 방법이 없어, 지금은 프론트에서 `watchType=OTT` 저장 자체를 막고 안내만 띄운다(THEATER/ETC만 동작). **B-14(낮음)** — `MovieDetailResponse`에 `backdropPath`가 없다(`posterPath`만 있음). 상세 화면 히어로 배경은 `posterPath`로 대신 렌더한다. 항목 수 표기를 12건→14건으로 갱신(§0) |
