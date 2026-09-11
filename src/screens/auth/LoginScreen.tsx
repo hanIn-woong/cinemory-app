@@ -6,7 +6,7 @@ import { Controller, useForm } from 'react-hook-form';
 import { KeyboardAvoidingView, Platform, Pressable, View } from 'react-native';
 import { z } from 'zod';
 import { Button, Screen, Spacer, TextField, Txt } from '../../components/primitives';
-import { useLogin } from '../../hooks/useAuth';
+import { useKakaoLogin, useLogin } from '../../hooks/useAuth';
 import type { AuthStackParamList } from '../../navigation/types';
 import { applyServerErrors } from '../../utils/formErrors';
 
@@ -22,7 +22,9 @@ type Nav = NativeStackNavigationProp<AuthStackParamList, 'Login'>;
 export function LoginScreen() {
   const navigation = useNavigation<Nav>();
   const login = useLogin();
+  const kakaoLogin = useKakaoLogin();
   const [formError, setFormError] = useState<string | null>(null);
+  const [kakaoError, setKakaoError] = useState<string | null>(null);
 
   const {
     control,
@@ -45,6 +47,25 @@ export function LoginScreen() {
       onError: (error) => setFormError(applyServerErrors(error, setError)),
     });
   });
+
+  const onKakaoPress = () => {
+    setKakaoError(null);
+    kakaoLogin.mutate(undefined, {
+      // tokens가 null이면 사용자가 로그인 도중 취소한 것 — 조용히 화면에 머무른다 (§11.1).
+      onSuccess: (tokens) => {
+        if (tokens) navigation.goBack();
+      },
+      onError: (error) => {
+        if (error.code === 'OAUTH_EMAIL_NOT_PROVIDED') {
+          setKakaoError('이메일 제공에 동의해야 가입할 수 있습니다');
+        } else if (error.code === 'EMAIL_ALREADY_REGISTERED_LOCALLY') {
+          setKakaoError('이미 이메일로 가입된 계정이에요. 이메일 로그인을 이용해 주세요');
+        } else {
+          setKakaoError(error.message);
+        }
+      },
+    });
+  };
 
   return (
     <Screen scroll>
@@ -106,10 +127,17 @@ export function LoginScreen() {
         </Button>
 
         <Spacer size="md" />
-        {/* 카카오 SDK는 prebuild가 필요해 아직 붙이지 않는다 (docs/M2-frontend-spec.md §11.1) */}
-        <Button variant="secondary" disabled>
+        <Button variant="secondary" onPress={onKakaoPress} loading={kakaoLogin.isPending}>
           카카오로 시작하기
         </Button>
+        {kakaoError && (
+          <>
+            <Spacer size="sm" />
+            <Txt variant="caption" color="destructive">
+              {kakaoError}
+            </Txt>
+          </>
+        )}
 
         <Spacer size="xl" />
         <View className="flex-row items-center justify-center">
