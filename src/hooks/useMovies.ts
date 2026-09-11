@@ -31,13 +31,15 @@ export function useMovieSearch(
   });
 }
 
-// 홈 배경 폴백 소스(B-17) — permitAll이라 게스트도 그대로 쓴다. `enabled`는 로그인 사용자의
-// 기록이 충분한지 알기 전까지 낭비 호출을 미루는 용도다(useHomeBackground).
+// 홈 배경 폴백 소스(B-17) — permitAll이라 게스트도 그대로 쓴다. useHomeBackground가 records
+// 완료를 기다리지 않고 항상 병렬로 호출한다(§7.5) — staleTime은 배경 포스터가 자주 바뀔
+// 이유가 없어 전역 30초보다 길게 둔다.
 export function useRandomMovies(size: number, enabled = true): UseQueryResult<MovieSummary[], ApiError> {
   return useQuery({
     queryKey: queryKeys.movies.random(size),
     queryFn: () => movieApi.random(size),
     enabled,
+    staleTime: 5 * 60 * 1000,
   });
 }
 

@@ -9,7 +9,7 @@
 
 ---
 
-## 📍 진행 현황 (최종 갱신 2026-09-09)
+## 📍 진행 현황 (최종 갱신 2026-09-11)
 
 > **번호 없는 섹션이다.** 아래 §0~§13의 번호는 다른 문서가 참조하고 있어 바꾸지 않는다.
 > **이 표는 작업이 끝날 때마다 갱신한다.**
@@ -57,14 +57,30 @@ multiline 높이 고정 · 무한스크롤 풋터 마운트/언마운트로 인�
 | **M2-C2** | **B-8.** 백엔드 M3-a와 동반. 차트 라이브러리(`react-native-gifted-charts`)도 이 시점에 설치한다 |
 | **M2-D** | **셋 다 백엔드 선행이 필요하다.** 지금 만들면 빈 화면이 나온다(§2·§11) |
 
-### M2-B 도중 발생하는 워크플로 전환
+### ✅ 워크플로 전환 완료 — Expo Go → Dev Client (2026-09-11)
 
-**카카오 로그인을 실기기에 붙이는 시점(대략 9월 중순)이 되돌리기 어려운 분기점이다.**
+**`npx expo prebuild` + Dev Client 전환을 마쳤다.** 화면 작업보다 **먼저** 한 것은,
+`Report`(B-8)와 3군(B-9~B-11)이 전부 백엔드에 막혀 **프론트가 대기 상태**였기 때문이다 —
+그 시간을 되돌리기 어려운 분기점을 넘는 데 썼다. 화면이 더 늘어난 뒤에 하면 회귀 검증
+대상만 커진다.
 
-- `npx expo prebuild` → **Expo Go 사용 불가**, 팀 전원 Dev Client 필요 (§11.1)
-- 같은 시점이 **실서버 배포 트리거**다 (기획노트 4-INF)
-- ⚠️ **prebuild를 카카오 하나로 결정하지 말 것** — §13의 지도 네이티브 SDK가 두 번째 요구이며,
-  **묶어서 한 번에 넘어가는 편이 총비용이 낮다**
+- **Expo Go는 더 이상 쓸 수 없다.** 개발 서버는 `npx expo start --dev-client`
+- `android/`·`ios/`는 **커밋하지 않는다** — CNG를 유지해 `app.json`이 단일 출처로 남고,
+  폴더를 지우면 원상복구된다
+- **팀 배포는 EAS Build 링크**가 현실적이다(팀원 각자 Android SDK를 갖추게 할 수 없다)
+- ⚠️ **`app.json`의 네이티브 설정이 이제서야 실제로 적용된다**(`predictiveBackGestureEnabled`
+  등) — Expo Go 시절과 동작이 다를 수 있다
+- **부수 효과** — §8.6의 뒤로가기 빈 화면 버그가 **Expo Go 한정이었음이 확인돼 해소**됐고
+  임시 가드를 제거했다
+
+⚠️ **실서버 배포는 이것과 분리한다**(기획노트 4-INF). Dev Client는 지금처럼 PC IP의 로컬
+백엔드를 그대로 본다. 배포 시점은 **발표에서 역산해 여유를 두되**, 파이프라인은 일찍
+세워두는 편이 낫다 — 처음 하는 배포는 반드시 예상보다 오래 걸린다.
+**데이터 이관만은 스키마가 굳은 뒤 마지막에** 한다.
+
+**카카오 로그인(B-1)은 완료됐다** — §11.1 검증표 7항목 중 6개 실기기 통과, 1개(웹뷰 폴백)는
+테스트 기기가 없어 의도적 스킵(2026-09-11). §13의 지도 네이티브 SDK도 이제 같은 기반 위에서
+판단한다.
 
 ### 상시 참조
 
@@ -510,9 +526,13 @@ POST /api/auth/nonce → { nonce, expiresIn: 300 }
   `INVALID_OAUTH_TOKEN`을 만난다.** `oauth.kakao.allowed-audiences`가 목록이므로
   **교체가 아니라 추가**다. 기획노트 4-M2에 이미 예고된 항목이다.
 - ⚠️ **검증용으로 늘려둔 `auth.oauth.nonce-ttl`을 `PT5M`으로 되돌릴 것** (기획노트 지적사항).
-- ⚠️ **카카오 로그인을 실기기에 붙이는 시점이 곧 실서버 배포 트리거다**(기획노트 4-INF).
-  실기기에서 `localhost`는 폰 자신이고, 카카오는 등록된 redirect URI만 허용해 LAN IP 우회가
-  안 된다. 대략 9월 중순.
+- ✅ **SDK는 `@react-native-kakao/user`의 `login({ nonce })`** 를 쓴다 — `nonce`를 받아
+  `id_token`의 `nonce` 클레임으로 돌려주고 `idToken`을 준다. 위 계약과 그대로 맞는다(§11.1).
+- ⚠️ **`idToken`은 optional이다.** 콘솔의 **OpenID Connect가 꺼져 있으면 `undefined`** 로 오며
+  에러가 아니라 *필드가 없는* 형태라 알아채기 어렵다. **클라이언트에서 가드한다.**
+- ⚠️ **네이티브 SDK 방식이라 redirect URI가 개입하지 않는다** — 초판이 *"실기기 연결 = 실서버
+  배포 트리거"* 로 묶어 둔 근거(LAN IP 우회 불가)는 **브라우저 OIDC 대안을 전제한 것**이었고,
+  그 대안은 폐기됐다(§11.1). **카카오 로그인과 서버 배포는 분리한다**(「진행 현황」).
 
 ### 6.6 화면
 
@@ -658,6 +678,10 @@ export function tmdbImageUrl(path: string | null | undefined, size: string): str
   폴백한다. **색상은 `movieId` 기반 결정론적**이어야 재렌더 시 깜빡이지 않는다.
 - ⚠️ **TMDB 출처 표기(attribution) 요건 확인 필요** — 기획노트가 남겨둔 항목.
   마이페이지나 설정에 표기 위치를 잡을 것.
+- ⚠️ **위 코드 블록은 초판이라 현행과 다르다.** 실제 `src/constants/tmdb.ts`는
+  `PosterSize = { LIST: 'w342', DETAIL: 'w500', BACKDROP_TILE: 'w92', HERO: 'w780' }` 이다
+  (`LIST`는 3열 그리드 업스케일 때문에 w185 → w342, 2026-09-10). **구현 시 스펙이 아니라
+  실제 파일을 기준으로 삼을 것.**
 
 ### 7.3 ★ 별점 — 0.0~10.0, 저장소는 `watch_record` 하나다
 
@@ -726,6 +750,201 @@ UI 0.5 ~ 5.0 (0.5 단위)  ⇄  API 1.0 ~ 10.0 (1.0 단위)
 ⚠️ **이건 집계 평점(TMDB `voteAverage` 또는 전체 사용자 리뷰 평균) 이야기다 — "내가 매긴
 이 영화의 별점"과는 다른 데이터다.** 후자는 이미 `watchLog`(내 시청 기록)에 있어 B-4와
 무관하게 표시할 수 있다(2026-09-10, 히어로 아래 큰 별점으로 추가 — §9.3).
+
+---
+
+### 7.5 ★ 홈 배경 이미지 로딩 지연 — 원인 분석과 조치 (2026-09-12)
+
+**증상** — 앱 실행 후 홈 화면에서 **배경 포스터가 전부 뜨기까지 체감 약 3초.** 그 동안은
+`posterFallbackPalette` 색 타일만 보인다(빈 화면은 아니지만 UI 완성도를 깎는다).
+
+#### 측정으로 배제된 것 — 백엔드가 아니다
+
+| 호출 | 웜업(버림) | 1회차 | 2회차 |
+|---|---|---|---|
+| `GET /api/movies/random?size=24` | 0.052s | 0.073s | 0.053s |
+| `GET /api/records/user/1?page=0&size=24` | 0.188s | 0.012s | 0.012s |
+
+**둘을 직렬로 더해도 0.1초다.** `ORDER BY RAND()` 의혹(`movie`가 4,609 → 12,750편이 되며
+2.77배 악화됐을 것이라는 가설)과 `show-sql: true`의 런타임 부하는 **둘 다 원인이 아니다.**
+`tmdb-sync-spec.md` 잔여 #12(`getMovieList` projection)·#32(로그 레벨)는 별개 사유로 유효하되
+이 건과는 무관하다.
+
+> ⚠️ **가설을 먼저 검증하지 않고 순위를 매긴 것이 이 분석의 초기 오류였다.** 백엔드 쿼리를
+> "가장 유력"으로 지목했으나 curl 두 줄로 즉시 배제됐다. **임계경로 분석은 구간을 재고 나서
+> 순위를 매긴다.**
+
+#### 확정 원인 — 이미지 요청 이전에 직렬 구간이 길다
+
+배경 타일은 `BACKDROP_TILE`(`w92`, 장당 3~8KB)이고 한 화면에 24장 = **총 120KB 남짓**이다.
+**이 용량이 3초가 될 수는 없다. 이미지가 늦게 *시작*되는 것이 문제다.**
+
+**① 콜드 스타트마다 `reissue` 왕복이 무조건 발생한다** (신규 발견)
+
+`authStore.restore()`가 `accessTokenExpiresAt: 0`으로 복원하는데
+(*"남은 TTL을 알 수 없으므로"*), `client.ts`의 선제 갱신 조건이
+
+```ts
+if (accessToken && accessTokenExpiresAt - Date.now() < 60_000) { await refreshOnce(); }
+```
+
+이라 `0 - Date.now()`는 **항상 음수 → 조건이 언제나 참**이다. 즉 로그인 사용자가 앱을 켤
+때마다 `SecureStore` 읽기 → `POST /api/auth/reissue` → `SecureStore` 쓰기 ×2가 **첫 API 요청
+앞에 무조건 붙는다.**
+
+**② `useHomeBackground`가 `random`을 `records` 뒤로 직렬화한다**
+
+```ts
+const needsRandom = !isAuthed || (records.isSuccess && !hasEnoughRecords);
+const random = useRandomMovies(poolSize, needsRandom);
+```
+
+주석의 근거는 *"기록이 충분한지 알기 전까진 낭비 호출이라 미룬다"* 인데, **아끼는 것은
+permitAll·24행·53~73ms짜리 GET 하나이고 대가는 가장 눈에 띄는 요소의 임계경로에 왕복
+한 번을 얹는 것**이다. 기록 12편 미만(초기 사용자 대부분)에서 항상 발생한다.
+
+**③ 결과적인 콜드 스타트 경로**
+
+```
+JS 번들 평가 → App 마운트
+  → restore(): SecureStore.getItemAsync ×3        ← Keystore 초기화, status='loading'이라 스플래시 유지
+  → HomeScreen 마운트 (폴백 색 타일만 표시)
+  → 인터셉터: SecureStore 읽기 → POST /api/auth/reissue → SecureStore 쓰기 ×2   ← 원인 ①
+  → GET /api/records/user/{id}
+  → GET /api/movies/random                         ← 원인 ② (기록 부족 시)
+  → 비로소 <Image> 24개 → DNS + TLS(image.tmdb.org) → 다운로드
+```
+
+**④ 부수 항목** — `<Image>`는 RN 기본 컴포넌트다(`expo-image` 미설치). `cachePolicy`·
+`placeholder`·`transition`·`recyclingKey`가 없어 **재진입 시 메모리 캐시가 보장되지 않는다.**
+그리고 `PosterBackdrop`은 무한 루프 이음매를 위해 `cellsPerSet * 2`(통상 **48개**)를 마운트한다
+— 중복 URI는 합쳐지지만 디코드·레이아웃 비용은 48개분이 남는다.
+
+#### 예산 — 남은 2초는 이미지 구간에 있다
+
+| 구간 | 추정 | 상태 |
+|---|---|---|
+| JS 부팅 + `restore()` (Keystore 초기화) | 0.2~0.5s | 계측 필요 |
+| `reissue` + `records` (+`random`) 왕복 | 0.2~0.4s | 서버 0.1s 확정, 나머지는 LAN RTT |
+| **이미지 24장 페치·디코드** | **≈ 2s** | **계측 필요 — 여기가 본체** |
+| 크로스페이드 250ms (`signature` 변경마다 재발화) | 0.25s | 확정 |
+
+#### 계측 — 타임스탬프 4개
+
+`App.tsx` 최상단(`SplashScreen.preventAutoHideAsync()` **위**):
+
+```ts
+export const APP_T0 = Date.now();
+```
+
+`PosterBackdrop.tsx`:
+
+```ts
+const loaded = useRef(0);
+const total = cellsPerSet * 2;
+
+useEffect(() => {
+  if (posters.length) console.log(`[bg] data ready  +${Date.now() - APP_T0}ms`);
+}, [signature]);
+
+<Image
+  key={i} source={{ uri }} style={cellStyle}
+  onLoadEnd={() => {
+    loaded.current += 1;
+    if (loaded.current === 1)     console.log(`[bg] 1st image  +${Date.now() - APP_T0}ms`);
+    if (loaded.current === total) console.log(`[bg] all images +${Date.now() - APP_T0}ms`);
+  }}
+/>
+```
+
+- `data ready` → `1st image` = **네트워크 개시 비용**(DNS + TLS)
+- `1st image` → `all images` = **동시성·디코드 비용**
+
+**보조 실험 2건**
+1. **네트워크 vs 디코드 분리** — `uri`를 잠시 `posters[0]` 하나로 고정해 48셀이 같은 URL을
+   쓰게 한다. 빨라지면 네트워크(호스트당 동시성 제한으로 웨이브가 쪼개지는 패턴), 그대로면
+   디코드·레이아웃이다.
+2. **2회차 실행 / 릴리스 빌드** — 2회차가 빠르면 디스크 캐시는 동작하는 것. `expo run:android
+   --variant release`로 dev 클라이언트(Metro) 오버헤드를 분리한다.
+
+#### 조치 — 우선순위
+
+| 순 | 조치 | 파일 | 선행 계측 |
+|---|---|---|---|
+| 1 | **`expo-image` 전환** | `PosterImage.tsx` · `PosterBackdrop.tsx` | 불필요 |
+| 2 | `useRandomMovies` **항상 발사**(병렬화) | `useHomeBackground.ts` | 불필요 |
+| 3 | `accessTokenExpiresAt` **실제 만료 복원** | `authStore.ts` | 불필요 (⚠️ 아래 트레이드오프) |
+| 4 | `poolSize` 버킷팅 + `staleTime` 상향 | `useHomeBackground.ts` | 불필요 |
+
+**1. `expo-image` 전환** — `npx expo install expo-image`
+
+```ts
+// PosterImage.tsx — import만 교체하고 props를 넷 추가한다
+import { Image } from 'expo-image';
+
+<Image
+  source={uri}
+  style={{ width, height, borderRadius }}
+  contentFit="cover"
+  cachePolicy="memory-disk"
+  transition={150}
+  recyclingKey={String(id)}
+/>
+```
+
+- `PosterBackdrop`의 셀도 같은 컴포넌트로 바꾸되 **`transition={0}`** 으로 둔다 — 이미 자체
+  크로스페이드(`opacity` 0 → `REST_OPACITY`)가 있어 겹치면 두 번 페이드인 된다.
+- **폴백 분기(`LinearGradient` / `View` 배경색)는 그대로 둔다.** `placeholder`로 옮기면
+  "결정론적 폴백 색"(§4) 규칙을 컴포넌트 밖에서 다시 관리해야 한다.
+- ⚠️ `expo-image`의 `source`는 문자열도 받지만 **기존 `{ uri }` 형태도 그대로 유효**하다.
+  한쪽으로 통일할 것.
+
+**2. `useRandomMovies` 병렬화**
+
+```ts
+const random = useRandomMovies(poolSize);   // enabled 인자 제거 — 항상 발사
+```
+
+`hasEnoughRecords`로 **고르는** 로직(반환부)은 그대로 둔다. 바뀌는 것은 *언제 쏘는가*뿐이다.
+
+> **주석 근거를 교체할 것.** 현재의 *"낭비 호출이라 미룬다"* 는 이 절로 대체된다 — 기록이
+> 충분한 사용자에게 GET 하나(53~73ms, permitAll, 24행)가 낭비되지만, 그 대가로 기록 부족
+> 사용자의 임계경로에서 왕복 한 번이 사라진다. **홈 배경은 첫인상을 결정하는 요소이므로
+> 이 교환은 성립한다.**
+
+**3. `accessTokenExpiresAt` 복원**
+
+`KEYS`에 `accessTokenExpiresAt: 'cinemory.accessTokenExpiresAt'`를 추가하고, `setTokens`에서
+함께 저장, `restore()`에서 읽어 숫자로 복원한다. **값이 없거나 파싱 실패면 `0`** — 현행
+동작으로 안전하게 폴백된다(§5 규칙 5).
+
+> ⚠️ **트레이드오프를 확인하고 진행할 것.** 지금은 콜드 스타트마다 `reissue`가 돌면서
+> **리프레시 토큰의 유효성까지 함께 검증**된다(`restore()` 주석이 명시). 복원하면 그 검증이
+> 첫 인증 요청 시점으로 미뤄진다 — 만료·폐기된 경우 401 → 인터셉터의 `TOKEN_EXPIRED` 경로가
+> 처리하므로 **기능상 동일**하지만, 의도적 설계였다면 유지 판단이 필요하다(아래 미결 1).
+
+**4. `poolSize` 버킷팅 + `staleTime`**
+
+`poolSize`가 `useWindowDimensions()`에서 나오므로 회전·분할화면·키보드로 값이 바뀌면
+쿼리 키가 달라져 **캐시 미스가 난다.** 올림 버킷으로 고정한다.
+
+```ts
+const raw = Math.min(Math.max(minCount, RECORDS_THRESHOLD), MAX_POOL);
+const poolSize = raw <= 16 ? 16 : raw <= 32 ? 32 : MAX_POOL;   // 항상 raw 이상
+```
+
+⚠️ **반드시 올림이어야 한다.** 버킷이 `cellsPerSet`보다 작아지면 `% posters.length` 순환이
+행 경계와 맞아떨어져 **첫 행과 마지막 행이 통째로 중복되는 버그**(2026-09-06 실기기 확인)가
+재현된다. 두 쿼리의 `staleTime`도 전역 30초에서 **5분**으로 올린다 — 배경 포스터는 30초마다
+갱신될 이유가 없다.
+
+#### 미결
+
+| # | 항목 |
+|---|---|
+| 1 | **조치 3의 리프레시 토큰 선제 검증을 포기할 것인가** — 포기하면 콜드 스타트 왕복 1회가 사라지고, 유지하면 현행대로다. 계측에서 이 구간이 실제로 얼마인지 본 뒤 판단해도 된다 |
+| 2 | **`cellsPerSet * 2` 48개 마운트를 줄일 수 있는가** — 이음매 없는 무한 루프에 필요한 구조라 단순 감축은 불가. `expo-image`의 `recyclingKey` 적용 후 재측정해 판단 |
+| 3 | **TMDB 이미지 프리페치** — `expo-image`의 `Image.prefetch()`로 앱 부팅 시 배경 포스터를 미리 받아둘 수 있다. 조치 1~4 후에도 이미지 구간이 남으면 검토 |
 
 ---
 
@@ -860,93 +1079,67 @@ export type MyPageStackParamList = {
 예외 2개: `MovieDetail`(`headerTransparent: true` — 포스터 위 투명 헤더),
 `Home`(`headerShown: false`).
 
-### 8.6 ⚠️ 뒤로가기 가드 — 진입 직후 빠른 뒤로가기 시 빈 화면 버그 (2026-09-10 해결)
+### 8.6 ⚠️ 진입 직후 빠른 뒤로가기 시 빈 화면 — Expo Go 런타임 한정 (2026-09-11 해소)
 
-**증상 (실기기 발견).** 아무 화면이나 진입 직후 push 전환 애니메이션이 끝나기 전에 곧바로
-뒤로가기를 누르면 빈 화면이 떴다가, 다시 한 번 눌러야 정상 동작했다. 처음엔 `MovieDetail`
-전용 문제로 보고됐으나(API 5개 + 히어로 이미지를 동시에 불러오는 무거운 화면이라 의심을
-받았다), 실기기 재현 범위를 넓혀보니 **모든 화면의 뒤로가기에서 재현**됐다 —
-`MovieDetail`의 무게와는 무관한, native-stack 전체에 걸친 문제였다.
+> **결론부터.** 이 버그는 **Expo Go에서만 일어났고, `expo prebuild` + Dev Client 전환으로
+> 사라졌다.** 임시로 넣었던 `src/navigation/backGuard.ts`는 **제거했다.**
+> 아래는 다른 기기에서 재현될 경우를 위한 조사 기록이다 — 되살리려면 git 히스토리에서
+> `backGuard.ts`를 꺼내 각 `Stack.Navigator`의 `screenListeners`에 다시 연결하면 된다.
 
-**원인.** Android native-stack은 화면 전환을 `Fragment` 트랜잭션으로 처리한다. push
-트랜잭션이 끝나기 전(`transitionStart`~`transitionEnd` 사이) pop이 들어오면 트랜잭션이
-겹쳐 화면 렌더링 서피스가 제대로 재부착되지 못하고 한 프레임이 빈 채로 남는다 — 두 번째
-뒤로가기가 정상인 것은 그때는 이미 트랜잭션 큐가 정리된 뒤이기 때문이다.
+**증상.** 아무 화면이나 진입 직후 push 전환 애니메이션이 끝나기 전에 곧바로 뒤로가기를
+누르면 **빈 화면이 뜨고 탭 바 외에는 아무것도 없는 상태로 갇혔다.** 처음엔 `MovieDetail`
+전용 문제로 보고됐으나(API 5개 + 히어로 이미지를 동시에 부르는 무거운 화면이라 의심을
+받았다) 재현 범위를 넓혀보니 **모든 화면의 뒤로가기에서** 났다 — 화면의 무게와 무관한
+native-stack 전체 문제였다.
 
-**이분 탐색으로 배제한 것들.**
-- `freezeOnBlur: true`(native-stack 화면 옵션) — 효과 없음.
-- `headerTransparent: false`로 임시 전환 — 그대로 재현. `MovieDetail`의 투명 헤더와 무관함을 확정.
-- `animation: 'none'`으로 전환 애니메이션 자체를 끔 — **사라짐.** 전환 애니메이션 경합이
-  원인임을 확정한 지점이자, 여기서 재현 범위를 전 화면으로 넓혀 재확인했다.
-- `detachPreviousScreen: false` — **native-stack엔 이 개념 자체가 없다.** JS 기반
-  `@react-navigation/stack`(미설치)에서만 쓰는 옵션이라 타입에도, 네이티브 구현에도 없음을
-  `react-native-screens` README로 확인. native-stack은 네이티브 컨트롤러가 전환을 맡아
-  "이전 화면을 detach하냐"를 JS에서 켜고 끌 지점이 없다.
-- `animationDuration: 150`(기본값보다 단축) — 레이스 발생 창을 좁힐 뿐이라 여전히 재현.
+**⚠️ 빈 화면이 "어느 화면인지"가 진단의 갈림길이었다.** 헤더가 있는 화면(`MyRecords` 등)으로
+돌아갔는데도 **그 화면의 네이티브 헤더조차 보이지 않았다.** 즉 *이전 화면이 비어 있게
+렌더된 것*이 아니라 **스택의 화면 컨테이너 자체가 비어 있었다.** 탭 바만 살아남은 것은
+탭 바가 한 단계 위인 탭 내비게이터 소속이기 때문이다.
 
-**해결 — `src/navigation/backGuard.ts`.** 애니메이션 지속시간은 원래대로 두고, 그 시간
-창에 들어오는 뒤로가기 자체를 막는다. `beforeRemove`는 하드웨어 back 버튼·헤더 back
-버튼·스와이프 제스처를 전부 같은 지점에서 가로채는 React Navigation 표준 API라(native-stack의
-`onHeaderBackButtonClicked`가 결국 `StackActions.pop()`을 `dispatch`하는 경로이고, iOS
-`preventNativeDismiss`도 같은 차단 신호에 연동돼 있다) 트리거별로 따로 처리할 필요가 없다.
+**이분 탐색으로 배제한 것들 — 다시 제안되면 이 목록부터 본다.**
 
-```ts
-// src/navigation/backGuard.ts — 개념
-let transitionCount = 0;              // 나가는 화면·들어오는 화면 양쪽에서
-                                       // transitionStart/End가 한 쌍씩 오므로 boolean이 아니라 카운터
-export const BACK_GUARD_SCREEN_LISTENERS = {
-  transitionStart: () => { transitionCount += 1; },
-  transitionEnd:   () => { transitionCount = Math.max(0, transitionCount - 1); },
-  beforeRemove: (e) => { if (transitionCount > 0) e.preventDefault(); },
-};
-```
+| 시도 | 결과 |
+|---|---|
+| `freezeOnBlur: true` | 효과 없음. **포커스를 잃은 채 살아있는 화면**을 얼리는 옵션이라 pop으로 파괴되는 화면과는 무관하다 |
+| `headerTransparent: false` | 그대로 재현. `MovieDetail`의 투명 헤더와 무관함을 확정 |
+| `detachPreviousScreen: false` | **native-stack엔 이 개념 자체가 없다.** JS 기반 `@react-navigation/stack`(미설치) 전용 옵션이라 타입에도 네이티브 구현에도 없다 |
+| `animationDuration: 150` | 레이스 창을 좁힐 뿐 여전히 재현 |
+| `react-native-screens` 패치 업 | **불가.** 이미 `4.26.2`로 4.26 라인의 마지막 stable이고 4.27은 nightly만 있다 |
+| **`animation: 'none'`** | **사라짐.** 전환 애니메이션 경합이 원인임을 확정한 지점 |
 
-**모든 `Stack.Navigator`의 `screenListeners`에 그대로 연결한다** — Root·Auth·Home·MyPage·
-Social·Recommend·CineMap 7곳 전부. 체감상으로는 push 직후 짧은 시간(기본 애니메이션
-지속시간만큼) 뒤로가기가 씹히는 것처럼 느껴지고, 그 시간이 지나면 정상 동작한다.
+**임시 대응이었던 것 — `backGuard.ts` (2026-09-10, 지금은 제거됨).**
+애니메이션은 그대로 두고 전환이 진행 중인 동안의 뒤로가기만 `beforeRemove`로 막았다.
+`beforeRemove`는 **하드웨어 back · 헤더 back · 스와이프 제스처를 한 지점에서** 가로채는
+React Navigation 표준 API라 트리거별 처리가 필요 없었다. `transitionStart`/`transitionEnd`가
+나가는 화면·들어오는 화면 양쪽에서 한 쌍씩 오므로 boolean이 아니라 카운터를 썼다.
 
-⚠️ **`MovieDetail`이 4개 스택(Home·MyPage·Social·Recommend)에 옵션까지 복붙으로 등록돼
-있던 것도 이번에 정리했다** — 여러 스택에서 재현되는 버그를 실험하면서 한 곳만 고치고
-나머지를 놓치기 쉬운 구조였다. `src/navigation/movieDetailScreenOptions.ts`(`MovieDetail`
-전용 옵션)와 `src/navigation/defaultStackScreenOptions.ts`(스택 공통 옵션, 지금은 실험
-잔재 없이 빈 객체)로 빼서 각 스택 파일은 이 상수들을 참조만 한다.
+⚠️ **디바운스가 아니었다.** 시간이 아니라 전환 이벤트로 창이 열리고 닫히므로 조절할 딜레이
+상수가 없고, 기기 성능에 따라 창 길이가 자동으로 맞는 것이 이 방식의 이점이었다.
 
-⚠️ **알려진 한계와 방어** (2026-09-10 보강)
+**해소 — `expo prebuild` + Dev Client (2026-09-11).**
 
-**① 카운터가 새면 뒤로가기가 영구히 막힌다 — 천장을 둔다.**
-`Math.max(0, ...)`가 아래쪽은 막지만 **위쪽은 아무것도 막지 않는다.** `transitionStart`가
-짝 없이 끝나면(전환 중 화면 파괴 · 앱 백그라운드 전환 · 네비게이터 언마운트)
-`transitionCount`가 영영 1 이상으로 남아 **모든 뒤로가기가 차단**된다.
-**원래 버그보다 나쁘다** — 원래는 특정 타이밍에만 나고 한 번 더 누르면 복구됐지만, 이건
-영구적이고 앱 재시작 외에 복구가 없다. 게다가 **7개 네비게이터가 모듈 전역 카운터 하나를
-공유**하므로 누수 기회가 그만큼 많다.
+Dev Client에서 **가드를 끈 채로** 전 화면·세 트리거(헤더/하드웨어/스와이프)를 재현했더니
+**빈 화면이 한 번도 나오지 않았다.** 그러면서 **전환 중 뒤로가기가 무시되는 체감은 그대로**였다
+— 즉 **네이티브 레이어가 이미 그 억제를 정상적으로 하고 있었고**, 가드는 그것을 JS로 재구현한
+것이었다. Expo Go에서는 그 처리가 깨져 pop이 어중간하게 진행되며 화면이 detach된 채 남았던
+것이다.
 
-```ts
-const MAX_TRANSITION_MS = 1000;   // 어떤 전환도 이보다 길 수 없다
-let lastStartAt = 0;
+| | Expo Go | Dev Client |
+|---|---|---|
+| 전환 중 뒤로가기 | **빈 화면 + 갇힘** | 무시됨(정상) |
+| 가드를 켠 경우 | 무시됨 | 무시됨 |
 
-// markTransitionStart 안에서
-lastStartAt = Date.now();
+→ **동작이 같으므로 가드는 이득 없이 위험만 남는다.** 두 위험이 실재했다 —
+① **카운터가 새면 뒤로가기가 영구 차단**된다(짝 없는 `transitionStart` 하나로 충분하고,
+7개 네비게이터가 모듈 전역 카운터를 공유했다). **원래 버그보다 나쁜 실패 모드**다.
+② `beforeRemove`는 **코드가 부르는 `goBack()`도 삼킨다** — 사용자 입력과 달리 재시도가 없어
+컬렉션 삭제·로그인 성공 후 화면이 안 닫힐 수 있었다.
+그래서 **제거했다.** `movieDetailScreenOptions.ts`(4개 스택 중복 해소)는 별개의 값어치가
+있어 남긴다.
 
-// guardBeforeRemove 안에서
-if (transitionCount > 0 && Date.now() - lastStartAt < MAX_TRANSITION_MS) e.preventDefault();
-```
-
-정상 경로는 그대로 이벤트 기반으로 두고 **누수했을 때만 천장이 걸린다.** 타이머를 쓰지 않아
-정리해야 할 자원도 없다.
-
-**② 코드가 부르는 `goBack()`은 조용히 삼켜진다.**
-`beforeRemove`는 프로그램 호출도 가로챈다. 사용자가 누른 뒤로가기는 안 먹히면 다시 누르면
-되지만, **코드가 부른 것은 재시도가 없어 그냥 화면이 안 닫힌다.** 해당 지점 셋 —
-`CollectionDetail` 삭제 성공 후 · **`AuthModal` 로그인 성공 후**(§6.7 — 로그인 성공은
-`goBack`만 한다) · `SignUp` 완료 후.
-증상은 *"삭제했는데 화면이 안 닫힘"* · *"로그인했는데 모달이 안 닫힘"* 으로 나타난다.
-응답이 전환 창(수백 ms) 안에 도착해야 하므로 확률은 낮지만 **로컬 백엔드는 빠르다.**
-지금은 고치지 않고 한계로 기록해 둔다 — 이 증상이 보고되면 **여기부터 의심한다.**
-
-**③ 개발 중 — `transitionCount`는 Fast Refresh를 살아남는다.**
-모듈 레벨 `let`이라 Fast Refresh로 갱신해도 값이 유지된다. 개발 중 *"갑자기 뒤로가기가 안
-먹는다"* 면 코드 문제가 아니라 누수된 카운터일 수 있으니 **풀 리로드**부터 해 본다.
+**⚠️ 유보 — 한 기기에서만 확인했다.** Android는 제조사·OS 버전마다 Fragment 전환 구현이
+다를 수 있다. 다른 기기에서 재현되면 위 기록으로 가드를 되살린다.
 
 **재발 방지 검증 — 화면을 추가할 때마다 돌린다.**
 
@@ -957,13 +1150,13 @@ if (transitionCount > 0 && Date.now() - lastStartAt < MAX_TRANSITION_MS) e.preve
 | 1 | 전환 직후 0.2초 내 뒤로가기 — **헤더 back 버튼** |
 | 2 | 전환 직후 0.2초 내 뒤로가기 — **Android 하드웨어 백** |
 | 3 | 전환 직후 0.2초 내 뒤로가기 — **엣지 스와이프** |
-| 4 | 위 셋을 **연속 3회** 반복해도 뒤로가기가 계속 동작한다(①의 누수 확인) |
-| 5 | 컬렉션 삭제 · 로그인 성공 직후 **화면이 실제로 닫힌다**(②의 확인) |
+| 4 | 위를 **여러 화면에서** 반복 (홈→상세 · 내 기록→상세 · 컬렉션→상세) |
 
-**4번이 핵심이다** — 누수는 한 번에 드러나지 않고 쌓인다.
+⚠️ **`app.json`의 `predictiveBackGestureEnabled: false`는 Expo Go에서 무시되고 prebuild 후에야
+실제로 적용된다.** 3번의 동작이 Expo Go 시절과 다를 수 있으니 네이티브 설정을 건드린 뒤에는
+반드시 다시 본다.
 
-상세 경위(각 실험 단계와 실기기 확인 결과)는 `docs/DevLog.md` 2026-09-10 참고.
-
+상세 경위(각 실험 단계와 실기기 확인 결과)는 `docs/DevLog.md` 2026-09-10 · 09-11 참고.
 ---
 
 ## 9. 화면별 스펙
@@ -1059,7 +1252,13 @@ depth = max(2, round(fontSize * 0.055))     // 56px → 3
 
 `brandLight`를 택한 이유는 **새 토큰이 필요 없고**, 4방향 시절 3방향에 흩어져 "밀린 인쇄"를
 만들던 그 색을 **버리지 않고 제 역할(맨 뒤 테두리)로 옮기는 것**이기 때문이다.
-⚠️ **다만 로고를 흰 배경 화면(스플래시·로그인)에 쓰기 시작하면 이 선택을 다시 본다.**
+
+✅ **로그인 화면에 로고를 붙이며 다시 봤다(2026-09-11).** 위 표대로 흰 배경에서는
+`shadowDeep`이 맞아 **`theme/tokens.ts`에 `shadowDeep: '#1F7A72'`를 추가**했다. `ExtrudedText`가
+`keylineColor`를 prop으로 받도록 이미 설계돼 있어 **컴포넌트는 그대로 두고 `LoginScreen`에서
+값만 교체**했다 — 이 문서가 그 설계 이유로 든 "인자 하나 교체로 끝내기 위함"이 실제로 그대로
+들어맞았다. `Home`(포스터 배경)은 `brandLight`를 유지 — 화면마다 배경 성격에 맞는 키라인 색을
+쓰는 것으로 정리한다. 스플래시도 흰 배경이라 붙이게 되면 `shadowDeep`을 쓴다.
 
 **컴포넌트 — `OutlinedText` → `ExtrudedText`**
 
@@ -1373,7 +1572,7 @@ npm i nativewind && npm i -D tailwindcss
 
 | # | 막히는 것 | 상태 | 필요한 작업 | 우선순위 |
 |---|---|---|---|---|
-| **B-1** | **카카오 네이티브 앱 키 `aud`** | 설정값 추가는 완료. **검증은 Dev Client 필요** | §11.1 절차 참고 — **prebuild에 묶여 있다** | **M2-B 후반** |
+| ~~B-1~~ | ~~카카오 네이티브 앱 키 `aud`~~ | ✅ **완료 — 실기기 로그인 성공 확인(2026-09-11)**. §11.1 검증표 1번 통과, 나머지 6항목은 진행 중 | 없음 | — |
 | ~~B-2~~ | ~~`auth.oauth.nonce-ttl`~~ | ✅ **이미 `PT5M`** (`application.yml:73`, 오버라이드 없음) | 없음 | — |
 | ~~B-3~~ | ~~CORS Expo origin~~ | ✅ **이미 등록됨** (`8081`, `19006`). **RN 네이티브는 CORS와 무관** — Expo 웹에서만 의미 | 없음 | — |
 | **B-4** | **영화 상세 평점** | `MovieDetailResponse`에 필드 없음 | ① `voteAverage`/`voteCount` 노출 ② `ReviewRepository`에 `AVG(rating)` 집계 추가 | 1군 (상세 화면) |
@@ -1393,47 +1592,155 @@ npm i nativewind && npm i -D tailwindcss
 | ~~B-15~~ | ~~시청 기록 수정 API 없음~~ | ✅ **백엔드 완료(`PATCH /api/records/{recordId}`), 프론트 연동 완료** — `gen:api` 재생성 확인(2026-09-04) | 없음 | — |
 | ~~B-16~~ | ~~`review.rating` 제거 + 별점 파생~~ | ✅ **백엔드 완료(`ReviewWriteRequest`에서 `rating` 제거 확인), 프론트 연동 완료**(`ReviewModal` 별점 입력 제거) — `gen:api` 재생성 확인(2026-09-02) | 없음 | — |
 
-### 11.1 B-1 상세 — 카카오 로그인은 prebuild 전환의 앞단이다
+### 11.1 B-1 상세 — 카카오 로그인 (2026-09-11 설계 확정)
 
-**설정값 추가(`allowed-audiences`에 네이티브 앱 키 한 줄)는 5분이지만, 그 값이 실제로 오는지
-검증하려면 카카오 네이티브 SDK가 돌아야 하고 그건 Expo Go에서 안 된다.**
+> **전제가 바뀌었다.** 초판은 *"검증이 Dev Client 빌드에 묶여 있어 독립 작업이 아니다"* 를
+> 전제로 쓰였으나, **prebuild + Dev Client 전환이 2026-09-11에 끝났다**(「진행 현황」).
+> 이제 B-1은 **순수하게 카카오만의 문제**이고, 키 해시를 뽑을 **첫 빌드도 이미 있다.**
 
-⚠️ **키 해시는 콘솔 등록의 입력이 아니라 첫 빌드의 산출물이다.** 키스토어가 없으면 해시도
-없으므로, "콘솔 등록 → 나중에 빌드" 순서로 잡으면 반드시 막힌다.
+#### 무엇이 막혀 있었나
 
-| 단계 | 내용 | 시점 |
+로컬 런북(`cinemory-backend/docs/kakao-login-runbook.md`)이 검증한 `aud`는 **REST API 키**다.
+RN 네이티브 SDK로 로그인하면 `aud`가 **네이티브 앱 키**로 바뀌어 같은 `INVALID_OAUTH_TOKEN`을
+만난다. `oauth.kakao.allowed-audiences`가 목록이므로 **교체가 아니라 추가**다.
+
+#### 패키지 — 실측 확인 (2026-09-11)
+
+| | |
+|---|---|
+| 패키지 | `@react-native-kakao/core` + `@react-native-kakao/user` **2.4.6** (2026-07 배포) |
+| peer | `react-native: '*'` · `expo: '>=47'` — **RN·Expo 버전 제약을 걸지 않는다** |
+| 성격 | **비공식 커뮤니티 래퍼**다. 막히면 카카오 공식 문서가 아니라 이 저장소 이슈를 본다 |
+
+**★ 우리 백엔드 계약과 맞는지가 유일한 진짜 미지수였고, 맞는다.**
+
+```ts
+login(options?: { nonce?: string; useKakaoAccountLogin?: boolean; scopes?: string[]; ... })
+  → { accessToken, idToken?, accessTokenExpiresAt, ... }
+```
+
+`nonce`를 받아 `id_token`의 `nonce` 클레임으로 되돌려주고 `idToken`을 준다 — `POST
+/api/auth/oauth/kakao { idToken, nonce }`가 요구하는 그대로다.
+
+⚠️ **`idToken`은 optional이다.** 콘솔에서 **OpenID Connect가 꺼져 있으면 `undefined`로 온다**
+— 에러가 아니라 *필드가 없는* 형태라 알아채기 어렵다(런북 0단계 3번이 지적한 바로 그 함정).
+**클라이언트에서 명시적으로 가드하고 구분되는 메시지를 낸다.**
+
+#### 흐름
+
+```
+버튼 탭
+ ① POST /api/auth/nonce            → { nonce, expiresIn: 300 }
+ ② login({ nonce })                 (카카오 SDK)
+ ③ idToken 없으면 중단              → "OIDC 미활성" 에러
+ ④ POST /api/auth/oauth/kakao { idToken, nonce } → TokenResponse
+ ⑤ setTokens → GET /api/users/me → setUser
+ ⑥ navigation.goBack()              (AuthModal만 닫는다 — §6.7)
+```
+
+- ⚠️ **nonce는 화면 진입이 아니라 버튼 탭 시점에 발급한다.** 5분 1회용이고, 화면에
+  머무는 시간을 통제할 수 없다.
+- ⚠️ **nonce는 재사용할 수 없다** — `consumeOrThrow`가 대조 즉시 제거한다(런북). 실패 후
+  재시도는 **①부터** 다시 한다. ②만 다시 부르면 반드시 `INVALID_NONCE`다.
+- **사용자가 로그인을 취소한 경우는 에러가 아니다** — 토스트 없이 조용히 복귀시킨다.
+- ⚠️ **이메일 미동의는 백엔드가 가입을 거부한다**(`security-spec.md` S-9 A-1). 우리 설계상
+  이메일 없이는 계정이 성립하지 않으므로 **정상 동작**이며, *"이메일 제공에 동의해야
+  가입할 수 있습니다"* 안내가 필요하다(L-9).
+
+#### 실행 순서
+
+| # | 작업 | 비고 |
 |---|---|---|
-| 1 | `app.json`에 `android.package` / `ios.bundleIdentifier` 확정 (역도메인, **스토어 등록 후 변경 불가**) | ✅ 완료 (2026-08-28) |
-| 2a | 카카오 콘솔 — 네이티브 앱 키 복사 · **iOS 번들 ID 등록**(해시 불필요) · **Android 패키지명만 등록** | 지금 |
-| 3 | `application-secret.yml`의 `allowed-audiences`에 네이티브 앱 키 **추가**(REST 키는 유지 — 런북 재검증 수단) | ✅ 완료 (2026-08-28) |
-| 4 | `@react-native-kakao/*` 설치 → config plugin → **`npx expo prebuild`** → `eas build --profile development` | M2-B 후반 |
-| 2b | **키 해시 등록** — 4단계 빌드 직후 | M2-B 후반 |
-| 5 | E2E: `nonce` → SDK 로그인 → `POST /api/auth/oauth/kakao` | M2-B 후반 |
+| 1 | ✅ 카카오 콘솔 — **OpenID Connect ON** · 이메일 **필수 동의** · **네이티브 앱 키** 복사 · **Android 패키지명**(`com.cinemory.app`) · **iOS 번들 ID** 등록 | 완료 |
+| 2 | ✅ `application-secret.yml`의 `allowed-audiences`에 **네이티브 앱 키 추가** (REST 키는 **유지** — 런북 재검증 수단) | 로그인 성공으로 반영 확인됨(2026-09-11) |
+| 3 | ✅ `npx expo install @react-native-kakao/core @react-native-kakao/user` | |
+| 4 | ✅ `app.json` `plugins`에 **`["@react-native-kakao/core", { "nativeAppKey": "..." }]`** 추가 | ⚠️ **M2-A에서 제거했던 그 플러그인이다** — `nativeAppKey` 없이 등록돼 `expo config`·`expo-doctor`·`expo start` 전체를 `TypeError`로 죽였다. **반드시 키와 함께** 넣는다. ⚠️ **실제로 걸린 함정은 다른 쪽이었다** — `"plugins"` 배열에 `"@react-native-kakao/core"`와 `{ nativeAppKey: ... }`를 **각각 별도 원소로** 넣으면(튜플로 묶지 않으면) 첫 번째만 이름으로 인식되고 옵션은 통째로 사라져 **똑같은 `TypeError`**가 난다. `["이름", 옵션]`을 **하나의 배열 원소**로 중첩해야 한다 |
+| 5 | ✅ `npx expo prebuild` → **재빌드·재설치**(`npx expo run:android`) | 네이티브 의존이 늘었으므로 기존 Dev Client로는 안 된다. ⚠️ **여기서 새 실패가 하나 더 나왔다 — 아래 「Maven 저장소 함정」 참고** |
+| 6 | ✅ **키 해시 등록** — 아래 | 2026-09-11 등록·확인 완료 |
+| 7 | ✅ E2E 검증 — 아래 | 검증표 7항목 중 6개 통과, 2번은 미설치 기기가 없어 스킵 결정(2026-09-11) |
 
-**키 해시 — 어느 키스토어인지가 핵심.** 등록할 값은 *그 APK에 실제로 서명한 키*의 해시다.
+**네이티브 앱 키는 `app.json`에 그대로 넣어도 된다.** 앱 번들에서 추출 가능한 **공개 식별자**이며
+(REST 키·Admin 키와 성격이 다르다), 카카오는 **키 해시/패키지명 등록**으로 앱을 식별한다.
+`.env`로 빼려면 `app.config.js` 전환이 따라오므로 **지금은 `app.json` 직접 기입을 권한다.**
+
+#### ⚠️ Maven 저장소 함정 — 5단계에서 실측 (2026-09-11)
+
+`npx expo run:android`가 `Could not find com.kakao.sdk:v2-common:2.20.1` /
+`v2-user:2.20.1`로 실패한다. 카카오 공식 Android SDK는 **Maven Central·JitPack이 아니라
+카카오 자체 저장소**(`https://devrepo.kakao.com/nexus/content/groups/public/`)에만 있는데,
+`@react-native-kakao/core`의 config plugin은 **AndroidManifest만 건드리고 이 저장소는
+추가해 주지 않는다.**
+
+`android/build.gradle`은 CNG가 매 prebuild마다 새로 만드는 파일이라 직접 고쳐도 다음
+prebuild에서 사라진다. 정석은 **`expo-build-properties`의 `android.extraMavenRepos`**로
+`app.json`에 등록하는 것 — 매 prebuild마다 자동으로 `gradle.properties`에 반영된다
+(`android/build.gradle`이 아니라 여기 박힌다: `android.extraMavenRepos=[{"url":"..."}]`,
+Expo autolinking Gradle 플러그인이 빌드 시점에 읽어 저장소를 추가한다).
+
+```json
+["expo-build-properties", {
+  "android": { "extraMavenRepos": ["https://devrepo.kakao.com/nexus/content/groups/public/"] }
+}]
+```
+
+패키지 설치 시 `npx expo install expo-build-properties`가 `app.json` `plugins`에 자동으로
+한 줄 추가해 주므로, `extraMavenRepos` 옵션 객체만 손으로 채워 넣으면 된다.
+
+#### 키 해시 — 어느 키스토어인지가 전부다
+
+등록할 값은 *그 APK에 실제로 서명한 키*의 해시다.
 
 | 설치 방식 | 서명 키 | 확인 |
 |---|---|---|
-| `eas build --profile development` | EAS 관리 키스토어 | `eas credentials` → SHA-1 → base64 |
-| `npx expo run:android` | `~/.android/debug.keystore` | `keytool -list -v -alias androiddebugkey …` |
+| **`npx expo run:android`** (현재 방식) | `~/.android/debug.keystore` | `keytool -exportcert -alias androiddebugkey -keystore ~/.android/debug.keystore -storepass android \| openssl sha1 -binary \| openssl base64` |
+| `eas build` (팀 배포용) | EAS 관리 키스토어 | `eas credentials` → SHA-1 → base64 |
 | Play 배포 (M5) | **Play 앱 서명 키**(구글 재서명) | Play Console → 앱 서명 |
 
+- **셋 다 결국 등록하게 된다**(카카오는 복수 등록을 허용). 나오는 대로 추가한다.
+- ⚠️ **Windows에 `openssl`이 없는 경우가 많다.** 그럴 땐 계산하려 애쓰지 말고 **일단 로그인을
+  시도**하면 SDK가 전송한 키 해시가 에러·logcat에 찍힌다. 그 값을 복사하는 편이 빠르다.
+- ✅ **더 쉬운 길 — `@react-native-kakao/core`가 `getKeyHashAndroid(): Promise<string | undefined>`를
+  내보낸다**(실측 확인, 2026-09-11). `openssl`도 로그인 시도도 필요 없이 앱 안에서 직접
+  호출해 값을 받을 수 있다. **실제로 이 경로로 등록했다** — `LoginScreen`의 카카오 버튼에
+  `onLongPress`로 임시 연결해 값을 화면에 `selectable` 텍스트로 띄우고 복사, 콘솔에 등록한
+  뒤 **디버그 코드는 지웠다**(2026-09-11). 다시 필요하면 같은 방식으로 재현 가능.
+- ⚠️ **Play 앱 서명 키를 빠뜨리면 개발 내내 정상이다가 스토어 배포 후에만 깨진다** — M5 항목.
 - 로컬 디버그 해시만 등록하고 EAS 빌드에서 `KOE009`를 만나는 것이 가장 흔한 사고다.
-  **셋 다 결국 등록**하게 되므로 나오는 대로 추가한다(카카오는 복수 등록을 허용).
-- ⚠️ **Play 앱 서명 키를 빠뜨리면 개발 내내 정상이다가 스토어 배포 후에만 로그인이 깨진다.**
-  M5 체크리스트 항목이다.
-- 실무 팁 — 해시를 미리 계산하지 말고 **일단 로그인을 시도**하면 SDK가 전송한 키 해시를
-  에러/logcat에 찍어준다. 그 값을 복사하는 편이 빠르다.
 
-**prebuild를 미루는 대안** — `expo-auth-session` 브라우저 OIDC를 쓰면 `aud`가 **REST API 키로
-유지**되어(이미 검증된 값) B-1도 prebuild도 불필요하다. 다만 브라우저 플로우는 authorization
-`code`를 토큰으로 교환해야 하는데 **이 앱은 client secret이 활성화돼 있어**(런북의 KOE010)
-시크릿을 앱 번들에 넣을 수 없다. → **백엔드에 `code`를 받는 엔드포인트 추가**가 필요하다
-(현재 `/api/auth/oauth/{provider}`는 `idToken`만 받는다). *"설정 한 줄 vs 백엔드 엔드포인트 하나"* 의 교환이다.
+#### 코드가 닿는 곳
 
-> 💡 **prebuild 결정을 카카오 로그인 하나로 내리지 말 것.** §13이 지적한 지도 네이티브 SDK가
-> 두 번째 요구이며, 어차피 Dev Client로 가야 한다면 **같은 시점에 묶어 전환하는 것이 총비용이 낮다.**
-> 기획노트 4-INF가 카카오 로그인 실기기 연결을 **배포 트리거(9월 중순)** 로 잡아둔 것과 일정이 맞는다.
+| 파일 | 지금 | 바뀔 것 |
+|---|---|---|
+| `src/hooks/useAuth.ts` `useKakaoLogin`·`kakaoNativeLogin` | **(2026-09-11 이어서 3) 전부 실구현 완료.** `kakaoNativeLogin`이 `@react-native-kakao/user`의 `login({ nonce })`을 직접 호출 | 취소 판정(`err.code === 'Cancelled'`) 실기기 확인만 남음 |
+| `src/screens/auth/LoginScreen.tsx` | **(2026-09-11 이어서 2) 활성화 완료** — 취소·미동의(`OAUTH_EMAIL_NOT_PROVIDED`)·로컬 계정 충돌(`EMAIL_ALREADY_REGISTERED_LOCALLY`) 분기까지 연결됨. OIDC 미활성은 `KAKAO_OIDC_DISABLED`로 매핑 | 없음 |
+| `app.json` `plugins` | **(2026-09-11 이어서 3) 완료** — `@react-native-kakao/core`(`nativeAppKey`) + `expo-build-properties`(`extraMavenRepos`) 등록됨 | 없음 |
+| `src/constants/kakao.ts` | **(신설)** `KAKAO_NATIVE_APP_KEY` — `app.json` plugin 등록값과 동일해야 한다 | 없음 |
+
+**SDK 초기화는 부팅 시퀀스에 합류시키지 않았다.** `App.tsx`의 `restore()` + 스플래시 흐름은
+M2-A에서 어렵게 다듬은 경로라 건드리지 않았고, `ensureKakaoSdkInitialized()`가 **모듈 레벨
+불리언으로 가드해 버튼 탭 시점에 `initializeKakaoSDK(nativeAppKey)`를 한 번만** 부른다.
+
+#### 검증
+
+| # | 확인 |
+|---|---|
+| 1 | ✅ **(2026-09-11 확인)** 카카오톡 설치 기기 — 버튼 탭 → 카카오톡 전환 → 동의 → **홈으로 복귀하고 로그인 상태** |
+| 2 | ⏭️ **스킵 (2026-09-11 결정)** — 카카오톡 **미설치** 기기가 없어 재현 불가. 웹뷰 폴백은 SDK 내부 로직이라 우리 코드가 관여하는 지점이 적다고 판단해 보류. 미설치 기기가 생기면 재확인 |
+| 3 | ✅ **(2026-09-11 확인)** **로그인 중 취소** → 에러 토스트 없이 조용히 복귀. 카카오 계정 연결 해제 후 재시도로 동의 화면을 다시 띄워 재현 — `err.code === 'Cancelled'` 판정이 실측으로 맞았다 |
+| 4 | ✅ **(2026-09-11, 설계상 발생 안 함)** **이메일 동의 거부** — 카카오 콘솔에서 이메일을 **필수 동의**로 설정해 뒀으므로 동의 화면에서 거부 자체가 불가능해 이 케이스가 원천적으로 안 난다. `OAUTH_EMAIL_NOT_PROVIDED` → 안내 배너로 매핑하는 코드 경로(`LoginScreen.tsx`)는 남겨 뒀다 — 콘솔 설정이 바뀌거나 다른 provider가 추가되면 실측이 다시 필요하다 |
+| 5 | ✅ **(2026-09-11 확인)** **실패 후 재시도** → ①부터 다시 타서 성공한다(`INVALID_NONCE` 안 남). 취소 직후 곧바로 재시도해 재현 — `mutate()`마다 `authApi.nonce()`를 새로 호출하는 구조가 실측으로도 맞았다 |
+| 6 | ✅ **(2026-09-11 확인)** 카카오 로그인 계정으로 **앱 재실행** → `restore()`로 로그인 유지. 완전 종료 후 재실행으로 재현 — 카카오 로그인도 이메일 로그인과 동일하게 토큰을 SecureStore에 저장하므로 M2-A에서 이미 검증된 경로와 같은 코드를 탄다는 것까지 실측으로 확인 |
+| 7 | ✅ **(2026-09-11 확인)** 카카오 로그인 상태에서 **로그아웃** → 정상 |
+
+**3·5번이 실제로 자주 깨진다** — 취소를 에러로 처리하거나, 재시도에서 nonce를 재사용한다.
+
+#### 폐기된 대안 — 기록만 남긴다
+
+**`expo-auth-session` 브라우저 OIDC**(`aud`가 REST 키로 유지돼 B-1도 prebuild도 불필요)는
+**prebuild를 이미 했으므로 존재 이유가 사라졌다.** 채택했더라도 client secret이 활성화돼
+있어(런북 KOE010) 시크릿을 앱 번들에 넣을 수 없고, **백엔드에 `code` 교환 엔드포인트 추가**가
+선행돼야 했다 — 현재 `/api/auth/oauth/{provider}`는 `idToken`만 받는다.
+
 
 ### 11.2 B-15 — 시청 기록 수정 API
 
@@ -1583,6 +1890,24 @@ export { CineMapWebView as CineMapView } from './CineMapWebView';
 
 | 날짜                 | 내용 |
 |--------------------|---|
+| 2026-09-12 (이어서 7) | **§7.5 실기기 검증 통과 — 앱 시작 로딩 화면 확인 완료.** 이어서 6의 구조(부팅 시 `AppLoadingScreen` → 배경 포스터 전부 프리페치 → 탭 네비게이션 전환)를 실기기에서 완전 재시작으로 확인 — 정상 반영, 체감 로딩 시간도 양호하다는 평가를 받았다. §7.5의 조치 우선순위 4건(이어서) + 미결 3(프리페치) + 이번 로딩 화면까지 **전부 실기기로 닫혔다.** 남은 미결은 §7.5 원문의 미결 1(`accessTokenExpiresAt` 트레이드오프 유지 여부 — 지금 구조에서는 `data ready` 시점이 로딩 화면 뒤에 가려져 사용자 체감에 미치는 영향이 이미 옅어졌다고 판단, 재론하지 않음)과 미결 2(48개 셀 마운트 감축)뿐이며 둘 다 지금 체감 품질로는 급하지 않아 보류 |
+| 2026-09-12 (이어서 6) | **§7.5 방향 전환 — "제한 시간 내 최선 공개" 롤백, 앱 시작 로딩 화면으로 교체.** 타협안(이어서 5, `PREFETCH_TIMEOUT_MS=1800`)을 실기기에서 확인한 사용자가 "소수가 뒤늦게 팝인하는 모습"을 부정적으로 평가하고, **대기 자체를 홈 화면 밖(전용 시작 로딩 화면)으로 옮기자**고 제안 — 채택했다. `PosterBackdrop.tsx`에 있던 `imagesReady` 게이트·프리페치 이펙트·계측 로그(이어서 3·4·5에서 쌓은 것) 전부를 **롤백**하고 단순 렌더로 되돌렸다 — 이제 이 컴포넌트는 프리페치를 하지 않는다. 대신 ① 그리드 셀 수 계산(`cellWidth`·`cellHeight`·`rows`·`cellsPerSet`)을 `PosterBackdrop.tsx`와 신규 훅이 공유해야 해 `src/utils/posterGrid.ts`(`computePosterGrid`)로 추출했다 ② `src/hooks/useHomeBackgroundReady.ts` 신설 — `useHomeBackground`(react-query 캐시 공유라 중복 호출이어도 네트워크 재요청 없음)로 받은 포스터의 고유 URI를 `Image.prefetch()`로 전부 채운 뒤(`Promise.allSettled` + 8초 안전망 타임아웃 — 이번엔 "거의 항상 발동하는 예산"이 아니라 진짜 네트워크 완전 차단 시나리오만을 위한 것) `true`를 반환한다. ⚠️ **`ready`는 최초 1회만 게이트로 쓰인다** — 로그인/로그아웃으로 나중에 signature가 바뀌어도 다시 `false`로 내리지 않는다. 안 그러면 로그인할 때마다 사용자를 로딩 화면으로 다시 쫓아내게 된다(이 경우의 팝인은 `PosterBackdrop`의 `transition={150}`이 예전처럼 떠안는다 — 빈도가 훨씬 낮은 이벤트라 이 정도는 받아들이기로 함) ③ `src/components/common/AppLoadingScreen.tsx` 신설 — 로그인 화면과 같은 로직으로 흰 배경엔 `keylineColor`를 `shadowDeep`으로 쓰는 `ExtrudedText` 로고 + `ActivityIndicator`. `common/`에 둔 이유는 이게 라우팅되는 화면이 아니라 `App.tsx`가 조건부로 그리는 최상위 뷰라서(`screens/`는 도메인별 실제 화면용) ④ `App.tsx`를 `AppContent`로 감싸 재구성 — **네이티브 스플래시를 내리는 시점 자체는 그대로**(`status`가 `'loading'`을 벗어나는 즉시) 두되, 그 트리거를 `NavigationContainer.onReady`에서 `AppLoadingScreen`의 `onLayout`으로 옮겼다(`NavigationContainer`는 이제 프리페치가 끝나야 마운트되므로 그때까지 기다리면 **정지된 네이티브 스플래시**가 그대로 떠 있게 돼 원래 의도(스피너가 도는 화면에서 대기 노출)가 깨진다). `hideSplashOnce`로 중복 호출 방지, `NavigationContainer.onReady`에도 안전망으로 남겨 둠. `npx tsc --noEmit` 통과. **실기기 검증 전** — 다음은 로딩 화면 노출 시간이 실측 예산(≈4~5초)과 맞는지, 스플래시→로딩 화면 전환에 이전 M2-A가 잡았던 "번쩍임" 회귀가 없는지 확인 |
+| 2026-09-12 (이어서 5) | **§7.5 실측 완료 — 프리페치 완전 대기가 병목임을 확인, "제한 시간 내 최선 동시 공개"로 타협.** 실기기 로그 5줄: `data ready +1014ms` → `prefetch first +1714ms`(첫 장 왕복 700ms) → **`prefetch all +5140ms`(32장, 나머지 31장에 3426ms)** → `mount first/all +5259~5269ms`(마운트는 10ms — 캐시 히트 설계가 의도대로 동작 확인). **병목은 디코드도 마운트도 아니라 프리페치 자체**였다 — 700ms/웨이브 × 6웨이브 ≈ 4.2초로 실측 4.1초와 거의 일치해, **호스트당 동시 연결 수 제한**(§7.5 보조 실험 1이 세웠던 가설)이 원인임을 별도 실험 없이 산수로 확인했다. "완전 동시 공개"를 그대로 두면 총 5.3초로 **원래 불만(체감 3초)보다 느려지는 역효과**라 사용자에게 트레이드오프를 보고하고 선택지 3개(제한 시간 내 최선 공개 / 그리드 밀도 축소 / 단계적 공개로 되돌리기)를 제시 — **"제한 시간 내 최선 동시 공개"로 결정**. `PREFETCH_TIMEOUT_MS`를 5000 → **1800**ms로 낮췄다 — ⚠️ 이 값은 더 이상 "네트워크가 느릴 때만 발동하는 안전망"이 아니라 **평범한 경로에서 거의 매번 발동하는 정상 예산**임을 주석에 명시했다(4.1초 완주는 실측상 드문 경우가 아니라 일반 경우였으므로). 예산 안에 못 들어온 소수는 게이트가 열린 뒤 개별 `transition`으로 뒤늦게 팝인 — 완전한 동시성은 포기했지만 다수는 함께 뜨고 최악의 경우도 ~2초로 상한이 걸린다. 계측 로그도 `settledCount`를 추가해 컷오프 시점에 몇 장이 실제로 끝났는지 남기도록 보강했다. **다음 검증**은 이 타협안을 실기기에서 다시 재보는 것 |
+| 2026-09-12 (이어서 4) | **§7.5 계측 코드 추가 — 실측 전, 코드만.** 프리페치 게이트(이어서 3) 적용 후에도 "로딩은 여전히 느리다"는 실기기 보고를 받아, §7.5가 처음에 계획했던 계측을 실제로 붙였다. `App.tsx` 최상단에 `APP_T0`를 두는 원안 대신 **`src/utils/perf.ts`로 분리**했다 — `PosterBackdrop.tsx`가 그 값을 다시 import하면 `App → RootNavigator → … → PosterBackdrop → App`로 순환 참조가 생겨 로드 시점에 `undefined`가 될 위험이 있었기 때문(App.tsx의 첫 import로 둬서 최대한 이른 시점을 유지). 원안의 3개 로그(`data ready`·`1st image`·`all images`)를 **프리페치 게이트 구조에 맞춰 5개로 확장**했다 — ① `data ready`(posters 쿼리 완료, `reissue` 왕복 포함) ② `prefetch first`/③ `prefetch all`(또는 타임아웃) — 개별 URI를 `Promise.allSettled`로 모아 실제 네트워크·디코드 구간을 분리 측정 ④ `mount first`/⑤ `mount all` — 프리페치 완료 후 실제 `<Image>`가 마운트돼 `onLoadEnd`까지 걸리는 시간(캐시 히트 확인용, 여기가 크면 "프리페치했는데도 마운트가 다시 느리다"는 새 사실이 드러나는 지점). 전부 `console.log`이고 **조치가 끝나면 제거할 임시 코드**로 주석에 명시했다. `npx tsc --noEmit` 통과. **실측은 다음 단계** — `npx expo start --dev-client`로 그대로 확인 가능하고(네이티브 변경 없음), logcat 또는 Metro 콘솔에서 `[bg]` 태그로 필터링해서 본다 |
+| 2026-09-12 (이어서 3) | **§7.5 미결 3 조기 해소 — `Image.prefetch()` 프리페치 게이트로 "동시 로드" UX 구현.** `transition` 조정(이어서 2)까지 해도 실기기에서 "포스터가 제각각으로 로드"되는 체감이 남는다는 재확인을 받았다 — 사용자가 원한 건 *"홈 화면이 보일 때 이미 로드가 끝나 있는"* 동시 등장이었다. `PosterBackdrop.tsx`에 `imagesReady` 게이트를 신설 — `signature`(포스터 셋)가 바뀔 때마다 그 셋의 **고유** `BACKDROP_TILE` URI를 `Set`으로 중복 제거해 `Image.prefetch(uri, 'memory-disk')`를 개별 호출하고 `Promise.allSettled`로 전부 settle될 때까지 기다린다. 그동안은 `uri`가 있어도 `<Image>`를 마운트하지 않고 기존 결정론적 폴백 색 타일만 보여준다 — 준비가 끝나 `imagesReady`가 한 번에 `true`가 되면 48개 셀이 전부 캐시 히트 상태로 동시에 마운트돼 실제로 동시에 나타난다. ⚠️ `Image.prefetch`는 배열로 한 번에 넘기면 **하나라도 실패 시 나머지를 기다리지 않고 즉시 `false`로 resolve**되는 문서화된 동작이라 게이트가 조기에 열릴 위험이 있어, **URI마다 개별 호출**해 `allSettled`로 모으는 방식을 썼다. 네트워크가 느리거나 멈춘 경우를 위해 `PREFETCH_TIMEOUT_MS = 5000`으로 `Promise.race` 타임아웃을 걸어 폴백 타일에 영원히 갇히지 않게 했다(타임아웃 시 일부는 여전히 개별 `transition`으로 뒤늦게 팝인할 수 있음 — 예외 경로로만 남긴다). **총 로딩 시간을 줄이는 조치가 아니라, 이미 있던 로딩 시간 동안 무엇을 보여주는가를 바꾼 것**이다 — 배경이 완전히 뜨기까지 걸리는 시간 자체는 §7.5 예산(≈2s, 계측 전)과 크게 다르지 않을 수 있다 |
+| 2026-09-12 (이어서 2) | **§7.5 조치 1 실기기 재검증 — 배경 셀 `transition={0}`이 원인이던 "산발적 로딩" 발견·수정.** 재빌드(`expo run:android`) 후 실기기 확인 — 총 로딩 체감은 소폭 개선됐으나 **포스터가 도착 순서대로 하나씩 뚝뚝 튀어나오는 현상(popcorn)은 그대로**였다. 원인은 배경 셀에 준 `transition={0}` — "부모 opacity와 겹치면 이중 페이드인"이라는 초판 판단이 **틀렸다**: 부모(Animated.View)의 opacity는 `signature`(포스터 셋 전체) 교체 시 **한 번만** 재생되는 반면, 셀의 `transition`은 **그 셀 하나가 개별로 로드를 마칠 때마다** 재생돼 서로 다른 이벤트다. `transition={0}`으로 죽여 둔 탓에 각 셀이 준비되는 즉시 뚝 나타나 §7.5 보조 실험 1이 예측한 "호스트당 동시 연결 수 제한으로 웨이브가 쪼개지는" 현상이 그대로 노출됐다. `200`으로 되돌려 개별 셀이 도착할 때마다 부드럽게 페이드인되도록 수정 — **총 로딩 시간을 줄이는 조치가 아니라 이미 존재하던 웨이브 도착을 매끄럽게 가리는 조치**임을 구분해 둔다. 근본 원인(동시 연결 제한)을 없애려면 §7.5 미결 3(`Image.prefetch()`)이나 셀 수 자체를 줄이는 방향이 필요하며, 그건 계측 후 재판단 |
+| 2026-09-12 (이어서)   | **§7.5 조치 4건 착수 — 코드 구현 완료, 실기기 검증 전.** ① `npx expo install expo-image`로 설치(`app.json` plugin 자동 등록 확인) 후 `PosterImage.tsx`·`PosterBackdrop.tsx`를 RN `<Image>`에서 교체 — `cachePolicy="memory-disk"`·`recyclingKey`(포스터/배경 셀 모두 `id` 기반, 결정론적 폴백 색과 같은 원칙). `PosterImage`는 `transition={150}`, 배경 셀은 자체 크로스페이드(opacity 애니메이션)와 겹치는 걸 막으려 `transition={0}`으로 뒀다(스펙이 지목한 함정 그대로). ② `useHomeBackground.ts`에서 `useRandomMovies(poolSize, needsRandom)` → `useRandomMovies(poolSize)`로 바꿔 `records` 완료를 기다리지 않고 항상 병렬 발사 — "낭비 호출이라 미룬다" 주석을 §7.5 근거로 교체했고, 소스를 **고르는**(반환부) 로직은 그대로 뒀다. ③ `authStore.ts`에 `KEYS.accessTokenExpiresAt` 신설 — `setTokens`에서 저장, `restore()`에서 `Number()` 파싱해 복원(값 없음·`NaN` 모두 `0`으로 안전 폴백, 기존 동작과 동일), `logout()`과 `restore()`의 catch 분기(키스토어 손상 시 삭제) 양쪽에 삭제 로직 추가 — **트레이드오프(미결 1)는 사용자에게 확인하지 않고 스펙 지시대로 진행**했다(스펙이 "실패해도 `TOKEN_EXPIRED` 401 → 인터셉터가 처리해 기능상 동일"이라고 명시했고, `client.ts`의 단일 비행 재발급 로직 자체는 건드리지 않았다). ④ `poolSize`를 `bucketPoolSize()`(올림 16/32/50)로 교체하고 `useHomeBackground`의 `records` 쿼리·`useRandomMovies` 양쪽에 `staleTime: 5분` 추가(전역 30초 대신). `npx tsc --noEmit` 통과. **실기기 계측(§7.5 "계측 — 타임스탬프 4개")과 미결 3건 판단은 아직**이다 — 다음 세션에서 `APP_T0`·`onLoadEnd` 로그를 붙여 실측하고 이 표에 결과를 추가할 것 |
+| 2026-09-12         | **§7.5 신설 — 홈 배경 이미지 로딩 지연(체감 3초) 원인 분석.** 분석·계측 계획만이며 코드 변경은 없다. ① ⚠️ **백엔드를 측정으로 배제** — `GET /api/movies/random?size=24` 53~73ms, `GET /api/records/user/1?page=0&size=24` 12ms로 **직렬 합산 0.1초**다. `movie`가 12,750편이 되며 `ORDER BY RAND()`가 2.77배 악화됐을 것이라는 가설과 `show-sql: true`의 런타임 부하는 **둘 다 원인이 아니었다**(각각 `tmdb-sync-spec.md` 잔여 #12·#32로 별개 사유로만 유효). **가설 순위를 구간 측정보다 먼저 매긴 것이 초기 오류**였음을 절 안에 명시했다. ② ⚠️ **신규 발견 — 콜드 스타트마다 `reissue` 왕복이 무조건 발생한다.** `authStore.restore()`가 `accessTokenExpiresAt: 0`으로 복원하는데 `client.ts`의 선제 갱신 조건이 `expiresAt - Date.now() < 60_000`이라 **항상 참**이다. 로그인 사용자가 앱을 켤 때마다 `SecureStore` 읽기 → `POST /api/auth/reissue` → `SecureStore` 쓰기 ×2가 첫 API 요청 앞에 붙는다. ③ **`useHomeBackground`가 `random`을 `records` 뒤로 직렬화**한다 — 주석의 *"낭비 호출이라 미룬다"* 근거가 홈 배경에서는 성립하지 않는다(아끼는 것은 53~73ms짜리 permitAll GET 하나, 대가는 임계경로의 왕복 한 번). ④ **예산 정리** — 배경 타일은 `w92` 24장 = 약 120KB라 용량이 원인일 수 없고, JS 부팅+`restore()` 0.2~0.5s / 왕복 0.2~0.4s를 빼면 **남는 약 2초가 이미지 구간**이다. ⑤ **계측 계획** — `APP_T0` 기준 `data ready` · `1st image` · `all images` 세 지점을 찍어 *네트워크 개시 비용*과 *동시성·디코드 비용*을 분리한다. 보조 실험으로 48셀 단일 URL 고정(네트워크 vs 디코드 판별)과 릴리스 빌드 비교(Metro 오버헤드 분리)를 둔다. ⑥ **조치 4건 확정** — 1) `expo-image` 전환(`cachePolicy: 'memory-disk'`·`transition`·`recyclingKey`, 배경 셀은 `transition={0}` — 자체 크로스페이드와 겹치면 두 번 페이드인), 2) `useRandomMovies` 항상 발사(고르는 로직은 그대로, *언제 쏘는가*만 변경), 3) `accessTokenExpiresAt` 실제 만료 복원(값 없으면 `0` 폴백 — §5 규칙 5), 4) `poolSize` **올림** 버킷팅 + `staleTime` 30초 → 5분(⚠️ 내림 버킷이면 2026-09-06의 *첫 행·마지막 행 중복* 버그가 재현된다). **네 건 모두 계측 없이 착수 가능**하다. ⑦ **미결 3건** — 조치 3이 포기하게 되는 *리프레시 토큰 선제 검증*을 유지할지, 48개 셀 마운트 감축 가능성, `Image.prefetch()` 도입 여부. ⑧ **§7.2 정오** — 초판 코드 블록의 `PosterSize`가 현행(`LIST: 'w342'` + `BACKDROP_TILE`·`HERO`)과 달라 경고를 달았다. 구현은 스펙이 아니라 실제 파일 기준 |
+| 2026-09-11 (이어서 9) | **§9.1 로그인 화면에 홈과 같은 입체 압출 로고 적용 + `shadowDeep` 토큰 신설.** §9.1이 2026-09-09부터 "로고를 흰 배경 화면(스플래시·로그인)에 쓰기 시작하면 `brandLight` 키라인 선택을 다시 본다"고 보류해 뒀던 것을 실제로 붙이며 해소했다. 표에 이미 정리돼 있던 대로 흰 배경에는 `shadowDeep`(≈`#1F7A72`)이 맞아 `theme/tokens.ts`에 추가하고, `ExtrudedText`가 애초에 `keylineColor`를 prop으로 받도록 설계돼 있던 덕에 **컴포넌트는 손대지 않고 `LoginScreen.tsx`에서 값만 교체**했다 — 이 설계 이유("인자 하나 교체로 끝내기 위함")가 실측으로 그대로 확인된 사례다. `Home`은 포스터 배경이라 `brandLight` 유지, 크기는 컴포넌트 주석이 안내한 대로 Home(56px)보다 작은 40px을 썼다. `LoginScreen`의 기존 플레인 `Txt` 로고를 교체하는 김에 로고를 `items-center` 래퍼로만 감싸 나머지 폼(전체 폭 stretch)에는 영향 없게 했다 |
+| 2026-09-11 (이어서 8) | **§11.1 E2E 검증 마무리 — B-1 사실상 완료.** 7번(로그아웃) 정상 확인. 4번(이메일 동의 거부)은 콘솔에서 이메일을 필수 동의로 걸어 둬 애초에 재현 불가능한 케이스임을 확인하고 **설계상 발생 안 함으로 정리**했다 — `OAUTH_EMAIL_NOT_PROVIDED` → 안내 배너 매핑 코드는 남겨 둔다(콘솔 설정이 바뀌거나 provider가 늘면 다시 실측 필요). 2번(카카오톡 미설치 기기)은 테스트 기기가 없어 **스킵으로 결정** — 웹뷰 폴백은 SDK 내부 로직이라 우리 코드가 관여하는 지점이 적다는 판단. 검증표 7항목 중 6개 통과·1개 의도적 스킵으로 §11.1 실행 순서 7단계를 ✅로 갱신했다. **§11.1 B-1이 이걸로 마무리됐다** — 설계 확정(이어서)부터 SDK 미설치 상태의 코드 준비(이어서 2)·실제 연결과 빌드 함정 둘(이어서 3)·키 해시 등록과 첫 로그인 성공(이어서 4)·취소(이어서 5)·재시도(이어서 6)·재실행 유지(이어서 7)를 거쳐 온 하루짜리 작업이었다 |
+| 2026-09-11 (이어서 7) | **§11.1 검증 6번(재실행 유지) 통과.** 완전 종료(최근 앱에서 스와이프) 후 재실행해 재현 — 스플래시 이후 로그인 상태 유지 확인. 카카오 로그인도 토큰 저장은 이메일 로그인과 동일 경로(SecureStore + `authStore.setTokens`)를 타므로 M2-A에서 이미 검증된 `restore()` 부팅 경로가 그대로 적용됨을 실측으로 확인. **남은 것**은 검증표 2(카카오톡 미설치 기기)·4(이메일 동의 거부)·7(로그아웃) |
+| 2026-09-11 (이어서 6) | **§11.1 검증 5번(재시도) 통과.** 3번(취소)으로 만든 "실패" 직후 곧바로 재시도해 재현 — 두 번째 시도가 `INVALID_NONCE` 없이 정상 로그인됐다. `useKakaoLogin`의 `mutationFn`이 `mutate()`가 불릴 때마다 `authApi.nonce()`를 처음부터 다시 호출하는 구조(이전 nonce를 들고 있다가 ②만 재시도하는 경로 자체가 없음)가 설계대로 동작함을 실측으로 확인. **남은 것**은 검증표 2(카카오톡 미설치 기기)·4(이메일 동의 거부)·6(재실행 유지)·7(로그아웃) |
+| 2026-09-11 (이어서 5) | **§11.1 검증 3번(취소) 통과.** 카카오톡 SSO는 한 번 동의하면 이후 로그인에서 **동의 화면 자체를 건너뛰어** 취소를 재현할 방법이 없었다 — 카카오 계정에서 CineMory 앱 연결을 해제해 동의 화면을 다시 띄운 뒤 그 화면에서 취소해 재현했다. `kakaoNativeLogin`의 `err.code === 'Cancelled'` 판정이 실측과 맞아떨어져 에러 없이 로그인 화면으로 조용히 복귀함을 확인 — 이 판정은 실기기 확인 전까지는 근거가 공식 SDK 문서뿐이라 가장 위험한 추측 지점이었는데 이제 실측으로 닫혔다. 검증표 1·3번 통과, 코드 주석의 "확인 필요" 경고도 정리했다. **남은 것**은 검증표 2(카카오톡 미설치 기기)·4(이메일 동의 거부)·5(재시도)·6(재실행 유지)·7(로그아웃) |
+| 2026-09-11 (이어서 4) | **§11.1 B-1 완료 — 키 해시 등록 + 실기기 로그인 성공.** `@react-native-kakao/core`의 `getKeyHashAndroid()`를 `LoginScreen`의 카카오 버튼 `onLongPress`에 임시로 연결해(`selectable` `Txt`로 화면에 표시) 키 해시를 뽑아 카카오 콘솔에 등록했다 — 등록 확인 후 **디버그 코드는 바로 제거**(`tsc --noEmit` 재확인). 버튼 탭 → 카카오톡 앱 전환 → 동의 → 앱 복귀 → **로그인 성공**까지 실기기에서 확인됐다(§11.1 검증표 1번). 이걸로 idToken 발급·`allowed-audiences`에 네이티브 앱 키 반영·키 해시 등록이 전부 실측으로 닫혀 **B-1을 §11 표에서 제거(~~B-1~~)했다.** 실행 순서 1·2·6·7도 완료로 갱신 — 단 7(E2E 검증)은 **7항목 중 1번만 통과**한 상태라 🔶로 남겨 뒀다. **남은 것**은 검증표 2~7번(카카오톡 미설치 기기·취소·이메일 동의 거부·재시도·재실행 유지·로그아웃) — 특히 3번(취소)은 `kakaoNativeLogin`의 `"Cancelled"` 코드 판정이 맞는지 아직 실측 전이라 우선순위가 높다 |
+| 2026-09-11 (이어서 3) | **§11.1 실제 SDK 연결 + 실기기 빌드 완료.** 사용자가 직접 `@react-native-kakao/*` 설치·`app.json` plugin 등록·`prebuild`·`run:android`를 진행하며 **두 가지 새 함정을 실측으로 찾았다** — ① `app.json`의 `plugins` 배열에 플러그인 이름과 옵션 객체를 **튜플로 묶지 않고 나열**하면(`"이름", {옵션}`처럼 각각 별도 원소로) 옵션이 통째로 사라져 §11.1이 이미 경고했던 `nativeAppKey` `TypeError`가 **다른 원인으로 똑같이** 난다 — `["이름", {옵션}]`으로 중첩해야 한다. ② `npx expo run:android`가 `com.kakao.sdk:v2-common`/`v2-user`를 못 찾고 실패 — 카카오 공식 Android SDK는 Maven Central·JitPack이 아니라 카카오 자체 저장소(`devrepo.kakao.com`)에만 있는데 `@react-native-kakao/core`의 config plugin은 AndroidManifest만 건드리고 이 저장소를 추가해 주지 않는다. **`android/build.gradle`은 CNG가 매번 새로 만드는 파일이라 직접 고치면 다음 prebuild에서 사라지므로**, `expo-build-properties`(신규 설치 — 이것도 네이티브 관련이라 착수 전 확인받았다)의 `android.extraMavenRepos`로 `app.json`에 등록하는 정석 경로를 썼다(`gradle.properties`에 반영되는 것까지 확인). 이 둘을 §11.1 실행 순서 4·5단계에 각주로, 새 하위 절 「Maven 저장소 함정」으로 남겼다. 그 뒤 `src/hooks/useAuth.ts`의 `kakaoNativeLogin` 스텁을 **실제 `@react-native-kakao/user`의 `login({ nonce })` 호출로 교체**했다 — `initializeKakaoSDK`는 여전히 버튼 탭 시점 모듈 레벨 가드로만 호출(부팅 시퀀스 미합류 원칙 유지). 취소 판정은 공식 Android SDK `ClientErrorCause`의 `"Cancelled"` 코드를 근거로 구현했지만 **실기기 확인 전이라 §11.1 검증 3번으로 남겨 뒀다** — 어긋나도 취소가 조용히 넘어가지 않고 일반 에러 메시지가 뜨는 정도라 안전하게 실패한다. 부수적으로 `@react-native-kakao/core`가 `getKeyHashAndroid()`를 내보내는 것을 발견해 **키 해시 표에 "더 쉬운 길"로 추가**했다 — `openssl`도 로그인 시도도 없이 앱에서 직접 호출로 받을 수 있다. `KAKAO_NATIVE_APP_KEY`는 `src/constants/kakao.ts`로 새로 뺐다(`app.json` plugin 값과 동일해야 함을 주석으로 못박음). **남은 것**은 §11.1 실행 순서 1(콘솔 OIDC/이메일 필수 동의)·2(백엔드 `allowed-audiences` 재확인)·6(키 해시 등록)·검증 7항목 |
+| 2026-09-11 (이어서 2) | **§11.1 코드 구현 — SDK 미설치 상태로 가능한 만큼만.** 실행 순서 3~5단계(패키지 설치·`app.json` plugin·`prebuild`)는 CLAUDE.md의 "네이티브 모듈 추가·prebuild는 먼저 알리기" 규칙 대상이라 **착수 전 사용자에게 확인했고, "코드만 먼저"로 답을 받았다.** `useKakaoLogin`(`src/hooks/useAuth.ts`)에 흐름 ①③④⑤(nonce 발급 → idToken 가드 → 서버 검증 → 토큰 저장·`setUser`)를 실제로 구현했다 — 백엔드 계약은 추측하지 않고 `cinemory-backend/docs/security-spec.md`·`kakao-login-runbook.md` 실측으로 확인했다(`OAUTH_EMAIL_NOT_PROVIDED` 400, `EMAIL_ALREADY_REGISTERED_LOCALLY` 409, `INVALID_NONCE` 401). **②(SDK 호출)만 `kakaoNativeLogin` 함수 하나로 격리**해 스텁으로 남겼다 — `@react-native-kakao/*`를 import하는 실제 구현은 주석으로 그대로 옆에 적어 뒀고, 패키지가 들어오면 이 함수 본문만 교체하면 된다. `KakaoLoginCancelledError`로 "취소는 에러가 아님" 계약을 타입으로 못박았다(§11.1 검증 3번이 자주 깨진다고 지적한 지점). `LoginScreen.tsx`의 `카카오로 시작하기` 버튼은 **활성화**하고 `onKakaoPress`로 연결했다 — 지금 탭하면 스텁이 `NOT_IMPLEMENTED`로 실패하지만, 에러 배너·필드 분기 코드 경로 자체는 실제로 동작해 리뷰 가능하다. `nonce?: string`(생성 타입)이 optional이라 응답에 `nonce`가 없는 경우도 `INVALID_NONCE`로 방어했다. **남은 것**은 §11.1 실행 순서 1(콘솔)·2(백엔드 `allowed-audiences`)·3~6(패키지·plugin·prebuild·키 해시)·검증 7항목 전부 — 전부 사용자 승인 또는 실기기가 필요해 이 세션에서는 진행하지 않았다 |
+| 2026-09-11 (이어서) | **§11.1 B-1 설계 확정 — 전제가 바뀌어 다시 썼다.** 초판은 *"검증이 Dev Client 빌드에 묶여 있어 독립 작업이 아니다"* 를 전제로 했으나 **prebuild가 끝나 B-1이 순수하게 카카오만의 문제**가 됐고, 키 해시를 뽑을 **첫 빌드도 이미 있다.** **유일한 진짜 미지수였던 "커뮤니티 래퍼가 우리 백엔드 계약을 만족하는가"를 실측으로 닫았다** — `@react-native-kakao/user` **2.4.6**의 `login({ nonce })`가 `nonce`를 받아 `id_token`의 `nonce` 클레임으로 돌려주고 `idToken`을 주므로 `POST /api/auth/oauth/kakao { idToken, nonce }`와 그대로 맞는다. peer가 `react-native: '*'`라 RN 0.86 제약도 없다. ⚠️ **`idToken`이 optional이라는 점을 클라이언트 가드로 못박았다** — 콘솔의 OIDC가 꺼져 있으면 에러가 아니라 *필드가 없는* 형태로 오며, 런북 0단계 3번이 지적한 가장 흔한 함정이다. 흐름 6단계(nonce 발급 → SDK → idToken 가드 → 서버 검증 → setUser → `goBack`)와 함정 넷(**nonce는 버튼 탭 시점 발급**·**재시도는 ①부터**·**취소는 에러가 아님**·**이메일 미동의는 정상 거부**), 실행 7단계, 키 해시 3종 표, 검증 7항목을 정리했다. **`app.json` plugin 재등록은 M2-A에서 `expo config` 전체를 죽였던 그 플러그인**이므로 `nativeAppKey`와 **반드시 함께** 넣도록 경고를 남겼고, 네이티브 앱 키는 **공개 식별자**라 `app.json` 직접 기입을 권했다(`.env`로 빼면 `app.config.js` 전환이 따라온다). **SDK 초기화를 부팅 시퀀스에 합류시키지 않는다**는 것도 명시 — `App.tsx`의 `restore()`+스플래시는 M2-A에서 어렵게 다듬은 경로다. 함께 **§6.5의 *"카카오 실기기 연결 = 실서버 배포 트리거"* 전제를 해제**했다 — 그 근거(redirect URI의 LAN IP 우회 불가)는 폐기된 브라우저 OIDC 대안을 전제한 것이고, 네이티브 SDK 방식엔 redirect URI가 개입하지 않는다. `expo-auth-session` 대안은 폐기 사유와 함께 기록만 남겼다 |
+| 2026-09-11 | **Dev Client 전환 완료 + §8.6 결론 교체(가드 → 원인 확정·제거).** 화면 작업보다 prebuild를 **먼저** 한 이유는 `Report`(B-8)와 3군(B-9~B-11)이 전부 백엔드에 막혀 **프론트가 대기 상태**였기 때문이다 — 되돌리기 어려운 분기점을 그 시간에 넘겼고, 화면이 늘어난 뒤에 하면 회귀 검증 대상만 커진다. 회귀 검증(스플래시·NativeWind·**reanimated/worklets**·`datetimepicker`·`expo-secure-store`·핵심 동선) 전 항목 통과. **§8.6의 결론이 뒤집혔다** — Dev Client에서 **가드를 끈 채로** 전 화면·세 트리거를 재현했더니 **빈 화면이 한 번도 나오지 않았고, 전환 중 뒤로가기가 무시되는 체감은 그대로**였다. 즉 **네이티브가 이미 그 억제를 정상적으로 하고 있었고 가드는 그것을 JS로 재구현한 것**이었다(Expo Go에서는 그 처리가 깨져 pop이 어중간하게 진행되며 화면이 detach된 채 남았다). 동작이 같으므로 가드는 이득 없이 위험만 남아 — ① **카운터 누수 시 뒤로가기 영구 차단**(원래 버그보다 나쁜 실패 모드) ② **프로그램 `goBack()`도 삼킴** — **제거했다.** `movieDetailScreenOptions.ts`는 4개 스택 중복 해소라는 별개의 값어치가 있어 남겼다. §8.6은 지우지 않고 **조사 기록 + 배제 목록 + 재발 방지 검증표**로 유지한다 — **한 기기에서만 확인했으므로** 다른 기기에서 재현되면 git 히스토리로 가드를 되살린다. 「진행 현황」의 워크플로 절도 *"곧 올 분기점"* 에서 *"완료"* 로 바꾸고, **실서버 배포를 prebuild와 분리**한다는 판단(파이프라인은 일찍, 데이터 이관은 마지막)을 함께 적었다 |
 | 2026-09-10 (이어서 5) | **§8.6에 「알려진 한계와 방어」·재발 방지 검증표 추가.** 구현 리뷰에서 셋을 찾았다 — ① **카운터 누수 시 뒤로가기가 영구 차단**된다(`Math.max(0,...)`가 아래쪽만 막고 위쪽엔 천장이 없다). 짝 없는 `transitionStart` 하나면 앱이 잠기며 **원래 버그보다 나쁘다**(원래는 특정 타이밍 한정에 한 번 더 누르면 복구됐다). `MAX_TRANSITION_MS` 천장 2줄로 자가 치유되게 했다 — 정상 경로는 이벤트 기반 그대로다. ② **프로그램이 부르는 `goBack()`도 `beforeRemove`에 걸려 조용히 삼켜진다** — 사용자 입력과 달리 재시도가 없어 *"삭제했는데 안 닫힘"* · *"로그인했는데 모달이 안 닫힘"* 으로 나타난다. 확률이 낮아 지금은 고치지 않고 **한계로 기록**했다(증상 보고 시 여기부터 의심). ③ `transitionCount`가 **모듈 전역 `let`이라 Fast Refresh를 살아남는다** — 개발 중 뒤로가기가 죽으면 풀 리로드부터. 함께 **재발 방지 검증 5항목**(헤더/하드웨어/스와이프 × 전환 직후 + 연속 3회 + 프로그램 `goBack`)을 넣었다. **연속 3회가 핵심** — 누수는 한 번에 드러나지 않고 쌓인다. ⚠️ 용어 — 이것은 **디바운스가 아니다.** 시간이 아니라 전환 이벤트로 창이 열리고 닫히므로 **조절할 딜레이 상수가 없고**, 기기 성능에 따라 창 길이가 자동으로 맞는 것이 이 방식의 이점이다 |
 | 2026-09-10 (이어서 4) | **§8.6 신설 — 진입 직후 빠른 뒤로가기 시 빈 화면 버그 해결.** `M2B-screens-spec.md` §5.4에 `MovieDetail` 전용 문제로 백로그 등록됐던 건이 실은 **모든 화면의 뒤로가기에서 재현**되는 native-stack 전체 문제로 확인돼 여기(네비게이션 절)로 옮겨 기록한다. `freezeOnBlur`·`headerTransparent` 끄기·`animationDuration` 단축은 효과가 없거나 부분적이었고, `detachPreviousScreen`은 native-stack에 개념 자체가 없어(JS 기반 `@react-navigation/stack` 전용) 시도조차 불가능했다. **`animation: 'none'`으로 사라지는 것으로 push/pop 전환 애니메이션 경합을 확정**한 뒤, 애니메이션은 유지한 채 그 시간 창의 뒤로가기만 `beforeRemove`로 막는 `src/navigation/backGuard.ts`를 신설해 해결 — 실기기 확인 완료. 겸사겸사 4개 스택에 복붙돼 있던 `MovieDetail` 옵션을 `movieDetailScreenOptions.ts`/`defaultStackScreenOptions.ts`로 추출했다. 상세 경위는 `docs/DevLog.md` 2026-09-10, `M2B-screens-spec.md` §5.4·변경 이력 참고 |
 | 2026-09-10 (이어서 3) | **§9.3에 "내 별점" 크게 표시 신설 — 제목 아래, 정보 카드 위.** 리뷰를 안 써도 시청 기록만 있으면 뜨도록 `watchLog`에서 직접 대표 기록의 별점을 뽑는다(§7.3의 2단계 폴백과 동일 규칙 — 리뷰의 파생 별점과 다른 자리에 같은 규칙을 다시 구현한 것일 뿐 새 규칙은 아니다). **§7.4의 B-4(집계 평점, 아직 차단)와는 다른 데이터**임을 명시해 뒀다 — "내가 매긴 별점"은 이미 있는 시청 기록 데이터라 백엔드 선행 없이 바로 가능했다. 비용이 작았던 이유는 데이터(`watchLog`, 이미 이 화면이 불러옴)와 컴포넌트(`RatingStars`, 크기만 키워 재사용) 둘 다 이미 있었기 때문. 상세는 `M2B-screens-spec.md` 변경 이력 2026-09-10 |

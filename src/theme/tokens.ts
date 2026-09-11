@@ -6,6 +6,10 @@ export const colors = {
   primaryForeground: '#FFFFFF',
   brandDeep: '#37BEB0',
   brandLight: '#DBF5F0',
+  // ExtrudedText 키라인 전용 — 흰 배경(스플래시·로그인)에서 brandLight가 거의 안 보여서
+  // 추가했다(docs/M2-frontend-spec.md §9.1 "② 로고" 표). brandLight(밝은 테두리)와 반대로
+  // 그림자처럼 뒤로 물러나 보여야 흰 배경에서 또렷하다.
+  shadowDeep: '#1F7A72',
   muted: '#ECECF0',
   mutedForeground: '#717182',
   accent: '#E9EBEF',

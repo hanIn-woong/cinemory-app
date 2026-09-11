@@ -27,7 +27,24 @@
       "@react-native-community/datetimepicker",
       "expo-secure-store",
       "expo-splash-screen",
-      "expo-status-bar"
+      "expo-status-bar",
+      [
+        "@react-native-kakao/core",
+        {
+          "nativeAppKey": "8d6d17b3e715fb385634e3056dfa8798"
+        }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "extraMavenRepos": [
+              "https://devrepo.kakao.com/nexus/content/groups/public/"
+            ]
+          }
+        }
+      ],
+      "expo-image"
     ]
   }
 }
