@@ -5,9 +5,11 @@ import { useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import { KeyboardAvoidingView, Platform, Pressable, View } from 'react-native';
 import { z } from 'zod';
+import { ExtrudedText } from '../../components/common';
 import { Button, Screen, Spacer, TextField, Txt } from '../../components/primitives';
 import { useKakaoLogin, useLogin } from '../../hooks/useAuth';
 import type { AuthStackParamList } from '../../navigation/types';
+import { colors } from '../../theme/tokens';
 import { applyServerErrors } from '../../utils/formErrors';
 
 const schema = z.object({
@@ -73,9 +75,17 @@ export function LoginScreen() {
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         className="flex-1 justify-center py-12"
       >
-        <Txt variant="h1" color="primary" className="text-center">
-          CineMory
-        </Txt>
+        {/* 홈 화면과 같은 입체 압출 로고 — 흰 배경이라 키라인은 brandLight 대신 shadowDeep을
+            쓴다(docs/M2-frontend-spec.md §9.1 "② 로고" — brandLight는 흰 배경에서 거의 안 보임). */}
+        <View className="items-center">
+          <ExtrudedText
+            style={{ fontSize: 40, fontWeight: '700', color: colors.primary }}
+            extrudeColor={colors.brandDeep}
+            keylineColor={colors.shadowDeep}
+          >
+            CineMory
+          </ExtrudedText>
+        </View>
         <Spacer size="xl" />
 
         <Controller
