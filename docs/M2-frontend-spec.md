@@ -678,6 +678,10 @@ export function tmdbImageUrl(path: string | null | undefined, size: string): str
   폴백한다. **색상은 `movieId` 기반 결정론적**이어야 재렌더 시 깜빡이지 않는다.
 - ⚠️ **TMDB 출처 표기(attribution) 요건 확인 필요** — 기획노트가 남겨둔 항목.
   마이페이지나 설정에 표기 위치를 잡을 것.
+- ⚠️ **위 코드 블록은 초판이라 현행과 다르다.** 실제 `src/constants/tmdb.ts`는
+  `PosterSize = { LIST: 'w342', DETAIL: 'w500', BACKDROP_TILE: 'w92', HERO: 'w780' }` 이다
+  (`LIST`는 3열 그리드 업스케일 때문에 w185 → w342, 2026-09-10). **구현 시 스펙이 아니라
+  실제 파일을 기준으로 삼을 것.**
 
 ### 7.3 ★ 별점 — 0.0~10.0, 저장소는 `watch_record` 하나다
 
@@ -746,6 +750,201 @@ UI 0.5 ~ 5.0 (0.5 단위)  ⇄  API 1.0 ~ 10.0 (1.0 단위)
 ⚠️ **이건 집계 평점(TMDB `voteAverage` 또는 전체 사용자 리뷰 평균) 이야기다 — "내가 매긴
 이 영화의 별점"과는 다른 데이터다.** 후자는 이미 `watchLog`(내 시청 기록)에 있어 B-4와
 무관하게 표시할 수 있다(2026-09-10, 히어로 아래 큰 별점으로 추가 — §9.3).
+
+---
+
+### 7.5 ★ 홈 배경 이미지 로딩 지연 — 원인 분석과 조치 (2026-09-12)
+
+**증상** — 앱 실행 후 홈 화면에서 **배경 포스터가 전부 뜨기까지 체감 약 3초.** 그 동안은
+`posterFallbackPalette` 색 타일만 보인다(빈 화면은 아니지만 UI 완성도를 깎는다).
+
+#### 측정으로 배제된 것 — 백엔드가 아니다
+
+| 호출 | 웜업(버림) | 1회차 | 2회차 |
+|---|---|---|---|
+| `GET /api/movies/random?size=24` | 0.052s | 0.073s | 0.053s |
+| `GET /api/records/user/1?page=0&size=24` | 0.188s | 0.012s | 0.012s |
+
+**둘을 직렬로 더해도 0.1초다.** `ORDER BY RAND()` 의혹(`movie`가 4,609 → 12,750편이 되며
+2.77배 악화됐을 것이라는 가설)과 `show-sql: true`의 런타임 부하는 **둘 다 원인이 아니다.**
+`tmdb-sync-spec.md` 잔여 #12(`getMovieList` projection)·#32(로그 레벨)는 별개 사유로 유효하되
+이 건과는 무관하다.
+
+> ⚠️ **가설을 먼저 검증하지 않고 순위를 매긴 것이 이 분석의 초기 오류였다.** 백엔드 쿼리를
+> "가장 유력"으로 지목했으나 curl 두 줄로 즉시 배제됐다. **임계경로 분석은 구간을 재고 나서
+> 순위를 매긴다.**
+
+#### 확정 원인 — 이미지 요청 이전에 직렬 구간이 길다
+
+배경 타일은 `BACKDROP_TILE`(`w92`, 장당 3~8KB)이고 한 화면에 24장 = **총 120KB 남짓**이다.
+**이 용량이 3초가 될 수는 없다. 이미지가 늦게 *시작*되는 것이 문제다.**
+
+**① 콜드 스타트마다 `reissue` 왕복이 무조건 발생한다** (신규 발견)
+
+`authStore.restore()`가 `accessTokenExpiresAt: 0`으로 복원하는데
+(*"남은 TTL을 알 수 없으므로"*), `client.ts`의 선제 갱신 조건이
+
+```ts
+if (accessToken && accessTokenExpiresAt - Date.now() < 60_000) { await refreshOnce(); }
+```
+
+이라 `0 - Date.now()`는 **항상 음수 → 조건이 언제나 참**이다. 즉 로그인 사용자가 앱을 켤
+때마다 `SecureStore` 읽기 → `POST /api/auth/reissue` → `SecureStore` 쓰기 ×2가 **첫 API 요청
+앞에 무조건 붙는다.**
+
+**② `useHomeBackground`가 `random`을 `records` 뒤로 직렬화한다**
+
+```ts
+const needsRandom = !isAuthed || (records.isSuccess && !hasEnoughRecords);
+const random = useRandomMovies(poolSize, needsRandom);
+```
+
+주석의 근거는 *"기록이 충분한지 알기 전까진 낭비 호출이라 미룬다"* 인데, **아끼는 것은
+permitAll·24행·53~73ms짜리 GET 하나이고 대가는 가장 눈에 띄는 요소의 임계경로에 왕복
+한 번을 얹는 것**이다. 기록 12편 미만(초기 사용자 대부분)에서 항상 발생한다.
+
+**③ 결과적인 콜드 스타트 경로**
+
+```
+JS 번들 평가 → App 마운트
+  → restore(): SecureStore.getItemAsync ×3        ← Keystore 초기화, status='loading'이라 스플래시 유지
+  → HomeScreen 마운트 (폴백 색 타일만 표시)
+  → 인터셉터: SecureStore 읽기 → POST /api/auth/reissue → SecureStore 쓰기 ×2   ← 원인 ①
+  → GET /api/records/user/{id}
+  → GET /api/movies/random                         ← 원인 ② (기록 부족 시)
+  → 비로소 <Image> 24개 → DNS + TLS(image.tmdb.org) → 다운로드
+```
+
+**④ 부수 항목** — `<Image>`는 RN 기본 컴포넌트다(`expo-image` 미설치). `cachePolicy`·
+`placeholder`·`transition`·`recyclingKey`가 없어 **재진입 시 메모리 캐시가 보장되지 않는다.**
+그리고 `PosterBackdrop`은 무한 루프 이음매를 위해 `cellsPerSet * 2`(통상 **48개**)를 마운트한다
+— 중복 URI는 합쳐지지만 디코드·레이아웃 비용은 48개분이 남는다.
+
+#### 예산 — 남은 2초는 이미지 구간에 있다
+
+| 구간 | 추정 | 상태 |
+|---|---|---|
+| JS 부팅 + `restore()` (Keystore 초기화) | 0.2~0.5s | 계측 필요 |
+| `reissue` + `records` (+`random`) 왕복 | 0.2~0.4s | 서버 0.1s 확정, 나머지는 LAN RTT |
+| **이미지 24장 페치·디코드** | **≈ 2s** | **계측 필요 — 여기가 본체** |
+| 크로스페이드 250ms (`signature` 변경마다 재발화) | 0.25s | 확정 |
+
+#### 계측 — 타임스탬프 4개
+
+`App.tsx` 최상단(`SplashScreen.preventAutoHideAsync()` **위**):
+
+```ts
+export const APP_T0 = Date.now();
+```
+
+`PosterBackdrop.tsx`:
+
+```ts
+const loaded = useRef(0);
+const total = cellsPerSet * 2;
+
+useEffect(() => {
+  if (posters.length) console.log(`[bg] data ready  +${Date.now() - APP_T0}ms`);
+}, [signature]);
+
+<Image
+  key={i} source={{ uri }} style={cellStyle}
+  onLoadEnd={() => {
+    loaded.current += 1;
+    if (loaded.current === 1)     console.log(`[bg] 1st image  +${Date.now() - APP_T0}ms`);
+    if (loaded.current === total) console.log(`[bg] all images +${Date.now() - APP_T0}ms`);
+  }}
+/>
+```
+
+- `data ready` → `1st image` = **네트워크 개시 비용**(DNS + TLS)
+- `1st image` → `all images` = **동시성·디코드 비용**
+
+**보조 실험 2건**
+1. **네트워크 vs 디코드 분리** — `uri`를 잠시 `posters[0]` 하나로 고정해 48셀이 같은 URL을
+   쓰게 한다. 빨라지면 네트워크(호스트당 동시성 제한으로 웨이브가 쪼개지는 패턴), 그대로면
+   디코드·레이아웃이다.
+2. **2회차 실행 / 릴리스 빌드** — 2회차가 빠르면 디스크 캐시는 동작하는 것. `expo run:android
+   --variant release`로 dev 클라이언트(Metro) 오버헤드를 분리한다.
+
+#### 조치 — 우선순위
+
+| 순 | 조치 | 파일 | 선행 계측 |
+|---|---|---|---|
+| 1 | **`expo-image` 전환** | `PosterImage.tsx` · `PosterBackdrop.tsx` | 불필요 |
+| 2 | `useRandomMovies` **항상 발사**(병렬화) | `useHomeBackground.ts` | 불필요 |
+| 3 | `accessTokenExpiresAt` **실제 만료 복원** | `authStore.ts` | 불필요 (⚠️ 아래 트레이드오프) |
+| 4 | `poolSize` 버킷팅 + `staleTime` 상향 | `useHomeBackground.ts` | 불필요 |
+
+**1. `expo-image` 전환** — `npx expo install expo-image`
+
+```ts
+// PosterImage.tsx — import만 교체하고 props를 넷 추가한다
+import { Image } from 'expo-image';
+
+<Image
+  source={uri}
+  style={{ width, height, borderRadius }}
+  contentFit="cover"
+  cachePolicy="memory-disk"
+  transition={150}
+  recyclingKey={String(id)}
+/>
+```
+
+- `PosterBackdrop`의 셀도 같은 컴포넌트로 바꾸되 **`transition={0}`** 으로 둔다 — 이미 자체
+  크로스페이드(`opacity` 0 → `REST_OPACITY`)가 있어 겹치면 두 번 페이드인 된다.
+- **폴백 분기(`LinearGradient` / `View` 배경색)는 그대로 둔다.** `placeholder`로 옮기면
+  "결정론적 폴백 색"(§4) 규칙을 컴포넌트 밖에서 다시 관리해야 한다.
+- ⚠️ `expo-image`의 `source`는 문자열도 받지만 **기존 `{ uri }` 형태도 그대로 유효**하다.
+  한쪽으로 통일할 것.
+
+**2. `useRandomMovies` 병렬화**
+
+```ts
+const random = useRandomMovies(poolSize);   // enabled 인자 제거 — 항상 발사
+```
+
+`hasEnoughRecords`로 **고르는** 로직(반환부)은 그대로 둔다. 바뀌는 것은 *언제 쏘는가*뿐이다.
+
+> **주석 근거를 교체할 것.** 현재의 *"낭비 호출이라 미룬다"* 는 이 절로 대체된다 — 기록이
+> 충분한 사용자에게 GET 하나(53~73ms, permitAll, 24행)가 낭비되지만, 그 대가로 기록 부족
+> 사용자의 임계경로에서 왕복 한 번이 사라진다. **홈 배경은 첫인상을 결정하는 요소이므로
+> 이 교환은 성립한다.**
+
+**3. `accessTokenExpiresAt` 복원**
+
+`KEYS`에 `accessTokenExpiresAt: 'cinemory.accessTokenExpiresAt'`를 추가하고, `setTokens`에서
+함께 저장, `restore()`에서 읽어 숫자로 복원한다. **값이 없거나 파싱 실패면 `0`** — 현행
+동작으로 안전하게 폴백된다(§5 규칙 5).
+
+> ⚠️ **트레이드오프를 확인하고 진행할 것.** 지금은 콜드 스타트마다 `reissue`가 돌면서
+> **리프레시 토큰의 유효성까지 함께 검증**된다(`restore()` 주석이 명시). 복원하면 그 검증이
+> 첫 인증 요청 시점으로 미뤄진다 — 만료·폐기된 경우 401 → 인터셉터의 `TOKEN_EXPIRED` 경로가
+> 처리하므로 **기능상 동일**하지만, 의도적 설계였다면 유지 판단이 필요하다(아래 미결 1).
+
+**4. `poolSize` 버킷팅 + `staleTime`**
+
+`poolSize`가 `useWindowDimensions()`에서 나오므로 회전·분할화면·키보드로 값이 바뀌면
+쿼리 키가 달라져 **캐시 미스가 난다.** 올림 버킷으로 고정한다.
+
+```ts
+const raw = Math.min(Math.max(minCount, RECORDS_THRESHOLD), MAX_POOL);
+const poolSize = raw <= 16 ? 16 : raw <= 32 ? 32 : MAX_POOL;   // 항상 raw 이상
+```
+
+⚠️ **반드시 올림이어야 한다.** 버킷이 `cellsPerSet`보다 작아지면 `% posters.length` 순환이
+행 경계와 맞아떨어져 **첫 행과 마지막 행이 통째로 중복되는 버그**(2026-09-06 실기기 확인)가
+재현된다. 두 쿼리의 `staleTime`도 전역 30초에서 **5분**으로 올린다 — 배경 포스터는 30초마다
+갱신될 이유가 없다.
+
+#### 미결
+
+| # | 항목 |
+|---|---|
+| 1 | **조치 3의 리프레시 토큰 선제 검증을 포기할 것인가** — 포기하면 콜드 스타트 왕복 1회가 사라지고, 유지하면 현행대로다. 계측에서 이 구간이 실제로 얼마인지 본 뒤 판단해도 된다 |
+| 2 | **`cellsPerSet * 2` 48개 마운트를 줄일 수 있는가** — 이음매 없는 무한 루프에 필요한 구조라 단순 감축은 불가. `expo-image`의 `recyclingKey` 적용 후 재측정해 판단 |
+| 3 | **TMDB 이미지 프리페치** — `expo-image`의 `Image.prefetch()`로 앱 부팅 시 배경 포스터를 미리 받아둘 수 있다. 조치 1~4 후에도 이미지 구간이 남으면 검토 |
 
 ---
 
@@ -1691,6 +1890,14 @@ export { CineMapWebView as CineMapView } from './CineMapWebView';
 
 | 날짜                 | 내용 |
 |--------------------|---|
+| 2026-09-12 (이어서 7) | **§7.5 실기기 검증 통과 — 앱 시작 로딩 화면 확인 완료.** 이어서 6의 구조(부팅 시 `AppLoadingScreen` → 배경 포스터 전부 프리페치 → 탭 네비게이션 전환)를 실기기에서 완전 재시작으로 확인 — 정상 반영, 체감 로딩 시간도 양호하다는 평가를 받았다. §7.5의 조치 우선순위 4건(이어서) + 미결 3(프리페치) + 이번 로딩 화면까지 **전부 실기기로 닫혔다.** 남은 미결은 §7.5 원문의 미결 1(`accessTokenExpiresAt` 트레이드오프 유지 여부 — 지금 구조에서는 `data ready` 시점이 로딩 화면 뒤에 가려져 사용자 체감에 미치는 영향이 이미 옅어졌다고 판단, 재론하지 않음)과 미결 2(48개 셀 마운트 감축)뿐이며 둘 다 지금 체감 품질로는 급하지 않아 보류 |
+| 2026-09-12 (이어서 6) | **§7.5 방향 전환 — "제한 시간 내 최선 공개" 롤백, 앱 시작 로딩 화면으로 교체.** 타협안(이어서 5, `PREFETCH_TIMEOUT_MS=1800`)을 실기기에서 확인한 사용자가 "소수가 뒤늦게 팝인하는 모습"을 부정적으로 평가하고, **대기 자체를 홈 화면 밖(전용 시작 로딩 화면)으로 옮기자**고 제안 — 채택했다. `PosterBackdrop.tsx`에 있던 `imagesReady` 게이트·프리페치 이펙트·계측 로그(이어서 3·4·5에서 쌓은 것) 전부를 **롤백**하고 단순 렌더로 되돌렸다 — 이제 이 컴포넌트는 프리페치를 하지 않는다. 대신 ① 그리드 셀 수 계산(`cellWidth`·`cellHeight`·`rows`·`cellsPerSet`)을 `PosterBackdrop.tsx`와 신규 훅이 공유해야 해 `src/utils/posterGrid.ts`(`computePosterGrid`)로 추출했다 ② `src/hooks/useHomeBackgroundReady.ts` 신설 — `useHomeBackground`(react-query 캐시 공유라 중복 호출이어도 네트워크 재요청 없음)로 받은 포스터의 고유 URI를 `Image.prefetch()`로 전부 채운 뒤(`Promise.allSettled` + 8초 안전망 타임아웃 — 이번엔 "거의 항상 발동하는 예산"이 아니라 진짜 네트워크 완전 차단 시나리오만을 위한 것) `true`를 반환한다. ⚠️ **`ready`는 최초 1회만 게이트로 쓰인다** — 로그인/로그아웃으로 나중에 signature가 바뀌어도 다시 `false`로 내리지 않는다. 안 그러면 로그인할 때마다 사용자를 로딩 화면으로 다시 쫓아내게 된다(이 경우의 팝인은 `PosterBackdrop`의 `transition={150}`이 예전처럼 떠안는다 — 빈도가 훨씬 낮은 이벤트라 이 정도는 받아들이기로 함) ③ `src/components/common/AppLoadingScreen.tsx` 신설 — 로그인 화면과 같은 로직으로 흰 배경엔 `keylineColor`를 `shadowDeep`으로 쓰는 `ExtrudedText` 로고 + `ActivityIndicator`. `common/`에 둔 이유는 이게 라우팅되는 화면이 아니라 `App.tsx`가 조건부로 그리는 최상위 뷰라서(`screens/`는 도메인별 실제 화면용) ④ `App.tsx`를 `AppContent`로 감싸 재구성 — **네이티브 스플래시를 내리는 시점 자체는 그대로**(`status`가 `'loading'`을 벗어나는 즉시) 두되, 그 트리거를 `NavigationContainer.onReady`에서 `AppLoadingScreen`의 `onLayout`으로 옮겼다(`NavigationContainer`는 이제 프리페치가 끝나야 마운트되므로 그때까지 기다리면 **정지된 네이티브 스플래시**가 그대로 떠 있게 돼 원래 의도(스피너가 도는 화면에서 대기 노출)가 깨진다). `hideSplashOnce`로 중복 호출 방지, `NavigationContainer.onReady`에도 안전망으로 남겨 둠. `npx tsc --noEmit` 통과. **실기기 검증 전** — 다음은 로딩 화면 노출 시간이 실측 예산(≈4~5초)과 맞는지, 스플래시→로딩 화면 전환에 이전 M2-A가 잡았던 "번쩍임" 회귀가 없는지 확인 |
+| 2026-09-12 (이어서 5) | **§7.5 실측 완료 — 프리페치 완전 대기가 병목임을 확인, "제한 시간 내 최선 동시 공개"로 타협.** 실기기 로그 5줄: `data ready +1014ms` → `prefetch first +1714ms`(첫 장 왕복 700ms) → **`prefetch all +5140ms`(32장, 나머지 31장에 3426ms)** → `mount first/all +5259~5269ms`(마운트는 10ms — 캐시 히트 설계가 의도대로 동작 확인). **병목은 디코드도 마운트도 아니라 프리페치 자체**였다 — 700ms/웨이브 × 6웨이브 ≈ 4.2초로 실측 4.1초와 거의 일치해, **호스트당 동시 연결 수 제한**(§7.5 보조 실험 1이 세웠던 가설)이 원인임을 별도 실험 없이 산수로 확인했다. "완전 동시 공개"를 그대로 두면 총 5.3초로 **원래 불만(체감 3초)보다 느려지는 역효과**라 사용자에게 트레이드오프를 보고하고 선택지 3개(제한 시간 내 최선 공개 / 그리드 밀도 축소 / 단계적 공개로 되돌리기)를 제시 — **"제한 시간 내 최선 동시 공개"로 결정**. `PREFETCH_TIMEOUT_MS`를 5000 → **1800**ms로 낮췄다 — ⚠️ 이 값은 더 이상 "네트워크가 느릴 때만 발동하는 안전망"이 아니라 **평범한 경로에서 거의 매번 발동하는 정상 예산**임을 주석에 명시했다(4.1초 완주는 실측상 드문 경우가 아니라 일반 경우였으므로). 예산 안에 못 들어온 소수는 게이트가 열린 뒤 개별 `transition`으로 뒤늦게 팝인 — 완전한 동시성은 포기했지만 다수는 함께 뜨고 최악의 경우도 ~2초로 상한이 걸린다. 계측 로그도 `settledCount`를 추가해 컷오프 시점에 몇 장이 실제로 끝났는지 남기도록 보강했다. **다음 검증**은 이 타협안을 실기기에서 다시 재보는 것 |
+| 2026-09-12 (이어서 4) | **§7.5 계측 코드 추가 — 실측 전, 코드만.** 프리페치 게이트(이어서 3) 적용 후에도 "로딩은 여전히 느리다"는 실기기 보고를 받아, §7.5가 처음에 계획했던 계측을 실제로 붙였다. `App.tsx` 최상단에 `APP_T0`를 두는 원안 대신 **`src/utils/perf.ts`로 분리**했다 — `PosterBackdrop.tsx`가 그 값을 다시 import하면 `App → RootNavigator → … → PosterBackdrop → App`로 순환 참조가 생겨 로드 시점에 `undefined`가 될 위험이 있었기 때문(App.tsx의 첫 import로 둬서 최대한 이른 시점을 유지). 원안의 3개 로그(`data ready`·`1st image`·`all images`)를 **프리페치 게이트 구조에 맞춰 5개로 확장**했다 — ① `data ready`(posters 쿼리 완료, `reissue` 왕복 포함) ② `prefetch first`/③ `prefetch all`(또는 타임아웃) — 개별 URI를 `Promise.allSettled`로 모아 실제 네트워크·디코드 구간을 분리 측정 ④ `mount first`/⑤ `mount all` — 프리페치 완료 후 실제 `<Image>`가 마운트돼 `onLoadEnd`까지 걸리는 시간(캐시 히트 확인용, 여기가 크면 "프리페치했는데도 마운트가 다시 느리다"는 새 사실이 드러나는 지점). 전부 `console.log`이고 **조치가 끝나면 제거할 임시 코드**로 주석에 명시했다. `npx tsc --noEmit` 통과. **실측은 다음 단계** — `npx expo start --dev-client`로 그대로 확인 가능하고(네이티브 변경 없음), logcat 또는 Metro 콘솔에서 `[bg]` 태그로 필터링해서 본다 |
+| 2026-09-12 (이어서 3) | **§7.5 미결 3 조기 해소 — `Image.prefetch()` 프리페치 게이트로 "동시 로드" UX 구현.** `transition` 조정(이어서 2)까지 해도 실기기에서 "포스터가 제각각으로 로드"되는 체감이 남는다는 재확인을 받았다 — 사용자가 원한 건 *"홈 화면이 보일 때 이미 로드가 끝나 있는"* 동시 등장이었다. `PosterBackdrop.tsx`에 `imagesReady` 게이트를 신설 — `signature`(포스터 셋)가 바뀔 때마다 그 셋의 **고유** `BACKDROP_TILE` URI를 `Set`으로 중복 제거해 `Image.prefetch(uri, 'memory-disk')`를 개별 호출하고 `Promise.allSettled`로 전부 settle될 때까지 기다린다. 그동안은 `uri`가 있어도 `<Image>`를 마운트하지 않고 기존 결정론적 폴백 색 타일만 보여준다 — 준비가 끝나 `imagesReady`가 한 번에 `true`가 되면 48개 셀이 전부 캐시 히트 상태로 동시에 마운트돼 실제로 동시에 나타난다. ⚠️ `Image.prefetch`는 배열로 한 번에 넘기면 **하나라도 실패 시 나머지를 기다리지 않고 즉시 `false`로 resolve**되는 문서화된 동작이라 게이트가 조기에 열릴 위험이 있어, **URI마다 개별 호출**해 `allSettled`로 모으는 방식을 썼다. 네트워크가 느리거나 멈춘 경우를 위해 `PREFETCH_TIMEOUT_MS = 5000`으로 `Promise.race` 타임아웃을 걸어 폴백 타일에 영원히 갇히지 않게 했다(타임아웃 시 일부는 여전히 개별 `transition`으로 뒤늦게 팝인할 수 있음 — 예외 경로로만 남긴다). **총 로딩 시간을 줄이는 조치가 아니라, 이미 있던 로딩 시간 동안 무엇을 보여주는가를 바꾼 것**이다 — 배경이 완전히 뜨기까지 걸리는 시간 자체는 §7.5 예산(≈2s, 계측 전)과 크게 다르지 않을 수 있다 |
+| 2026-09-12 (이어서 2) | **§7.5 조치 1 실기기 재검증 — 배경 셀 `transition={0}`이 원인이던 "산발적 로딩" 발견·수정.** 재빌드(`expo run:android`) 후 실기기 확인 — 총 로딩 체감은 소폭 개선됐으나 **포스터가 도착 순서대로 하나씩 뚝뚝 튀어나오는 현상(popcorn)은 그대로**였다. 원인은 배경 셀에 준 `transition={0}` — "부모 opacity와 겹치면 이중 페이드인"이라는 초판 판단이 **틀렸다**: 부모(Animated.View)의 opacity는 `signature`(포스터 셋 전체) 교체 시 **한 번만** 재생되는 반면, 셀의 `transition`은 **그 셀 하나가 개별로 로드를 마칠 때마다** 재생돼 서로 다른 이벤트다. `transition={0}`으로 죽여 둔 탓에 각 셀이 준비되는 즉시 뚝 나타나 §7.5 보조 실험 1이 예측한 "호스트당 동시 연결 수 제한으로 웨이브가 쪼개지는" 현상이 그대로 노출됐다. `200`으로 되돌려 개별 셀이 도착할 때마다 부드럽게 페이드인되도록 수정 — **총 로딩 시간을 줄이는 조치가 아니라 이미 존재하던 웨이브 도착을 매끄럽게 가리는 조치**임을 구분해 둔다. 근본 원인(동시 연결 제한)을 없애려면 §7.5 미결 3(`Image.prefetch()`)이나 셀 수 자체를 줄이는 방향이 필요하며, 그건 계측 후 재판단 |
+| 2026-09-12 (이어서)   | **§7.5 조치 4건 착수 — 코드 구현 완료, 실기기 검증 전.** ① `npx expo install expo-image`로 설치(`app.json` plugin 자동 등록 확인) 후 `PosterImage.tsx`·`PosterBackdrop.tsx`를 RN `<Image>`에서 교체 — `cachePolicy="memory-disk"`·`recyclingKey`(포스터/배경 셀 모두 `id` 기반, 결정론적 폴백 색과 같은 원칙). `PosterImage`는 `transition={150}`, 배경 셀은 자체 크로스페이드(opacity 애니메이션)와 겹치는 걸 막으려 `transition={0}`으로 뒀다(스펙이 지목한 함정 그대로). ② `useHomeBackground.ts`에서 `useRandomMovies(poolSize, needsRandom)` → `useRandomMovies(poolSize)`로 바꿔 `records` 완료를 기다리지 않고 항상 병렬 발사 — "낭비 호출이라 미룬다" 주석을 §7.5 근거로 교체했고, 소스를 **고르는**(반환부) 로직은 그대로 뒀다. ③ `authStore.ts`에 `KEYS.accessTokenExpiresAt` 신설 — `setTokens`에서 저장, `restore()`에서 `Number()` 파싱해 복원(값 없음·`NaN` 모두 `0`으로 안전 폴백, 기존 동작과 동일), `logout()`과 `restore()`의 catch 분기(키스토어 손상 시 삭제) 양쪽에 삭제 로직 추가 — **트레이드오프(미결 1)는 사용자에게 확인하지 않고 스펙 지시대로 진행**했다(스펙이 "실패해도 `TOKEN_EXPIRED` 401 → 인터셉터가 처리해 기능상 동일"이라고 명시했고, `client.ts`의 단일 비행 재발급 로직 자체는 건드리지 않았다). ④ `poolSize`를 `bucketPoolSize()`(올림 16/32/50)로 교체하고 `useHomeBackground`의 `records` 쿼리·`useRandomMovies` 양쪽에 `staleTime: 5분` 추가(전역 30초 대신). `npx tsc --noEmit` 통과. **실기기 계측(§7.5 "계측 — 타임스탬프 4개")과 미결 3건 판단은 아직**이다 — 다음 세션에서 `APP_T0`·`onLoadEnd` 로그를 붙여 실측하고 이 표에 결과를 추가할 것 |
+| 2026-09-12         | **§7.5 신설 — 홈 배경 이미지 로딩 지연(체감 3초) 원인 분석.** 분석·계측 계획만이며 코드 변경은 없다. ① ⚠️ **백엔드를 측정으로 배제** — `GET /api/movies/random?size=24` 53~73ms, `GET /api/records/user/1?page=0&size=24` 12ms로 **직렬 합산 0.1초**다. `movie`가 12,750편이 되며 `ORDER BY RAND()`가 2.77배 악화됐을 것이라는 가설과 `show-sql: true`의 런타임 부하는 **둘 다 원인이 아니었다**(각각 `tmdb-sync-spec.md` 잔여 #12·#32로 별개 사유로만 유효). **가설 순위를 구간 측정보다 먼저 매긴 것이 초기 오류**였음을 절 안에 명시했다. ② ⚠️ **신규 발견 — 콜드 스타트마다 `reissue` 왕복이 무조건 발생한다.** `authStore.restore()`가 `accessTokenExpiresAt: 0`으로 복원하는데 `client.ts`의 선제 갱신 조건이 `expiresAt - Date.now() < 60_000`이라 **항상 참**이다. 로그인 사용자가 앱을 켤 때마다 `SecureStore` 읽기 → `POST /api/auth/reissue` → `SecureStore` 쓰기 ×2가 첫 API 요청 앞에 붙는다. ③ **`useHomeBackground`가 `random`을 `records` 뒤로 직렬화**한다 — 주석의 *"낭비 호출이라 미룬다"* 근거가 홈 배경에서는 성립하지 않는다(아끼는 것은 53~73ms짜리 permitAll GET 하나, 대가는 임계경로의 왕복 한 번). ④ **예산 정리** — 배경 타일은 `w92` 24장 = 약 120KB라 용량이 원인일 수 없고, JS 부팅+`restore()` 0.2~0.5s / 왕복 0.2~0.4s를 빼면 **남는 약 2초가 이미지 구간**이다. ⑤ **계측 계획** — `APP_T0` 기준 `data ready` · `1st image` · `all images` 세 지점을 찍어 *네트워크 개시 비용*과 *동시성·디코드 비용*을 분리한다. 보조 실험으로 48셀 단일 URL 고정(네트워크 vs 디코드 판별)과 릴리스 빌드 비교(Metro 오버헤드 분리)를 둔다. ⑥ **조치 4건 확정** — 1) `expo-image` 전환(`cachePolicy: 'memory-disk'`·`transition`·`recyclingKey`, 배경 셀은 `transition={0}` — 자체 크로스페이드와 겹치면 두 번 페이드인), 2) `useRandomMovies` 항상 발사(고르는 로직은 그대로, *언제 쏘는가*만 변경), 3) `accessTokenExpiresAt` 실제 만료 복원(값 없으면 `0` 폴백 — §5 규칙 5), 4) `poolSize` **올림** 버킷팅 + `staleTime` 30초 → 5분(⚠️ 내림 버킷이면 2026-09-06의 *첫 행·마지막 행 중복* 버그가 재현된다). **네 건 모두 계측 없이 착수 가능**하다. ⑦ **미결 3건** — 조치 3이 포기하게 되는 *리프레시 토큰 선제 검증*을 유지할지, 48개 셀 마운트 감축 가능성, `Image.prefetch()` 도입 여부. ⑧ **§7.2 정오** — 초판 코드 블록의 `PosterSize`가 현행(`LIST: 'w342'` + `BACKDROP_TILE`·`HERO`)과 달라 경고를 달았다. 구현은 스펙이 아니라 실제 파일 기준 |
 | 2026-09-11 (이어서 9) | **§9.1 로그인 화면에 홈과 같은 입체 압출 로고 적용 + `shadowDeep` 토큰 신설.** §9.1이 2026-09-09부터 "로고를 흰 배경 화면(스플래시·로그인)에 쓰기 시작하면 `brandLight` 키라인 선택을 다시 본다"고 보류해 뒀던 것을 실제로 붙이며 해소했다. 표에 이미 정리돼 있던 대로 흰 배경에는 `shadowDeep`(≈`#1F7A72`)이 맞아 `theme/tokens.ts`에 추가하고, `ExtrudedText`가 애초에 `keylineColor`를 prop으로 받도록 설계돼 있던 덕에 **컴포넌트는 손대지 않고 `LoginScreen.tsx`에서 값만 교체**했다 — 이 설계 이유("인자 하나 교체로 끝내기 위함")가 실측으로 그대로 확인된 사례다. `Home`은 포스터 배경이라 `brandLight` 유지, 크기는 컴포넌트 주석이 안내한 대로 Home(56px)보다 작은 40px을 썼다. `LoginScreen`의 기존 플레인 `Txt` 로고를 교체하는 김에 로고를 `items-center` 래퍼로만 감싸 나머지 폼(전체 폭 stretch)에는 영향 없게 했다 |
 | 2026-09-11 (이어서 8) | **§11.1 E2E 검증 마무리 — B-1 사실상 완료.** 7번(로그아웃) 정상 확인. 4번(이메일 동의 거부)은 콘솔에서 이메일을 필수 동의로 걸어 둬 애초에 재현 불가능한 케이스임을 확인하고 **설계상 발생 안 함으로 정리**했다 — `OAUTH_EMAIL_NOT_PROVIDED` → 안내 배너 매핑 코드는 남겨 둔다(콘솔 설정이 바뀌거나 provider가 늘면 다시 실측 필요). 2번(카카오톡 미설치 기기)은 테스트 기기가 없어 **스킵으로 결정** — 웹뷰 폴백은 SDK 내부 로직이라 우리 코드가 관여하는 지점이 적다는 판단. 검증표 7항목 중 6개 통과·1개 의도적 스킵으로 §11.1 실행 순서 7단계를 ✅로 갱신했다. **§11.1 B-1이 이걸로 마무리됐다** — 설계 확정(이어서)부터 SDK 미설치 상태의 코드 준비(이어서 2)·실제 연결과 빌드 함정 둘(이어서 3)·키 해시 등록과 첫 로그인 성공(이어서 4)·취소(이어서 5)·재시도(이어서 6)·재실행 유지(이어서 7)를 거쳐 온 하루짜리 작업이었다 |
 | 2026-09-11 (이어서 7) | **§11.1 검증 6번(재실행 유지) 통과.** 완전 종료(최근 앱에서 스와이프) 후 재실행해 재현 — 스플래시 이후 로그인 상태 유지 확인. 카카오 로그인도 토큰 저장은 이메일 로그인과 동일 경로(SecureStore + `authStore.setTokens`)를 타므로 M2-A에서 이미 검증된 `restore()` 부팅 경로가 그대로 적용됨을 실측으로 확인. **남은 것**은 검증표 2(카카오톡 미설치 기기)·4(이메일 동의 거부)·7(로그아웃) |

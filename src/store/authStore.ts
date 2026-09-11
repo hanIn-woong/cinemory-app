@@ -9,6 +9,7 @@ const KEYS = {
   accessToken: 'cinemory.accessToken',
   refreshToken: 'cinemory.refreshToken',
   user: 'cinemory.user',
+  accessTokenExpiresAt: 'cinemory.accessTokenExpiresAt',
 } as const;
 
 interface AuthState {
@@ -36,19 +37,22 @@ export const useAuthStore = create<AuthState>((set) => ({
     // JSON.parse나 SecureStore 호출이 던지면 status가 'loading'에 갇혀 앱이
     // 스플래시에서 영구 정지한다 (§5 규칙 5) — 전체를 try/catch로 감싼다.
     try {
-      const [accessToken, refreshToken, userJson] = await Promise.all([
+      const [accessToken, refreshToken, userJson, expiresAtRaw] = await Promise.all([
         SecureStore.getItemAsync(KEYS.accessToken),
         SecureStore.getItemAsync(KEYS.refreshToken),
         SecureStore.getItemAsync(KEYS.user),
+        SecureStore.getItemAsync(KEYS.accessTokenExpiresAt),
       ]);
 
       if (accessToken && refreshToken) {
+        // 값이 없거나(이전 버전에서 이관) 파싱 실패면 0 — 콜드 스타트마다 client.ts의 선제
+        // 갱신이 걸려 리프레시 토큰까지 함께 검증되던 현행 동작으로 안전하게 폴백된다(§7.5).
+        const parsed = expiresAtRaw ? Number(expiresAtRaw) : NaN;
+        const accessTokenExpiresAt = Number.isFinite(parsed) ? parsed : 0;
         set({
           status: 'authenticated',
           accessToken,
-          // 남은 TTL을 알 수 없으므로 0으로 둔다 — 첫 인증 요청에서 client.ts의
-          // 선제 갱신 로직이 자동으로 refresh를 트리거하며 리프레시 토큰 자체도 검증된다.
-          accessTokenExpiresAt: 0,
+          accessTokenExpiresAt,
           user: userJson ? (JSON.parse(userJson) as UserResponse) : null,
         });
       } else {
@@ -62,6 +66,7 @@ export const useAuthStore = create<AuthState>((set) => ({
           SecureStore.deleteItemAsync(KEYS.accessToken),
           SecureStore.deleteItemAsync(KEYS.refreshToken),
           SecureStore.deleteItemAsync(KEYS.user),
+          SecureStore.deleteItemAsync(KEYS.accessTokenExpiresAt),
         ]);
       } catch {}
       set({ status: 'anonymous', user: null, accessToken: null, accessTokenExpiresAt: 0 });
@@ -73,6 +78,7 @@ export const useAuthStore = create<AuthState>((set) => ({
     await Promise.all([
       SecureStore.setItemAsync(KEYS.accessToken, t.accessToken),
       SecureStore.setItemAsync(KEYS.refreshToken, t.refreshToken),
+      SecureStore.setItemAsync(KEYS.accessTokenExpiresAt, String(accessTokenExpiresAt)),
     ]);
     set({ status: 'authenticated', accessToken: t.accessToken, accessTokenExpiresAt });
   },
@@ -91,6 +97,7 @@ export const useAuthStore = create<AuthState>((set) => ({
       SecureStore.deleteItemAsync(KEYS.accessToken),
       SecureStore.deleteItemAsync(KEYS.refreshToken),
       SecureStore.deleteItemAsync(KEYS.user),
+      SecureStore.deleteItemAsync(KEYS.accessTokenExpiresAt),
     ]);
     set({ status: 'anonymous', user: null, accessToken: null, accessTokenExpiresAt: 0 });
     queryClient.clear();

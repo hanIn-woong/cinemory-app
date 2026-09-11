@@ -1,4 +1,4 @@
-import { Image } from 'react-native';
+import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { PosterSize, tmdbImageUrl } from '../../constants/tmdb';
 import { colors, posterFallbackPalette, radius } from '../../theme/tokens';
@@ -27,5 +27,15 @@ export function PosterImage({ posterPath, id, width, height, size = 'LIST', radi
     );
   }
 
-  return <Image source={{ uri }} style={{ width, height, borderRadius }} className={className} />;
+  return (
+    <Image
+      source={uri}
+      style={{ width, height, borderRadius }}
+      className={className}
+      contentFit="cover"
+      cachePolicy="memory-disk"
+      transition={150}
+      recyclingKey={String(id)}
+    />
+  );
 }
