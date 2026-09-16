@@ -97,7 +97,7 @@ export function SearchResultScreen() {
   }
 
   const sections = [
-    { title: '내 서재에 있는 작품', data: registered },
+    { title: '등록된 작품', data: registered },
     { title: '더 찾아보기', data: suggestions },
   ].filter((s) => s.data.length > 0);
 

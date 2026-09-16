@@ -296,7 +296,7 @@ export const starsToApi = (s: number) => s * 2;   // 4.5 → 9.0
 
 ```
 SectionList
-├─ [내 서재에 있는 작품]  registered   → navigate('MovieDetail', { movieId: item.id })
+├─ [등록된 작품]          registered   → navigate('MovieDetail', { movieId: item.id })
 └─ [더 찾아보기]          suggestions  → sync 후 이동
 ```
 
@@ -663,6 +663,7 @@ M2-B가 끝나면 2군으로 간다. 미리 알아둘 것.
 
 | 날짜 | 내용 |
 |---|---|
+| 2026-09-17 | **§5.1 `SignUp` 헤더 잘림 버그 수정.** `ScreenHeader`(신규 공용 컴포넌트, 이 화면이 유일한 사용처)가 `Screen`의 `SafeAreaView`(기본 `edges`에 `top` 포함)가 이미 반영한 top 인셋을 자체적으로 `paddingTop: insets.top`으로 한 번 더 더하고 있었다 — 이중 적용된 padding이 고정 높이(`h-14`, 56px) 박스 안에서 아이콘·타이틀을 아래로 밀어내 잘리게 만들었다. `ScreenHeader`에서 자체 `insets.top` 적용을 제거해 `Screen`이 top 인셋을 한 곳에서만 처리하도록 정리 — `Screen`의 `edges`를 건드리는 방향은 먼저 시도했다가 헤더가 상태바/노치와 겹쳐 더 잘려 보이는 역효과가 나서 되돌리고 이 방향으로 확정했다. **§5.3 `SearchResult` `registered` 섹션 라벨도 같은 날 "내 서재에 있는 작품" → "등록된 작품"으로 수정** — 사유·상세는 `M2-frontend-spec.md` §9.2 변경 이력 2026-09-17 참고 |
 | 2026-09-10 (이어서 12) | **§5.4 백로그(진입 직후 빠른 뒤로가기 시 빈 화면) 해결 — 실기기 확인.** `이어서 11`에서 `MovieDetail` 전용으로 보고 보류했던 문제를 재실험 중 **모든 화면의 뒤로가기에서 재현됨**을 확인해 native-stack 전체 문제로 재정의했다. `freezeOnBlur`·`headerTransparent` 끄기는 효과 없음, `animation: 'none'`은 사라져 전환 애니메이션 경합을 확정, `detachPreviousScreen`은 native-stack에 없는 개념(JS 기반 `@react-navigation/stack` 전용)이라 시도 불가, `animationDuration` 단축도 재현 지속. 최종적으로 `src/navigation/backGuard.ts`를 신설해 애니메이션은 유지하되 `beforeRemove`로 전환 중 뒤로가기만 막아 해결했다. 원인·해결 상세는 `M2-frontend-spec.md` §8.6(단일 출처)으로 옮겨 기록, 여기 §5.4는 요약과 링크만 남김. 겸사겸사 4개 스택에 복붙돼 있던 `MovieDetail` 옵션을 `movieDetailScreenOptions.ts`/`defaultStackScreenOptions.ts`로 추출. 상세 경위는 `docs/DevLog.md` 2026-09-10 |
 | 2026-09-10 (이어서 10) | **"내 별점 탭 수정" 중 별점이 사라지는 버그 수정(실기기 확인).** `RatingStars`는 "같은 별을 다시 탭하면 0(해제)"을 보내는 내장 동작이 있다 — `WatchRecordModal`처럼 "저장"을 누르기 전 임시 상태에서는 안전하지만, 이번엔 탭마다 바로 `PATCH`가 나가도록 연결해서 **현재 별점과 같은 위치를 탭하면 그대로 지워져 저장**됐다. `handleChangeMyRating`에서 `nextRating <= 0`이면 무시하도록 수정 — 이 빠른 수정 경로에서는 지우기를 지원하지 않고, 별점을 지우려면 "시청 기록 수정" 모달을 쓴다. `npx tsc --noEmit`·`expo export --platform android` 통과 |
 | 2026-09-10 (이어서 9) | **"내 별점" 탭해서 수정 + 실기기 크기 조정(28→40).** `RatingStars`가 이미 지원하는 탭 입력 모드(`onChange`)와 대표 기록 수정에 쓰던 `useUpdateRecord`를 연결하기만 해서 비용이 낮았다 — 새 API·새 컴포넌트 없음. 탭하면 **항상 대표 기록**의 별점을 갱신한다(기록이 여러 개여도 다른 회차는 그대로). ⚠️ `PATCH /api/records/{id}`가 전체 치환이라(B-15) 대표 기록의 기존 `watchDate`·`watchType`·`placeDetail`·`note`를 그대로 다시 실어 보낸다 — `rating`만 보내면 나머지가 지워진다. 저장 중에는 `onChange`를 `undefined`로 바꿔 표시 전용으로 전환해 중복 탭을 막는다. `npx tsc --noEmit`·`expo export --platform android` 통과 |
