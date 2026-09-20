@@ -7,7 +7,7 @@ import Animated from 'react-native-reanimated';
 import { AuthRequired, EmptyState, ErrorState, InfiniteScrollFooter, LoadingState } from '../../components/common';
 import { MovieGridItem } from '../../components/movie/MovieGridItem';
 import { MovieListItem } from '../../components/movie/MovieListItem';
-import { Screen } from '../../components/primitives';
+import { Screen, Txt } from '../../components/primitives';
 import { useCollapsibleToolbar } from '../../hooks/useCollapsibleToolbar';
 import { useMyWishes } from '../../hooks/useWishlist';
 import type { MyPageStackParamList } from '../../navigation/types';
@@ -62,6 +62,9 @@ export function WishlistScreen() {
 
   const items = wishes.data.pages.flatMap((p) => p.content);
   const cellWidth = (windowWidth - GRID_GAP * (GRID_COLUMNS - 1)) / GRID_COLUMNS;
+  // 무한스크롤 첫 페이지의 totalElements를 그대로 쓴다 — 별도 count 조회 없이 이미
+  // 받아온 응답으로 충당된다.
+  const totalCount = wishes.data.pages[0]?.totalElements ?? 0;
 
   // ⚠️ 네이티브 헤더가 이미 상단 안전영역을 소화한다 — top을 빼서 헤더 밑에 툴바를 바로 붙인다.
   return (
@@ -69,15 +72,18 @@ export function WishlistScreen() {
       <View className="flex-1 overflow-hidden">
         <Animated.View
           pointerEvents="box-none"
-          className="absolute left-0 right-0 top-0 z-10 flex-row items-center justify-end bg-background px-4"
+          className="absolute left-0 right-0 top-0 z-10 flex-row items-center justify-between bg-background px-4"
           style={[{ height: TOOLBAR_HEIGHT }, toolbarStyle]}
         >
-          <Pressable onPress={() => setViewMode('grid')} hitSlop={8} className="mr-4">
-            <LayoutGrid size={20} color={viewMode === 'grid' ? colors.primary : colors.mutedForeground} />
-          </Pressable>
-          <Pressable onPress={() => setViewMode('list')} hitSlop={8}>
-            <List size={20} color={viewMode === 'list' ? colors.primary : colors.mutedForeground} />
-          </Pressable>
+          <Txt variant="caption">총 {totalCount}편</Txt>
+          <View className="flex-row items-center">
+            <Pressable onPress={() => setViewMode('grid')} hitSlop={8} className="mr-4">
+              <LayoutGrid size={20} color={viewMode === 'grid' ? colors.primary : colors.mutedForeground} />
+            </Pressable>
+            <Pressable onPress={() => setViewMode('list')} hitSlop={8}>
+              <List size={20} color={viewMode === 'list' ? colors.primary : colors.mutedForeground} />
+            </Pressable>
+          </View>
         </Animated.View>
 
         {items.length === 0 ? (
