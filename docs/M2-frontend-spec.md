@@ -1443,6 +1443,8 @@ SectionList
   넣지 않는다.** 필요해지면 백엔드에 정렬 옵션을 요청한다.
 - 와이어프레임의 시청/찜 2탭 구조는 **찜을 별도 화면(`Wishlist`, 2군)으로 분리**한다 —
   엔드포인트가 다르고 응답 DTO도 다르다.
+- **툴바에 "총 N편" 개수 표시** (2026-09-20 추가). 별도 count 조회 없이 무한스크롤 첫 페이지의
+  `totalElements`를 그대로 쓴다.
 - **스크롤 시 툴바 접기 — 구현한다** (2026-09-02 확정, 종전 "M2에서 생략"에서 변경).
   ⚠️ **접는 대상은 화면 안 툴바(그리드/리스트 토글)뿐이고, 네이티브 스택 헤더는 그대로 둔다.**
   네이티브 헤더는 플랫폼 뷰(UINavigationBar / Toolbar)라 `translateY`로 부드럽게 움직일 수
@@ -1471,7 +1473,8 @@ SectionList
 
 #### 9.6 WishlistScreen
 `GET /api/users/{myId}/wishes` → `PageResponse<WishListItemResponse>`. 그리드/리스트 토글.
-항목 탭 → `MovieDetail`. 빈 목록 시 검색 유도 CTA.
+항목 탭 → `MovieDetail`. 빈 목록 시 검색 유도 CTA. 툴바에 "총 N편" 개수 표시 —
+`MyRecordsScreen`과 동일하게 첫 페이지 `totalElements` 재사용(2026-09-20 추가).
 
 #### 9.7 CollectionList / CollectionDetail
 
@@ -1572,7 +1575,7 @@ npm i nativewind && npm i -D tailwindcss
 
 | # | 막히는 것 | 상태 | 필요한 작업 | 우선순위 |
 |---|---|---|---|---|
-| ~~B-1~~ | ~~카카오 네이티브 앱 키 `aud`~~ | ✅ **완료 — 실기기 로그인 성공 확인(2026-09-11)**. §11.1 검증표 1번 통과, 나머지 6항목은 진행 중 | 없음 | — |
+| ~~B-1~~ | ~~카카오 네이티브 앱 키 `aud`~~ | ✅ **완료 (2026-09-11)** — §11.1 검증표 **6/7 통과**. 4번(이메일 동의 거부)은 **재현 불가** — 콘솔에서 이메일을 필수 동의로 설정해 거부 경로가 *로그인 취소*(3번)와 합쳐진다. **백엔드 `security-spec.md` L-7·L-9도 이 결과로 종결**(2026-09-17 반영) | 없음 | — |
 | ~~B-2~~ | ~~`auth.oauth.nonce-ttl`~~ | ✅ **이미 `PT5M`** (`application.yml:73`, 오버라이드 없음) | 없음 | — |
 | ~~B-3~~ | ~~CORS Expo origin~~ | ✅ **이미 등록됨** (`8081`, `19006`). **RN 네이티브는 CORS와 무관** — Expo 웹에서만 의미 | 없음 | — |
 | **B-4** | **영화 상세 평점** | `MovieDetailResponse`에 필드 없음 | ① `voteAverage`/`voteCount` 노출 ② `ReviewRepository`에 `AVG(rating)` 집계 추가 | 1군 (상세 화면) |
@@ -1589,6 +1592,7 @@ npm i nativewind && npm i -D tailwindcss
 | **B-13** | **OTT 플랫폼 목록 조회 API 없음** | `WatchRecordCreateRequest.ottPlatformId`는 필수인데 유효 ID를 얻을 방법이 없다 | `OttPlatformResponse`를 반환하는 목록 엔드포인트 추가 | 1군 (상세 화면 — 지금은 `watchType=OTT` 저장을 막고 THEATER/ETC만 지원) |
 | B-14 | 상세 히어로 배경 | `MovieDetailResponse`에 `backdropPath` 없음(`posterPath`만) | 필요하면 필드 추가 — 없어도 `posterPath`로 우회 가능 | 낮음 |
 | **B-17** | **랜덤 영화 조회 API 없음** | `GET /api/movies`는 `findAll(pageable)`이 정렬 미지정이라 **매번 같은 목록**이 나온다(5-0-D가 클라이언트 `sort`를 의도적으로 미지원) | **`GET /api/movies/random?size=`** 신설 — `poster_path IS NOT NULL` 필터 포함. 설계 확정본은 **백엔드 docs**(`controller-layer-spec.md` 5-2 · `service-layer-spec.md` 4-2) | **1군 (홈 배경).** 없으면 게스트 배경이 **항상 같은 영화**가 된다 |
+| **B-20** | **`WatchRecord`의 `note` → `privateReview` 리네임 + `rating` 타입 변경 (v16)** | 백엔드가 **컬럼명과 필드명이 갈린 상태**(`@Column(name="review")` ↔ 필드 `note`)를 닫으면서 `private_review`/`privateReview`로 통일했고, `rating`이 `double` → `DECIMAL(3,1)`(Java `BigDecimal`)로 바뀌었다. 설계 확정본은 **백엔드 docs**(`schema/v16-delta.sql` · `jpa-entity-spec.md`) | `npm run gen:api` 재생성 후 **`MovieDetailScreen.tsx`(3곳)·`WatchRecordModal.tsx`(2곳)** 의 `note` → `privateReview`. ⚠️ **`PATCH /api/records/{id}`가 전체 치환(B-15)이라 `privateReview`를 안 실어 보내면 감상 텍스트가 null로 지워진다** — 대표 기록 별점 탭 수정(2026-09-10) 경로가 특히 위험하다. `rating`은 JSON 숫자 그대로라 타입 변경의 프론트 영향은 없다 | **백엔드 v16 적용과 동시** — 적용 후 재생성하지 않으면 타입 불일치가 조용히 남는다 |
 | ~~B-15~~ | ~~시청 기록 수정 API 없음~~ | ✅ **백엔드 완료(`PATCH /api/records/{recordId}`), 프론트 연동 완료** — `gen:api` 재생성 확인(2026-09-04) | 없음 | — |
 | ~~B-16~~ | ~~`review.rating` 제거 + 별점 파생~~ | ✅ **백엔드 완료(`ReviewWriteRequest`에서 `rating` 제거 확인), 프론트 연동 완료**(`ReviewModal` 별점 입력 제거) — `gen:api` 재생성 확인(2026-09-02) | 없음 | — |
 
@@ -1890,6 +1894,8 @@ export { CineMapWebView as CineMapView } from './CineMapWebView';
 
 | 날짜                 | 내용 |
 |--------------------|---|
+| 2026-09-20 | **§9.4·§9.6 — `MyRecordsScreen`/`WishlistScreen` 툴바에 "총 N편" 개수 표시 추가.** B-20 등록 확인 후 별도 특이사항이 없어 진행. 두 화면 다 이미 무한스크롤로 `PageResponse`(`totalElements` 포함)를 받고 있어 **별도 count API 호출 없이** 첫 페이지(`data.pages[0].totalElements`)를 그대로 읽었다 — §9.5 `MyPageScreen`의 "N편 관람"이 이미 같은 방식(size=1 별도 조회)을 쓰지만, 이 두 화면은 어차피 전체 목록을 불러오므로 그 방식을 그대로 재사용하면 낭비 요청이 된다. 토글 버튼 2개를 `View`로 묶어 `justify-between`으로 개수(좌)·토글(우) 배치 — 기존 `justify-end`에 세 번째 요소를 그냥 추가하면 셋이 고르게 벌어져 토글 버튼 사이가 벌어지는 문제가 있어 그룹핑했다. 컬렉션 화면(§9.7)은 이번 범위 밖 |
+| 2026-09-17 | **B-1 검증 결과 확정(6/7) + 백엔드 `security-spec.md` L-7·L-9 종결 반영.** §11 B-1 행이 9/11 시점 문구(*"검증표 1번 통과, 나머지 6항목 진행 중"*) 그대로 남아 있어 실제 결과로 갱신했다. **4번(이메일 동의 거부)만 미통과인데, 빠뜨린 것이 아니라 재현할 수 없었다** — 콘솔에서 이메일을 **필수 동의**로 설정하면 사용자가 거부할 방법이 *로그인 취소*뿐이라 3번과 같은 경로로 끝난다. 이 결과로 백엔드의 **L-7이 완전 종결**됐다 — 2026-08-27 부분 종결이 남긴 구멍(*"통과한 `aud`는 REST API 키"*)이 **실기기 로그인 성공으로 닫혔다.** `allowed-audiences`의 네이티브 앱 키가 매칭되지 않았다면 `INVALID_OAUTH_TOKEN`이 났을 것이므로 로그인 성공 자체가 `aud` 검증이다. **L-9(이메일 미동의 안내 UX)도 종결** — 필수 동의 설정에서는 안내 문구가 설 자리가 없다(단, 동의 철회 경로가 있으므로 **서버 측 A-1 거부는 유지**). ⚠️ **미등록 서명 키 2종이 남는다** — EAS 키스토어(팀 배포)와 **Play 앱 서명 키(M5)**. 후자를 빠뜨리면 개발 내내 정상이다가 스토어 배포 후에만 깨진다. **발견의 계기는 문서 규칙의 구멍이었다** — 2026-09-02에 *"백엔드 계약의 단일 출처는 백엔드 리포"* 를 정했지만 **백엔드 미결이 프론트 작업으로 닫히는 반대 방향에는 경로가 없어** L-7이 6일간 낡은 채였다. **프론트 세션이 백엔드 항목을 해소하면 백엔드 문서로 돌려보낸다** |
 | 2026-09-17 | **§9.2 `SearchResult` `registered` 섹션 라벨 "내 서재에 있는 작품" → "등록된 작품" 수정.** 2026-09-05(이어서) 검증 때 이미 지적됐던 문제 — `registered`는 로그인한 사용자 개인화가 아니라 CineMory DB(`movie` 테이블) 전체에서 제목 매칭된 결과라, 다른 유저나 백엔드 시드가 한 번이라도 TMDB 동기화한 적 있으면 누구 검색에서든 뜬다. "내 서재"(개인 소장/기록)로 읽히는 기존 문구가 이 사실과 반대라 사용자가 오해할 수 있다는 지적을 받아 이번에 반영 — `SearchResultScreen.tsx`·본 문서·`M2B-screens-spec.md` §5.3 3곳 동시 수정 |
 | 2026-09-12 (이어서 7) | **§7.5 실기기 검증 통과 — 앱 시작 로딩 화면 확인 완료.** 이어서 6의 구조(부팅 시 `AppLoadingScreen` → 배경 포스터 전부 프리페치 → 탭 네비게이션 전환)를 실기기에서 완전 재시작으로 확인 — 정상 반영, 체감 로딩 시간도 양호하다는 평가를 받았다. §7.5의 조치 우선순위 4건(이어서) + 미결 3(프리페치) + 이번 로딩 화면까지 **전부 실기기로 닫혔다.** 남은 미결은 §7.5 원문의 미결 1(`accessTokenExpiresAt` 트레이드오프 유지 여부 — 지금 구조에서는 `data ready` 시점이 로딩 화면 뒤에 가려져 사용자 체감에 미치는 영향이 이미 옅어졌다고 판단, 재론하지 않음)과 미결 2(48개 셀 마운트 감축)뿐이며 둘 다 지금 체감 품질로는 급하지 않아 보류 |
 | 2026-09-12 (이어서 6) | **§7.5 방향 전환 — "제한 시간 내 최선 공개" 롤백, 앱 시작 로딩 화면으로 교체.** 타협안(이어서 5, `PREFETCH_TIMEOUT_MS=1800`)을 실기기에서 확인한 사용자가 "소수가 뒤늦게 팝인하는 모습"을 부정적으로 평가하고, **대기 자체를 홈 화면 밖(전용 시작 로딩 화면)으로 옮기자**고 제안 — 채택했다. `PosterBackdrop.tsx`에 있던 `imagesReady` 게이트·프리페치 이펙트·계측 로그(이어서 3·4·5에서 쌓은 것) 전부를 **롤백**하고 단순 렌더로 되돌렸다 — 이제 이 컴포넌트는 프리페치를 하지 않는다. 대신 ① 그리드 셀 수 계산(`cellWidth`·`cellHeight`·`rows`·`cellsPerSet`)을 `PosterBackdrop.tsx`와 신규 훅이 공유해야 해 `src/utils/posterGrid.ts`(`computePosterGrid`)로 추출했다 ② `src/hooks/useHomeBackgroundReady.ts` 신설 — `useHomeBackground`(react-query 캐시 공유라 중복 호출이어도 네트워크 재요청 없음)로 받은 포스터의 고유 URI를 `Image.prefetch()`로 전부 채운 뒤(`Promise.allSettled` + 8초 안전망 타임아웃 — 이번엔 "거의 항상 발동하는 예산"이 아니라 진짜 네트워크 완전 차단 시나리오만을 위한 것) `true`를 반환한다. ⚠️ **`ready`는 최초 1회만 게이트로 쓰인다** — 로그인/로그아웃으로 나중에 signature가 바뀌어도 다시 `false`로 내리지 않는다. 안 그러면 로그인할 때마다 사용자를 로딩 화면으로 다시 쫓아내게 된다(이 경우의 팝인은 `PosterBackdrop`의 `transition={150}`이 예전처럼 떠안는다 — 빈도가 훨씬 낮은 이벤트라 이 정도는 받아들이기로 함) ③ `src/components/common/AppLoadingScreen.tsx` 신설 — 로그인 화면과 같은 로직으로 흰 배경엔 `keylineColor`를 `shadowDeep`으로 쓰는 `ExtrudedText` 로고 + `ActivityIndicator`. `common/`에 둔 이유는 이게 라우팅되는 화면이 아니라 `App.tsx`가 조건부로 그리는 최상위 뷰라서(`screens/`는 도메인별 실제 화면용) ④ `App.tsx`를 `AppContent`로 감싸 재구성 — **네이티브 스플래시를 내리는 시점 자체는 그대로**(`status`가 `'loading'`을 벗어나는 즉시) 두되, 그 트리거를 `NavigationContainer.onReady`에서 `AppLoadingScreen`의 `onLayout`으로 옮겼다(`NavigationContainer`는 이제 프리페치가 끝나야 마운트되므로 그때까지 기다리면 **정지된 네이티브 스플래시**가 그대로 떠 있게 돼 원래 의도(스피너가 도는 화면에서 대기 노출)가 깨진다). `hideSplashOnce`로 중복 호출 방지, `NavigationContainer.onReady`에도 안전망으로 남겨 둠. `npx tsc --noEmit` 통과. **실기기 검증 전** — 다음은 로딩 화면 노출 시간이 실측 예산(≈4~5초)과 맞는지, 스플래시→로딩 화면 전환에 이전 M2-A가 잡았던 "번쩍임" 회귀가 없는지 확인 |
