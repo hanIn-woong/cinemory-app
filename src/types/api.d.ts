@@ -566,6 +566,66 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/users/{userId}/report/statistics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 누적 시청 통계 조회
+         * @description movieCount(고유 편수)와 watchCount(전 회차)는 다른 지표다. monthlyTrend는 watch_date가 있는 기록만 담는다.
+         */
+        get: operations["getStatistics"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/users/{userId}/report/monthly": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 월말 리포트 조회
+         * @description year/month는 필수이며 서버 기본값이 없다. 미래 월은 빈 결과 200으로 응답한다.
+         */
+        get: operations["getMonthlyReport"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/users/{userId}/report/calendar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 월별 캘린더 조회
+         * @description 하루에 여러 편이 가능해 days[].records는 배열이다. year/month는 필수이며 서버 기본값이 없다.
+         */
+        get: operations["getCalendar"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/users/{userId}/records": {
         parameters: {
             query?: never;
@@ -711,6 +771,23 @@ export interface paths {
         };
         /** 내 리뷰 단건 조회 */
         get: operations["getMyReview"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/ott-platforms": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** OTT 플랫폼 목록 조회 (활성 항목만) */
+        get: operations["getOttPlatforms"];
         put?: never;
         post?: never;
         delete?: never;
@@ -890,9 +967,8 @@ export interface components {
             placeDetail?: string;
             /** Format: int64 */
             ottPlatformId?: number;
-            /** Format: double */
             rating?: number;
-            note?: string;
+            privateReview?: string;
         };
         OttPlatformResponse: {
             /** Format: int64 */
@@ -911,9 +987,8 @@ export interface components {
             watchType?: "THEATER" | "OTT" | "ETC";
             placeDetail?: string;
             ottPlatform?: components["schemas"]["OttPlatformResponse"];
-            /** Format: double */
             rating?: number;
-            note?: string;
+            privateReview?: string;
         };
         WishToggleResponse: {
             wished?: boolean;
@@ -1080,9 +1155,8 @@ export interface components {
             placeDetail?: string;
             /** Format: int64 */
             ottPlatformId?: number;
-            /** Format: double */
             rating?: number;
-            note?: string;
+            privateReview?: string;
         };
         CommentUpdateRequest: {
             content: string;
@@ -1133,6 +1207,152 @@ export interface components {
             /** Format: date-time */
             addedAt?: string;
         };
+        DecadeCountResponse: {
+            decade?: string;
+            /** Format: int64 */
+            count?: number;
+        };
+        MonthlyTrendItemResponse: {
+            /** Format: int32 */
+            year?: number;
+            /** Format: int32 */
+            month?: number;
+            /** Format: int64 */
+            watchCount?: number;
+            /** Format: int64 */
+            movieCount?: number;
+            /** Format: int64 */
+            watchedMinutes?: number;
+        };
+        MovieRatingGapResponse: {
+            /** Format: int64 */
+            movieId?: number;
+            title?: string;
+            posterPath?: string;
+            myRating?: number;
+            publicRating?: number;
+            gap?: number;
+        };
+        OldestWatchedResponse: {
+            /** Format: int64 */
+            movieId?: number;
+            title?: string;
+            /** Format: date */
+            releaseDate?: string;
+        };
+        OttPlatformCountResponse: {
+            /** Format: int64 */
+            id?: number;
+            name?: string;
+            /** Format: int64 */
+            count?: number;
+        };
+        PreferenceItemResponse: {
+            /** Format: int64 */
+            id?: number;
+            name?: string;
+            score?: number;
+            /** Format: int64 */
+            count?: number;
+        };
+        RatingBucketResponse: {
+            /** Format: int32 */
+            rating?: number;
+            /** Format: int64 */
+            count?: number;
+        };
+        ReportStatisticsResponse: {
+            /** Format: int64 */
+            movieCount?: number;
+            /** Format: int64 */
+            watchCount?: number;
+            /** Format: int64 */
+            undatedCount?: number;
+            /** Format: int64 */
+            totalWatchedMinutes?: number;
+            averageRating?: number;
+            ratingDistribution?: components["schemas"]["RatingBucketResponse"][];
+            topGenres?: components["schemas"]["PreferenceItemResponse"][];
+            topCountries?: components["schemas"]["PreferenceItemResponse"][];
+            topActors?: components["schemas"]["PreferenceItemResponse"][];
+            topDirectors?: components["schemas"]["PreferenceItemResponse"][];
+            monthlyTrend?: components["schemas"]["MonthlyTrendItemResponse"][];
+            watchTypeDistribution?: components["schemas"]["WatchTypeCountResponse"][];
+            ottPlatformDistribution?: components["schemas"]["OttPlatformCountResponse"][];
+            releaseDecadeDistribution?: components["schemas"]["DecadeCountResponse"][];
+            /** Format: int64 */
+            classicCount?: number;
+            oldestWatched?: components["schemas"]["OldestWatchedResponse"];
+            ratingBiasAverage?: number;
+            mostOverratedByMe?: components["schemas"]["MovieRatingGapResponse"];
+            mostUnderratedByMe?: components["schemas"]["MovieRatingGapResponse"];
+            /** Format: int64 */
+            rewatchCount?: number;
+            rewatchTop?: components["schemas"]["RewatchItemResponse"][];
+            weekdayDistribution?: components["schemas"]["WeekdayCountResponse"][];
+            /** Format: date */
+            firstRecordDate?: string;
+            /** Format: double */
+            reviewRate?: number;
+        };
+        RewatchItemResponse: {
+            /** Format: int64 */
+            movieId?: number;
+            title?: string;
+            posterPath?: string;
+            /** Format: int64 */
+            watchCount?: number;
+        };
+        WatchTypeCountResponse: {
+            watchType?: string;
+            /** Format: int64 */
+            count?: number;
+        };
+        WeekdayCountResponse: {
+            /** Format: int32 */
+            weekday?: number;
+            /** Format: int64 */
+            count?: number;
+        };
+        ReportMonthlyResponse: {
+            /** Format: int32 */
+            year?: number;
+            /** Format: int32 */
+            month?: number;
+            /** Format: int64 */
+            movieCount?: number;
+            /** Format: int64 */
+            watchCount?: number;
+            /** Format: int64 */
+            totalWatchedMinutes?: number;
+            averageRating?: number;
+            ratingDistribution?: components["schemas"]["RatingBucketResponse"][];
+            watchTypeDistribution?: components["schemas"]["WatchTypeCountResponse"][];
+            mostWatchedDirector?: components["schemas"]["PreferenceItemResponse"];
+            /** Format: int32 */
+            mostWatchedWeekday?: number;
+        };
+        CalendarDayResponse: {
+            /** Format: date */
+            date?: string;
+            records?: components["schemas"]["CalendarRecordItemResponse"][];
+        };
+        CalendarRecordItemResponse: {
+            /** Format: int64 */
+            recordId?: number;
+            /** Format: int64 */
+            movieId?: number;
+            title?: string;
+            posterPath?: string;
+            rating?: number;
+        };
+        ReportCalendarResponse: {
+            /** Format: int32 */
+            year?: number;
+            /** Format: int32 */
+            month?: number;
+            days?: components["schemas"]["CalendarDayResponse"][];
+        };
         PageResponseUserMovieListItemResponse: {
             content?: components["schemas"]["UserMovieListItemResponse"][];
             /** Format: int32 */
@@ -1157,7 +1377,6 @@ export interface components {
             countries?: components["schemas"]["CountryResponse"][];
             /** Format: date */
             watchDate?: string;
-            /** Format: double */
             rating?: number;
             /** @enum {string} */
             watchType?: "THEATER" | "OTT" | "ETC";
@@ -1900,6 +2119,7 @@ export interface operations {
                 minVotes?: number;
                 sortBy?: string;
                 year?: number;
+                genres?: string;
             };
             header?: never;
             path?: never;
@@ -2319,6 +2539,78 @@ export interface operations {
             };
         };
     };
+    getStatistics: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                userId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ReportStatisticsResponse"];
+                };
+            };
+        };
+    };
+    getMonthlyReport: {
+        parameters: {
+            query: {
+                year: number;
+                month: number;
+            };
+            header?: never;
+            path: {
+                userId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ReportMonthlyResponse"];
+                };
+            };
+        };
+    };
+    getCalendar: {
+        parameters: {
+            query: {
+                year: number;
+                month: number;
+            };
+            header?: never;
+            path: {
+                userId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ReportCalendarResponse"];
+                };
+            };
+        };
+    };
     getUserMovieList: {
         parameters: {
             query: {
@@ -2523,6 +2815,26 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["ReviewResponse"];
+                };
+            };
+        };
+    };
+    getOttPlatforms: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["OttPlatformResponse"][];
                 };
             };
         };
