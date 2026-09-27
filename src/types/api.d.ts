@@ -2519,6 +2519,7 @@ export interface operations {
         parameters: {
             query: {
                 pageable: components["schemas"]["Pageable"];
+                sort?: "RECENT" | "OLDEST" | "TITLE" | "RELEASE_DESC" | "RELEASE_ASC";
             };
             header?: never;
             path: {
@@ -2615,6 +2616,7 @@ export interface operations {
         parameters: {
             query: {
                 pageable: components["schemas"]["Pageable"];
+                sort?: "RECENT" | "OLDEST" | "TITLE" | "RELEASE_DESC" | "RELEASE_ASC" | "WATCH_DATE_DESC" | "RATING_DESC";
             };
             header?: never;
             path: {

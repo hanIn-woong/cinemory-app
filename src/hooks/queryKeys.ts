@@ -1,5 +1,7 @@
 // 첫 요소는 도메인, 둘째는 동작, 셋째부터 식별자 — invalidateQueries(['movies'])
 // 같은 광역 무효화가 가능해야 한다 (docs/M2A-foundation-spec.md §7).
+import type { RecordSort, WishSort } from '../types';
+
 export const queryKeys = {
   movies: {
     search: (query: string, year?: number) => ['movies', 'search', { query, year }] as const,
@@ -8,7 +10,9 @@ export const queryKeys = {
     random: (size: number) => ['movies', 'random', size] as const,
   },
   records: {
-    ofUser: (userId: number) => ['records', 'ofUser', userId] as const,
+    // ⚠️ sort를 키에 넣는다 — 빠지면 정렬을 바꿔도 캐시가 그대로라 "정렬이 안 먹는다"로 보인다
+    // (docs/library-sort-spec.md §2.1). 무효화는 접두사 ['records']라 키가 길어져도 그대로 동작한다.
+    ofUser: (userId: number, sort: RecordSort) => ['records', 'ofUser', userId, sort] as const,
     ofUserMovie: (userId: number, movieId: number) => ['records', 'ofUserMovie', userId, movieId] as const,
     // "N편 관람" 표시용 — size=1 조회. ofUser(무한스크롤)와 캐시 모양이 달라 키를 분리한다.
     count: (userId: number) => ['records', 'count', userId] as const,
@@ -20,7 +24,7 @@ export const queryKeys = {
   },
   wishes: {
     me: (movieId: number) => ['wishes', 'me', movieId] as const,
-    ofUser: (userId: number) => ['wishes', 'ofUser', userId] as const,
+    ofUser: (userId: number, sort: WishSort) => ['wishes', 'ofUser', userId, sort] as const,
   },
   collections: {
     ofUser: (userId: number) => ['collections', 'ofUser', userId] as const,

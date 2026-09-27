@@ -1,6 +1,6 @@
 import { api } from './client';
 import { EP } from './endpoints';
-import type { PageResponse, WishListItemResponse } from '../types';
+import type { PageResponse, WishListItemResponse, WishSort } from '../types';
 
 export const wishlistApi = {
   // POST /api/movies/{movieId}/wish — 토글 단일 엔드포인트(찜/찜 해제 공용).
@@ -10,8 +10,8 @@ export const wishlistApi = {
   isWished: (movieId: number) =>
     api.get<{ wished: boolean }>(EP.wishes.me(movieId)).then((r) => r.data),
 
-  ofUser: (userId: number, page: number) =>
+  ofUser: (userId: number, page: number, sort?: WishSort) =>
     api
-      .get<PageResponse<WishListItemResponse>>(EP.wishes.ofUser(userId), { params: { page } })
+      .get<PageResponse<WishListItemResponse>>(EP.wishes.ofUser(userId), { params: { page, sort } })
       .then((r) => r.data),
 };

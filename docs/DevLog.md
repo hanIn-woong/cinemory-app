@@ -6,6 +6,22 @@ narrative로 남긴다.
 
 ---
 
+## 2026-09-26 — 내 서재 정렬 1·2단계 (`library-sort-spec.md`)
+
+- **출발**: 정렬 UI 요청을 보다가 내 기록 Repository에 `ORDER BY`가 없다는 것을 발견 — 기능
+  추가이자 버그 수정이 됐다. 1단계(백엔드)가 미구현이라 사용자 확인 후 **백엔드까지 이 세션에서** 진행했다.
+  3단계(`MyLibrary` 통합)는 네이티브 패키지 추가라 **2단계까지만**으로 범위를 합의했다.
+- **백엔드**: `RecordSort`·`WishSort` enum → Controller `sort` 파라미터 → Service에서
+  `PageRequest`로 재조립(자유 `sort` 폐기). 스펙에 없던 `id DESC` 보조키를 넣었다(동률 정렬의
+  페이지 경계 버그 방지). `LibrarySortTest` 4건 + 전체 129건 통과. 문서는 백엔드 docs로 이관.
+- **프론트**: `gen:api` → `RecordSort`/`WishSort` 별칭 → 쿼리 키에 `sort` → `SortSheet`/`SortButton`
+  → 두 화면 툴바. 정렬 변경 시 전체 로딩 깜빡임을 피하려 `keepPreviousData`를 쓰고, 그 대가로
+  `scrollToOffset(0)` + `reset()`을 직접 부른다. `tsc`·`expo export android` 통과.
+- **남은 것**: §4.1 실기기 검증 — 특히 **4번(기록 21건 이상 무한스크롤 중복·누락 없음)** 과
+  5번(날짜/별점 없는 기록이 맨 위에 오지 않음). 부수 효과로 홈 배경이 최근 기록 기준으로 바뀐 것도 눈으로 확인.
+
+---
+
 ## 2026-09-26 — M2-C2 §7 검증 수정 ① 별점 분포 4.5·5.0 막대 누락
 
 - **증상**: 시청 분석의 별점 분포 그래프에 4.5점·5점 칸이 없었다.

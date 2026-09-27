@@ -3,15 +3,17 @@ import { EP } from './endpoints';
 import type {
   CreateRecordRequest,
   PageResponse,
+  RecordSort,
   UpdateRecordRequest,
   UserMovieListItemResponse,
   WatchRecordResponse,
 } from '../types';
 
 export const recordApi = {
-  ofUser: (userId: number, page: number, size?: number) =>
+  // sort 생략 시 서버 기본값 RECENT(docs/library-sort-spec.md §1.2).
+  ofUser: (userId: number, page: number, size?: number, sort?: RecordSort) =>
     api
-      .get<PageResponse<UserMovieListItemResponse>>(EP.records.ofUser(userId), { params: { page, size } })
+      .get<PageResponse<UserMovieListItemResponse>>(EP.records.ofUser(userId), { params: { page, size, sort } })
       .then((r) => r.data),
 
   // 페이징 없는 배열 응답 — 회차 목록.

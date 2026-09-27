@@ -1,4 +1,5 @@
 import {
+  keepPreviousData,
   useInfiniteQuery,
   useMutation,
   useQuery,
@@ -14,6 +15,7 @@ import { useAuthStore } from '../store/authStore';
 import type {
   CreateRecordRequest,
   PageResponse,
+  RecordSort,
   UpdateRecordRequest,
   UserMovieListItemResponse,
   WatchRecordResponse,
@@ -24,16 +26,20 @@ import { queryKeys } from './queryKeys';
 // 그대로 넣으면 .data.pages가 타입에 잡히지 않는다.
 export function useMyRecords(
   userId: number,
+  sort: RecordSort = 'RECENT',
 ): UseInfiniteQueryResult<InfiniteData<PageResponse<UserMovieListItemResponse>>, ApiError> {
   // 인증 전용 화면 — enabled 게이팅 필수(docs/M2B-screens-spec.md §3.4). 빠져 있으면
   // 게스트가 이 훅을 쓰는 화면에 들어오는 것만으로 불필요한 401 요청이 나간다.
   const isAuthed = useAuthStore((s) => s.status === 'authenticated');
   return useInfiniteQuery({
-    queryKey: queryKeys.records.ofUser(userId),
-    queryFn: ({ pageParam }) => recordApi.ofUser(userId, pageParam),
+    queryKey: queryKeys.records.ofUser(userId, sort),
+    queryFn: ({ pageParam }) => recordApi.ofUser(userId, pageParam, undefined, sort),
     initialPageParam: 0,
     getNextPageParam: (lastPage, allPages) => (lastPage.last ? undefined : allPages.length),
     enabled: isAuthed,
+    // 정렬을 바꾸면 키가 바뀐다 — 새 정렬이 올 때까지 이전 목록을 유지해 화면 전체가
+    // 로딩으로 깜빡이지 않게 한다(스크롤·툴바 리셋은 화면 몫, docs/library-sort-spec.md §2.3).
+    placeholderData: keepPreviousData,
   });
 }
 

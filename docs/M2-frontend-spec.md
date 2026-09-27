@@ -1436,11 +1436,10 @@ SectionList
 
 - `GET /api/users/{myId}/records` → `PageResponse<UserMovieListItemResponse>`
 - 그리드(3열) ↔ 리스트 토글
-- ⚠️ **와이어프레임의 정렬·별점 필터는 서버가 지원하지 않는다.** `sortOption`/`ratingFilter`
-  state가 선언만 되고 목록에 반영되지 않는 것도 와이어프레임의 미구현 부분이다.
-  **5-0-D에서 클라이언트 `sort` 파라미터를 의도적으로 지원하지 않기로 확정**했으므로
-  (인덱스를 타지 않는 정렬이 조용히 만들어지는 것을 막기 위함), M2에서는 **정렬·필터 UI를
-  넣지 않는다.** 필요해지면 백엔드에 정렬 옵션을 요청한다.
+- **정렬 — 2026-09-26 추가(`docs/library-sort-spec.md`).** 5-0-D는 *자유* `sort`를 막는 것이라
+  백엔드에 **화이트리스트 enum**(`RecordSort`·`WishSort`, 백엔드 5-0-D-1)을 두고 정렬 UI를 붙였다.
+  기본값은 **최근 기록순**(이전엔 정렬이 없어 오래된 기록이 먼저 나왔다). `Wishlist`도 같다.
+  ⚠️ **별점 필터는 여전히 없다** — 정렬과 별개 작업이다(`library-sort-spec.md` §5).
 - 와이어프레임의 시청/찜 2탭 구조는 **찜을 별도 화면(`Wishlist`, 2군)으로 분리**한다 —
   엔드포인트가 다르고 응답 DTO도 다르다.
 - **툴바에 "총 N편" 개수 표시** (2026-09-20 추가). 별도 count 조회 없이 무한스크롤 첫 페이지의
@@ -1895,6 +1894,7 @@ export { CineMapWebView as CineMapView } from './CineMapWebView';
 
 | 날짜                 | 내용 |
 |--------------------|---|
+| 2026-09-26 | **§9.4 "정렬 UI를 넣지 않는다"를 뒤집었다 — 내 기록·찜 목록 정렬 추가.** 근거는 5-0-D가 막으려던 것이 *임의 컬럼 정렬*이지 정렬 기능이 아니라는 것, 그리고 **내 기록 Repository에 정렬이 아예 없어** 오래된 기록이 먼저 나오고 21건부터 무한스크롤 페이지 경계에서 중복·누락이 날 수 있었다는 발견이다(§11 미등록 버그였다 — B-18과 같은 계열). 백엔드 enum 화이트리스트로 해결했고 계약은 백엔드 `controller-layer-spec.md` 5-0-D-1, 실행·검증은 `docs/library-sort-spec.md` |
 | 2026-09-24 | **§7.5 시작 로딩 화면 안전망 수정 — 타이머를 마운트 시점으로 앞당김.** M2-C2 실기기 검증을 시작하려다 앱이 `AppLoadingScreen`에서 영구 정지했다. 직접 원인은 PC가 핫스팟에 다시 붙으며 IP가 바뀌었는데(`10.216.149.151` → `10.254.172.151`) `.env.local`의 `EXPO_PUBLIC_API_BASE_URL`이 옛 값이었던 것이다. **그러나 8초 안전망이 있었는데도 멈춘 것이 진짜 결함이었다** — `useHomeBackgroundReady`는 포스터 쿼리가 성공해 `posters`가 채워져야 프리페치 이펙트에 들어가고, 안전망 타이머는 **그 이펙트 안에서** 걸렸다. 그래서 안전망이 대비하려던 바로 그 상황(백엔드 도달 불가)에서는 `posters.length === 0` 조기 반환에 막혀 타이머가 한 번도 설정되지 않았다. 타이머를 **마운트 시 한 번 거는 별도 이펙트**로 옮기고, 프리페치 쪽의 `Promise.race`는 제거했다(상한은 마운트 타이머 하나가 맡는다). 결과적으로 8초는 "프리페치 시작부터"가 아니라 "쿼리+프리페치 전체"의 상한이 됐다 — 정상 경로 실측(≈4~5초)보다 여전히 넉넉하다. `ready`가 한 번 `true`가 되면 내려가지 않는 규칙은 그대로다. `npx tsc --noEmit` 통과. 경위는 `docs/DevLog.md` 2026-09-24 |
 | 2026-09-23 | **M2-C2 구현 완료 — 실기기 검증 전.** `docs/M2C2-report-spec.md` §1 실행 순서를 그대로 따랐다. API 3종(`endpoints.ts`·`src/api/report.ts`) · 타입 별칭(`ReportStatisticsResponse` 등 13종, `gen:api` 스키마명 그대로) · `queryKeys.report`·`useReport.ts` 훅 3종 · **무효화 매트릭스**(`useCreateRecord`·`useUpdateRecord`·`useDeleteRecord`·`useSetRepresentative`·`useWriteReview`·`useDeleteReview` 여섯 곳에 `['report']` 추가, 리뷰 두 곳을 놓치기 쉬웠다) · 공통 부품(`SectionCard`·`StatTile`·`RankRow`·`ReportBarChart`·`ReportPieChart`·`CalendarView`, `src/components/report/`) · `ReportScreen`(10섹션 한 화면 스크롤) · `CalendarScreen`(월 이동 + 날짜 탭 확장) · `MonthlyReportScreen`(월 고정, 요일 차트 없음) · 마이페이지 캘린더 요약 위젯(`compact`, `Calendar`와 쿼리 키 공유)까지 전부 붙였다. `react-native-gifted-charts` 설치 후 **Dev Client 재빌드 없이 JS 번들만으로 동작** — `npx expo export --platform android`로 확인, 추가 네이티브 의존 없음(`react-native-svg`는 M2-A에서 이미 설치됨). `npx tsc --noEmit` 통과. **실기기 검증은 아직이다** — §7 검증 절차(무효화 동선·경계 케이스·게스트/타인 403) 전부 대기 |
 | 2026-09-22 | **M2-C2 설계 확정 — `docs/M2C2-report-spec.md` 신설, B-8 종결.** 백엔드 M3-a 완료로 2군 마지막 블로커가 풀렸다. **진입 구조** — 시청 분석은 마이페이지 메뉴(이미 존재), 캘린더는 **마이페이지 요약 위젯**(§9.8이 `compact`를 전제로 설계돼 있었다), 월말은 캘린더에서 현재 월을 넘겨 진입. **월말에는 월 이동 UI를 두지 않는다**(캘린더와 둘 다 두면 상태가 갈린다). ⚠️ **연말 리포트는 만들지 않는다** — 백엔드에 엔드포인트가 없고, `monthlyTrend`로 흉내내면 편수·회차·시간 셋뿐이라 *"올해의 감독·장르"* 가 안 나온다. **한 화면 스크롤**로 가고 섹션 분할은 로딩이 실제 문제가 될 때 논의한다. ★ **요일 매핑을 1-based 배열로 고정** — `DAYOFWEEK()`(1=일)·`getDay()`(0=일)·캘린더 헤더의 오프셋이 달라 `['', '일', …]`로 0번을 비워 **서버 값을 변환 없이 인덱싱**한다. ★ **`reviewRate`는 비율로 쓰지 않는다** — 리뷰가 기록 없이도 작성 가능해 **1.0을 넘을 수 있다**(→ *"135편 중 42편에 리뷰"*). ★ **무효화에 리뷰를 포함** — `reviewRate` 때문에 리뷰만 써도 통계가 바뀐다. 찜은 리포트에 영향이 없다 |

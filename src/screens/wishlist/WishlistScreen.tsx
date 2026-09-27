@@ -1,18 +1,28 @@
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { LayoutGrid, List } from 'lucide-react-native';
-import { useEffect, useState } from 'react';
-import { Pressable, useWindowDimensions, View } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import { type FlatList, Pressable, useWindowDimensions, View } from 'react-native';
 import Animated from 'react-native-reanimated';
-import { AuthRequired, EmptyState, ErrorState, InfiniteScrollFooter, LoadingState } from '../../components/common';
+import {
+  AuthRequired,
+  EmptyState,
+  ErrorState,
+  InfiniteScrollFooter,
+  LoadingState,
+  SortButton,
+  SortSheet,
+} from '../../components/common';
 import { MovieGridItem } from '../../components/movie/MovieGridItem';
 import { MovieListItem } from '../../components/movie/MovieListItem';
 import { Screen, Txt } from '../../components/primitives';
+import { WISH_SORT_OPTIONS } from '../../constants/librarySort';
 import { useCollapsibleToolbar } from '../../hooks/useCollapsibleToolbar';
 import { useMyWishes } from '../../hooks/useWishlist';
 import type { MyPageStackParamList } from '../../navigation/types';
 import { useAuthStore } from '../../store/authStore';
 import { colors, layout } from '../../theme/tokens';
+import type { WishListItemResponse, WishSort } from '../../types';
 
 // 가장 단순한 2군 화면 — API·훅·무한스크롤·게이트가 이미 다 있어 파이프가 통하는지
 // 검증하는 역할이다(M2C-screens-spec.md §5.1). MyRecordsScreen을 구조째 베낀다.
@@ -29,16 +39,30 @@ export function WishlistScreen() {
   const { width: windowWidth } = useWindowDimensions();
   const [viewMode, setViewMode] = useState<ViewMode>('grid');
   const { onScroll, toolbarStyle, reset } = useCollapsibleToolbar(TOOLBAR_HEIGHT);
+  // 정렬은 화면 state — 상세에 들어갔다 나와도 스택에 화면이 살아 있어 유지된다
+  // (영속화는 하지 않는다, docs/library-sort-spec.md §5).
+  const [sort, setSort] = useState<WishSort>('RECENT');
+  const [sortVisible, setSortVisible] = useState(false);
+  const listRef = useRef<FlatList<WishListItemResponse>>(null);
 
   // ⚠️ user가 null이면 조회하지 않는다 — 화면 자체가 <AuthRequired>로 막히므로
   // userId ?? 0은 훅에 넘길 더미 값일 뿐, 실제로 이 값으로 조회가 나가지 않는다.
-  const wishes = useMyWishes(userId ?? 0);
+  const wishes = useMyWishes(userId ?? 0, sort);
 
   // ⚠️ 그리드↔리스트 토글은 FlatList를 key로 재생성한다 — 스크롤은 0으로 가는데 툴바
   // 애니메이션 상태는 그대로라 숨김에 굳는다(§5.5 함정 1). 토글마다 되돌린다.
   useEffect(() => {
     reset();
   }, [viewMode, reset]);
+
+  // ⚠️ 정렬 변경 = 리스트 리셋 — 이전 목록이 placeholder로 남아 FlatList가 재생성되지
+  // 않으므로 스크롤을 직접 0으로 돌리고, 툴바도 숨김에 굳지 않게 되돌린다
+  // (docs/library-sort-spec.md §2.3, M2-B §5.5 함정 1과 같은 부류).
+  const changeSort = (next: WishSort) => {
+    setSort(next);
+    listRef.current?.scrollToOffset({ offset: 0, animated: false });
+    reset();
+  };
 
   if (!isAuthed) {
     return <AuthRequired description="찜 목록은 로그인 후 볼 수 있어요" />;
@@ -75,7 +99,12 @@ export function WishlistScreen() {
           className="absolute left-0 right-0 top-0 z-10 flex-row items-center justify-between bg-background px-4"
           style={[{ height: TOOLBAR_HEIGHT }, toolbarStyle]}
         >
-          <Txt variant="caption">총 {totalCount}편</Txt>
+          <View className="flex-row items-center">
+            <SortButton options={WISH_SORT_OPTIONS} value={sort} onPress={() => setSortVisible(true)} />
+            <Txt variant="caption" color="mutedForeground" className="ml-3">
+              총 {totalCount}편
+            </Txt>
+          </View>
           <View className="flex-row items-center">
             <Pressable onPress={() => setViewMode('grid')} hitSlop={8} className="mr-4">
               <LayoutGrid size={20} color={viewMode === 'grid' ? colors.primary : colors.mutedForeground} />
@@ -97,6 +126,7 @@ export function WishlistScreen() {
           </View>
         ) : (
           <Animated.FlatList
+            ref={listRef}
             key={viewMode}
             data={items}
             numColumns={viewMode === 'grid' ? GRID_COLUMNS : 1}
@@ -142,6 +172,14 @@ export function WishlistScreen() {
           />
         )}
       </View>
+
+      <SortSheet
+        visible={sortVisible}
+        onClose={() => setSortVisible(false)}
+        options={WISH_SORT_OPTIONS}
+        value={sort}
+        onChange={changeSort}
+      />
     </Screen>
   );
 }
