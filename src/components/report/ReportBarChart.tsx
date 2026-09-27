@@ -12,7 +12,13 @@ interface ReportBarChartProps {
   scrollable?: boolean;
   maxValue?: number;
   yAxisLabelSuffix?: string;
+  // false면 차트 대신 같은 높이의 빈 자리만 둔다 — 화면 전환 중에 SVG 차트를 마운트하지 않기 위함
+  // (ReportScreen이 native-stack transitionEnd 뒤에 true로 바꾼다, 2026-09-28).
+  ready?: boolean;
 }
+
+// x축 라벨 영역 — 빈 자리 높이를 차트와 맞춰 ready 전환 때 아래 섹션이 튀지 않게 한다.
+const X_AXIS_LABEL_SPACE = 30;
 
 // gifted-charts 기본 y축 라벨 폭(AxesAndRulesDefaults.yAxisLabelWidth).
 const Y_AXIS_LABEL_WIDTH = 35;
@@ -31,6 +37,7 @@ export function ReportBarChart({
   scrollable = false,
   maxValue,
   yAxisLabelSuffix,
+  ready = true,
 }: ReportBarChartProps) {
   const [parentWidth, setParentWidth] = useState(0);
   const chartWidth = Math.max(parentWidth - Y_AXIS_LABEL_WIDTH, 0);
@@ -49,8 +56,8 @@ export function ReportBarChart({
   }
 
   return (
-    <View onLayout={(e) => setParentWidth(e.nativeEvent.layout.width)}>
-      {parentWidth > 0 && (
+    <View onLayout={(e) => setParentWidth(e.nativeEvent.layout.width)} style={{ minHeight: height + X_AXIS_LABEL_SPACE }}>
+      {ready && parentWidth > 0 && (
         <BarChart
           data={data.map((d) => ({ frontColor: colors.primary, ...d }))}
           width={chartWidth}
@@ -71,7 +78,9 @@ export function ReportBarChart({
           xAxisLabelTextStyle={{ color: colors.mutedForeground, fontSize: 11 }}
           noOfSections={4}
           disableScroll={!scrollable}
-          isAnimated
+          // ⚠️ isAnimated를 쓰지 않는다 — gifted-charts의 막대 애니메이션은 useNativeDriver: false라
+          // 매 프레임 JS가 높이를 계산한다. 리포트 화면의 막대 차트 4개가 진입과 동시에 애니메이션해
+          // JS 스레드가 포화되고 프레임이 떨어졌다(2026-09-28 실기기).
         />
       )}
     </View>

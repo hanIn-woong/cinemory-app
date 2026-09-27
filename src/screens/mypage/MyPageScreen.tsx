@@ -37,7 +37,7 @@ interface MenuItem {
 const MENU_ITEMS: MenuItem[] = [
   { label: '내 기록', icon: Film, onPress: (nav) => nav.navigate('MyLibrary') },
   { label: '내 컬렉션', icon: Bookmark, onPress: (nav) => nav.navigate('CollectionList') },
-  { label: '시청 분석', icon: BarChart2, onPress: (nav) => nav.navigate('Report') },
+  { label: '시청 분석 리포트', icon: BarChart2, onPress: (nav) => nav.navigate('Report') },
   { label: '프로필 수정', icon: UserIcon, onPress: (nav) => nav.navigate('EditProfile') },
   { label: '설정', icon: SettingsIcon, onPress: (nav) => nav.navigate('Settings') },
 ];
