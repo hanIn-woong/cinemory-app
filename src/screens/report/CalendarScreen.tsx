@@ -42,7 +42,7 @@ export function CalendarScreen() {
   const selectedDay = days.find((d) => d.date === selectedDate);
 
   return (
-    <Screen scroll>
+    <Screen scroll edges={['left', 'right']}>
       <Spacer size="md" />
       <View className="flex-row items-center justify-between">
         <Pressable onPress={() => goToMonth(-1)} hitSlop={8}>
@@ -55,11 +55,11 @@ export function CalendarScreen() {
           <ChevronRight size={22} color={colors.foreground} />
         </Pressable>
       </View>
-      <Spacer size="sm" />
+      <Spacer size="lg" />
       <Button variant="secondary" onPress={() => navigation.navigate('MonthlyReport', { year, month })}>
         이달의 리포트
       </Button>
-      <Spacer size="md" />
+      <Spacer size="lg" />
 
       {calendar.isLoading ? (
         <LoadingState variant="detail" />

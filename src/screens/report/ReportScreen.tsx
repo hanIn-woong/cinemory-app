@@ -1,5 +1,6 @@
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { useEffect, useState } from 'react';
 import { View } from 'react-native';
 import { AuthRequired, ErrorState, LoadingState } from '../../components/common';
 import { PosterImage } from '../../components/movie/PosterImage';
@@ -13,6 +14,9 @@ import { useAuthStore } from '../../store/authStore';
 import { colors } from '../../theme/tokens';
 
 type Nav = NativeStackNavigationProp<MyPageStackParamList, 'Report'>;
+
+// 전환 이벤트가 오지 않을 때 차트를 그리기 시작하는 시점 — native-stack 기본 전환(~350ms)보다 넉넉하게.
+const CHART_READY_FALLBACK_MS = 600;
 
 function formatMinutes(totalMinutes: number): string {
   const hours = Math.floor(totalMinutes / 60);
@@ -29,17 +33,30 @@ function formatStars(rating: number): string {
 
 export function ReportScreen() {
   const navigation = useNavigation<Nav>();
+  // 차트는 화면 전환이 끝난 뒤에 그린다 — 전환 애니메이션과 SVG 차트 4개의 마운트가 겹치면 프레임이
+  // 떨어진다(2026-09-28). transitionEnd가 오지 않는 경우(초기 라우트 등)를 위해 짧은 안전망을 둔다.
+  const [chartsReady, setChartsReady] = useState(false);
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('transitionEnd', (e) => {
+      if (!e.data.closing) setChartsReady(true);
+    });
+    const fallback = setTimeout(() => setChartsReady(true), CHART_READY_FALLBACK_MS);
+    return () => {
+      unsubscribe();
+      clearTimeout(fallback);
+    };
+  }, [navigation]);
   const isAuthed = useAuthStore((s) => s.status === 'authenticated');
   const userId = useAuthStore((s) => s.user?.id);
   const stats = useReportStatistics(userId);
 
   if (!isAuthed) {
-    return <AuthRequired description="시청 분석은 로그인 후 볼 수 있어요" />;
+    return <AuthRequired description="시청 분석 리포트는 로그인 후 볼 수 있어요" />;
   }
 
   if (stats.isLoading) {
     return (
-      <Screen>
+      <Screen edges={['left', 'right']}>
         <LoadingState variant="detail" />
       </Screen>
     );
@@ -47,7 +64,7 @@ export function ReportScreen() {
 
   if (stats.isError || !stats.data) {
     return (
-      <Screen>
+      <Screen edges={['left', 'right']}>
         <ErrorState message={stats.error?.message} onRetry={() => stats.refetch()} />
       </Screen>
     );
@@ -58,7 +75,7 @@ export function ReportScreen() {
   // 기록 0건이면 404가 아니라 빈 값이 200으로 온다(RA-5) — EmptyState로 유도한다.
   if (!data.movieCount) {
     return (
-      <Screen>
+      <Screen edges={['left', 'right']}>
         <View className="flex-1 items-center justify-center px-6">
           <Txt variant="h4" className="text-center">
             아직 기록이 없습니다
@@ -85,7 +102,9 @@ export function ReportScreen() {
   const reviewCount = data.movieCount ? Math.round((data.reviewRate ?? 0) * data.movieCount) : 0;
 
   return (
-    <Screen scroll>
+    // ⚠️ top을 뺀다 — 네이티브 헤더가 이미 상단 안전영역을 소화하므로, 기본 edges(top 포함)면
+    // 헤더 아래에 안전영역 높이만큼 빈 띠가 한 번 더 생겨 툴바처럼 보였다(2026-09-28, 리포트 3화면 공통).
+    <Screen scroll edges={['left', 'right']}>
       <Spacer size="md" />
 
       {/* 1. 요약 타일 */}
@@ -104,7 +123,7 @@ export function ReportScreen() {
       {/* 2. 별점 분포 */}
       <SectionCard title="별점 분포">
         {ratingBuckets.length > 0 && (
-          <ReportBarChart
+          <ReportBarChart ready={chartsReady}
             data={ratingBuckets.map((b) => ({ value: b.count ?? 0, label: ((b.rating ?? 0) / 2).toFixed(1) }))}
           />
         )}
@@ -113,6 +132,11 @@ export function ReportScreen() {
 
       {/* 3. 선호 TOP */}
       <SectionCard title="선호 TOP">
+        {/* 편수를 보여 주되 정렬 기준을 밝힌다(2026-09-28 B안) — 순서는 편수가 아니라 별점 가중
+            선호도라 편수가 적은 쪽이 위에 올 수 있고(RA-4), 편수는 별점을 준 기록만 센다. */}
+        <Txt variant="caption" color="mutedForeground" className="mb-3">
+          별점 기준 선호도 순 · 편수는 별점을 준 작품 수예요
+        </Txt>
         <PreferenceGroup title="장르" items={data.topGenres} />
         <PreferenceGroup title="국가" items={data.topCountries} />
         <PreferenceGroup title="감독" items={data.topDirectors} />
@@ -131,7 +155,7 @@ export function ReportScreen() {
           </>
         )}
         {recentMonthlyTrend.length > 0 && (
-          <ReportBarChart
+          <ReportBarChart ready={chartsReady}
             data={recentMonthlyTrend.map((m) => ({ value: m.watchCount ?? 0, label: `${m.month}월` }))}
             scrollable={monthlyTrend.length > 12}
           />
@@ -227,7 +251,7 @@ export function ReportScreen() {
       {/* 8. 연대와 고전 */}
       <SectionCard title="연대와 고전" headerRight={<Txt variant="h3">{data.classicCount ?? 0}편</Txt>}>
         {decades.length > 0 && (
-          <ReportBarChart data={decades.map((d) => ({ value: d.count ?? 0, label: d.decade ?? '' }))} scrollable />
+          <ReportBarChart ready={chartsReady} data={decades.map((d) => ({ value: d.count ?? 0, label: d.decade ?? '' }))} scrollable />
         )}
         {data.oldestWatched && (
           <>
@@ -244,7 +268,7 @@ export function ReportScreen() {
       {/* 9. 요일 */}
       <SectionCard title="요일">
         {weekdays.length > 0 && (
-          <ReportBarChart
+          <ReportBarChart ready={chartsReady}
             data={weekdays.map((w) => ({ value: w.count ?? 0, label: WEEKDAY_LABELS[w.weekday ?? 0] ?? '' }))}
           />
         )}
@@ -275,7 +299,7 @@ function PreferenceGroup({
   items,
 }: {
   title: string;
-  items?: { id?: number; name?: string; score?: number }[];
+  items?: { id?: number; name?: string; score?: number; count?: number }[];
 }) {
   if (!items || items.length === 0) return null;
   return (
@@ -283,9 +307,15 @@ function PreferenceGroup({
       <Txt variant="caption" color="mutedForeground" className="mb-1">
         {title}
       </Txt>
-      {/* ⚠️ score로 정렬돼 있다 — count(편수)를 부제로 쓰지 않는다(§5.1 3번, RA-4) */}
+      {/* ⚠️ score로 정렬돼 있다 — 편수가 순서와 어긋날 수 있어 섹션 상단에 정렬 기준을 적었다
+          (§5.1 3번, 2026-09-28 B안). OTT의 "N회"(재관람 포함)와 달리 여기는 "N편"(대표 기록). */}
       {items.slice(0, 5).map((item, i) => (
-        <RankRow key={item.id ?? i} rank={i + 1} label={item.name ?? ''} />
+        <RankRow
+          key={item.id ?? i}
+          rank={i + 1}
+          label={item.name ?? ''}
+          meta={item.count != null ? `${item.count}편` : undefined}
+        />
       ))}
     </View>
   );

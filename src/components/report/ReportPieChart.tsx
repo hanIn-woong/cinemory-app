@@ -14,7 +14,7 @@ interface ReportPieChartProps {
   radius?: number;
 }
 
-// PieChart + 커스텀 범례 — 관람 방식·월말 평점 분포에서 재사용한다
+// PieChart + 커스텀 범례 — 관람 방식·월말 별점 분포에서 재사용한다
 // (docs/M2C2-report-spec.md §4.1·§4.2). 라이브러리에 범례 컴포넌트가 없어 직접 그린다.
 export function ReportPieChart({ data, radius = 80 }: ReportPieChartProps) {
   const total = data.reduce((sum, d) => sum + d.value, 0);
@@ -27,6 +27,9 @@ export function ReportPieChart({ data, radius = 80 }: ReportPieChartProps) {
         donut
         innerRadius={radius * 0.6}
         innerCircleColor={colors.card}
+        // 조각 사이 2px 카드색 간격 — 순차 팔레트처럼 인접 색이 가까워도 경계가 보이게 한다.
+        strokeWidth={2}
+        strokeColor={colors.card}
       />
       <View className="ml-4 flex-1">
         {data.map((d) => (

@@ -29,6 +29,10 @@ export const queryKeys = {
   collections: {
     ofUser: (userId: number) => ['collections', 'ofUser', userId] as const,
     movies: (collectionId: number) => ['collections', 'movies', collectionId] as const,
+    // 순서 편집용 전량 로드 — 무한스크롤과 캐시 모양이 달라 키를 분리하되, ofUser/movies의
+    // 접두사 아래에 둬 기존 무효화가 그대로 함께 걸리게 한다(docs/collection-order-spec.md §3.2).
+    ofUserAll: (userId: number) => ['collections', 'ofUser', userId, 'all'] as const,
+    moviesAll: (collectionId: number) => ['collections', 'movies', collectionId, 'all'] as const,
   },
   users: {
     me: () => ['users', 'me'] as const,

@@ -8,7 +8,9 @@ const TMDB_IMAGE_BASE = 'https://image.tmdb.org/t/p';
 // 3배 밀도까지 커버한다(2026-09-10, 실기기 화질 확인 후 조정).
 // HERO — MovieDetail 상단의 화면 폭 대형 포스터 전용(2026-09-10, 히어로 배경 이미지를
 // 대형 포스터로 교체하며 신설). backdropPath가 없어 posterPath를 그대로 키운다.
-export const PosterSize = { LIST: 'w342', DETAIL: 'w500', BACKDROP_TILE: 'w92', HERO: 'w780' } as const;
+// SHELF(w185) — 컬렉션 카드 선반 전용(2026-09-27). 5장이 카드 폭을 채우도록 키우면서 한 장이
+// ~60dp가 돼 3배 밀도에서 ~180px가 필요하다 — w92는 흐려지고 w342는 과하다.
+export const PosterSize = { LIST: 'w342', DETAIL: 'w500', BACKDROP_TILE: 'w92', HERO: 'w780', SHELF: 'w185' } as const;
 export const ProfileSize = { LIST: 'w185' } as const;
 
 export function tmdbImageUrl(path: string | null | undefined, size: string): string | null {

@@ -52,7 +52,7 @@ export function CollectionDetailScreen() {
 
   if (movies.isLoading) {
     return (
-      <Screen>
+      <Screen edges={['left', 'right']}>
         <LoadingState variant="detail" />
       </Screen>
     );
@@ -60,7 +60,7 @@ export function CollectionDetailScreen() {
 
   if (movies.isError || !movies.data) {
     return (
-      <Screen>
+      <Screen edges={['left', 'right']}>
         <ErrorState message={movies.error?.message} onRetry={() => movies.refetch()} />
       </Screen>
     );

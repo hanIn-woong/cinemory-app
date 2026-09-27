@@ -37,7 +37,7 @@ export function SettingsScreen() {
 
   if (me.isLoading) {
     return (
-      <Screen>
+      <Screen edges={['left', 'right']}>
         <LoadingState variant="detail" />
       </Screen>
     );
@@ -45,7 +45,7 @@ export function SettingsScreen() {
 
   if (me.isError || !me.data) {
     return (
-      <Screen>
+      <Screen edges={['left', 'right']}>
         <ErrorState message={me.error?.message} onRetry={() => me.refetch()} />
       </Screen>
     );

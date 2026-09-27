@@ -98,6 +98,11 @@ export type CollectionMovieListItemResponse = S['CollectionMovieListItemResponse
 export type AddMoviesToCollectionRequest = S['AddMoviesToCollectionRequest'];
 export type AddMoviesToCollectionResponse = S['AddMoviesToCollectionResponse'];
 
+// 순서 저장 — 전체 배열을 한 번에 보낸다. 서버가 집합 일치를 요구해 빠지거나 섞이면 400,
+// 상한(200/500) 초과도 400이며 부분 저장은 없다(docs/collection-order-spec.md §1).
+export type CollectionOrderRequest = S['CollectionOrderRequest'];
+export type CollectionMovieOrderRequest = S['CollectionMovieOrderRequest'];
+
 // 리포트 — docs/M2C2-report-spec.md §2.3. PageResponse로 감싸지 않는다(TOP N, 서버 상수 개수).
 export type ReportStatisticsResponse = S['ReportStatisticsResponse'];
 export type ReportMonthlyResponse = S['ReportMonthlyResponse'];

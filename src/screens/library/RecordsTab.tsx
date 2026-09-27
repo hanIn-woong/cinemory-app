@@ -110,7 +110,7 @@ export function RecordsTab({ userId }: RecordsTabProps) {
 
   if (records.isLoading) {
     return (
-      <Screen>
+      <Screen edges={['left', 'right']}>
         <LoadingState variant="detail" />
       </Screen>
     );
@@ -118,7 +118,7 @@ export function RecordsTab({ userId }: RecordsTabProps) {
 
   if (records.isError || !records.data) {
     return (
-      <Screen>
+      <Screen edges={['left', 'right']}>
         <ErrorState message={records.error?.message} onRetry={() => records.refetch()} />
       </Screen>
     );

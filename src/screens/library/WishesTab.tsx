@@ -110,7 +110,7 @@ export function WishesTab({ userId }: WishesTabProps) {
 
   if (wishes.isLoading) {
     return (
-      <Screen>
+      <Screen edges={['left', 'right']}>
         <LoadingState variant="detail" />
       </Screen>
     );
@@ -118,7 +118,7 @@ export function WishesTab({ userId }: WishesTabProps) {
 
   if (wishes.isError || !wishes.data) {
     return (
-      <Screen>
+      <Screen edges={['left', 'right']}>
         <ErrorState message={wishes.error?.message} onRetry={() => wishes.refetch()} />
       </Screen>
     );

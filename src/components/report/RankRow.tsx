@@ -6,8 +6,8 @@ import { Txt } from '../primitives/Txt';
 interface RankRowProps {
   rank: number;
   label: string;
-  // 부가정보 — 재관람 횟수 등. 선호 TOP(§5.1 3번)에는 count를 여기 넣지 않는다(score 정렬과
-  // 순서가 안 맞아 버그처럼 보인다, docs/M2C2-report-spec.md §5.1).
+  // 부가정보 — 재관람 횟수·OTT 회수·선호 TOP 편수 등. 선호 TOP은 score 정렬이라 편수가 순서와
+  // 어긋날 수 있어 섹션에 정렬 기준을 함께 적는다(docs/M2C2-report-spec.md §5.1 3번, 2026-09-28).
   meta?: string;
   posterPath?: string | null;
   movieId?: number;

@@ -1,13 +1,18 @@
-import { useEffect, useState } from 'react';
+import { X } from 'lucide-react-native';
+import { useCallback, useEffect, useState } from 'react';
 import { Alert, FlatList, Modal, Pressable, useWindowDimensions, View } from 'react-native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import Animated, { useAnimatedRef } from 'react-native-reanimated';
+import Sortable from 'react-native-sortables';
 import { EmptyState, ErrorState, InfiniteScrollFooter, LoadingState } from '../common';
-import { MovieGridItem } from '../movie/MovieGridItem';
 import { PosterImage } from '../movie/PosterImage';
 import { Button, Screen, Spacer, TextField, Txt } from '../primitives';
+import { COLLECTION_MOVIE_ORDER_MAX } from '../../constants/collectionOrder';
 import {
   useAddMoviesToCollection,
-  useCollectionMovies,
+  useLoadAllCollectionMovies,
   useRemoveMovieFromCollection,
+  useReorderCollectionMovies,
   useUpdateCollection,
 } from '../../hooks/useCollection';
 import { useMovieSearch, useMovieSync } from '../../hooks/useMovies';
@@ -45,6 +50,8 @@ interface CollectionEditModalProps {
 // 통합한 편집 모달 — 실기기 검증 피드백 반영(2026-09-10). 모든 변경(이름·설명·영화
 // 추가/제거)은 화면에는 즉시 반영되어 보이지만, 실제 서버 반영은 **"저장"을 눌러야만**
 // 한 번에 일어난다 — "닫기"를 누르면 전부 취소된다(2026-09-10 후속 피드백, 두 번째 라운드).
+// "현재 영화" 탭에서 순서도 바꾼다(2026-09-28 — 상세 화면의 별도 순서 편집 모드를 여기로 통합,
+// docs/collection-order-spec.md §3.3). 순서 역시 "저장" 때 한 번에 보낸다.
 export function CollectionEditModal({
   visible,
   onClose,
@@ -70,8 +77,37 @@ export function CollectionEditModal({
   const [pendingAdd, setPendingAdd] = useState<Map<number, PendingMovie>>(new Map());
   const [pendingRemove, setPendingRemove] = useState<Set<number>>(new Set());
 
+  // 순서 편집 — 드래그는 무한스크롤과 공존할 수 없어(화면 밖으로 끌 수 없음) 모달을 열 때 전량을
+  // 받는다(§3.2). order가 "지금 화면에 보이는 순서"의 단일 출처이고, catalog는 id → 표시 정보.
+  const [serverIds, setServerIds] = useState<number[]>([]);
+  const [catalog, setCatalog] = useState<Map<number, PendingMovie>>(new Map());
+  const [order, setOrder] = useState<number[]>([]);
+  const [loadState, setLoadState] = useState<'loading' | 'ready' | 'error'>('loading');
+  const [loadError, setLoadError] = useState<string | undefined>();
+  // 서버 상한(500)을 넘으면 순서 저장이 400이라 드래그를 끈다. 담기·빼기는 그대로 된다.
+  const [tooManyToSort, setTooManyToSort] = useState(false);
+  const scrollableRef = useAnimatedRef<Animated.ScrollView>();
+
   // 열릴 때마다 초기값으로 되돌린다 — 이 모달은 visible로만 토글되고 계속 마운트돼 있어서,
   // 리셋하지 않으면 "닫기"로 취소한 값이 다음에 열 때도 남는다.
+  const loadMovies = useCallback(async () => {
+    setLoadState('loading');
+    try {
+      const all = await loadAllMovies(collectionId);
+      const ids = all.map((m) => m.movieId!);
+      setServerIds(ids);
+      setOrder(ids);
+      setCatalog(new Map(all.map((m) => [m.movieId!, { movieId: m.movieId!, title: m.title!, posterPath: m.posterPath }])));
+      setTooManyToSort(all.length > COLLECTION_MOVIE_ORDER_MAX);
+      setLoadState('ready');
+    } catch (error) {
+      setLoadError(error instanceof Error ? error.message : undefined);
+      setLoadState('error');
+    }
+    // loadAllMovies는 렌더마다 새 함수지만 queryClient만 닫아 두므로 의존성에서 뺀다 — 넣으면
+    // 렌더마다 loadMovies가 바뀌어 아래 effect가 매번 다시 전량 로드한다.
+  }, [collectionId]);
+
   useEffect(() => {
     if (!visible) return;
     setName(initialName);
@@ -82,30 +118,28 @@ export function CollectionEditModal({
     setSubmittedQuery('');
     setPendingAdd(new Map());
     setPendingRemove(new Set());
-  }, [visible, initialName, initialDescription]);
+    loadMovies();
+  }, [visible, initialName, initialDescription, loadMovies]);
 
   const updateCollection = useUpdateCollection();
-  const movies = useCollectionMovies(collectionId);
+  const loadAllMovies = useLoadAllCollectionMovies();
   const addMovies = useAddMoviesToCollection();
   const removeMovie = useRemoveMovieFromCollection();
+  const reorderMovies = useReorderCollectionMovies();
   const search = useMovieSearch(submittedQuery);
   const sync = useMovieSync();
   const records = useMyRecords(userId ?? 0);
 
-  const serverItems = movies.data?.pages.flatMap((p) => p.content) ?? [];
-  // 서버 목록에서 제거 대기 중인 것을 빼고, 추가 대기 중인 것을 얹은 "지금 화면에 보일 목록".
-  const visibleItems: PendingMovie[] = [
-    ...serverItems
-      .filter((m) => !pendingRemove.has(m.movieId!))
-      .map((m) => ({ movieId: m.movieId!, title: m.title!, posterPath: m.posterPath })),
-    ...Array.from(pendingAdd.values()),
-  ];
-  const visibleIds = new Set(visibleItems.map((m) => m.movieId));
+  const visibleIds = new Set(order);
   // ⚠️ 그리드에 좌우 padding(GRID_PADDING)이 있다 — 이걸 빼지 않고 windowWidth 기준으로만
   // 셀 폭을 계산하면 한 행의 실제 너비가 컨테이너보다 커져 맨 오른쪽 셀이 잘린다.
   const cellWidth = (windowWidth - GRID_PADDING * 2 - GRID_GAP * (GRID_COLUMNS - 1)) / GRID_COLUMNS;
 
   function stageAdd(movie: PendingMovie) {
+    setCatalog((prev) => new Map(prev).set(movie.movieId, movie));
+    // ⚠️ 맨 앞에 둔다 — 서버가 새로 담은 영화를 요청 순서대로 MIN-1, MIN-2…로 넣어 "나중에 고른 것이
+    // 맨 위"가 된다(백엔드 4-5-A). 끝에 두면 저장 전 화면과 저장 후 순서가 달라진다(v17 이후 잠복 버그).
+    setOrder((prev) => [movie.movieId, ...prev]);
     if (pendingRemove.has(movie.movieId)) {
       // 이번 편집 세션에서 뺐다가 다시 담는 경우 — 원래 있던 것이니 제거 대기만 취소한다.
       setPendingRemove((prev) => {
@@ -119,6 +153,7 @@ export function CollectionEditModal({
   }
 
   function stageRemove(movieId: number) {
+    setOrder((prev) => prev.filter((id) => id !== movieId));
     if (pendingAdd.has(movieId)) {
       // 이번 편집 세션에서 새로 담은 것이면 서버에 존재하지 않으니 추가 대기만 취소한다.
       setPendingAdd((prev) => {
@@ -185,6 +220,16 @@ export function CollectionEditModal({
           Array.from(pendingRemove).map((movieId) => removeMovie.mutateAsync({ collectionId, movieId })),
         );
       }
+      // 순서는 담기·빼기가 끝난 뒤 보낸다 — 서버가 집합 일치를 요구하므로 최종 집합이어야 한다.
+      // 서버가 스스로 만들 순서(새로 담은 것 맨 위 + 기존 순서)와 화면 순서가 같으면 보내지 않는다.
+      const serverWouldBe = [
+        ...Array.from(pendingAdd.keys()).reverse(),
+        ...serverIds.filter((id) => !pendingRemove.has(id)),
+      ];
+      const reordered = order.some((id, i) => id !== serverWouldBe[i]);
+      if (reordered && !tooManyToSort) {
+        await reorderMovies.mutateAsync({ collectionId, movieIds: order });
+      }
       onInfoSaved?.(updated);
       onClose();
     } catch (error) {
@@ -196,6 +241,9 @@ export function CollectionEditModal({
 
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
+      {/* ⚠️ Android의 Modal은 별도 네이티브 루트라 App.tsx의 GestureHandlerRootView가 닿지 않는다 —
+          여기서 한 번 더 감싸지 않으면 드래그가 에러 없이 조용히 안 먹는다. */}
+      <GestureHandlerRootView style={{ flex: 1 }}>
       <Screen padded={false} edges={['top', 'left', 'right']}>
         <View className="flex-row items-center justify-between border-b border-border px-4 py-3">
           <Pressable onPress={onClose} hitSlop={8} disabled={isSaving}>
@@ -250,37 +298,42 @@ export function CollectionEditModal({
 
         <View className="flex-1">
           {tab === 'movies' &&
-            (movies.isLoading ? (
+            (loadState === 'loading' ? (
               <LoadingState />
-            ) : movies.isError || !movies.data ? (
-              <ErrorState message={movies.error?.message} onRetry={() => movies.refetch()} />
-            ) : visibleItems.length === 0 ? (
+            ) : loadState === 'error' ? (
+              <ErrorState message={loadError} onRetry={loadMovies} />
+            ) : order.length === 0 ? (
               <EmptyState title="담긴 영화가 없어요" description="검색하거나 내 기록에서 추가해보세요" />
             ) : (
-              <FlatList
-                data={visibleItems}
-                numColumns={GRID_COLUMNS}
-                columnWrapperStyle={{ gap: GRID_GAP }}
-                keyExtractor={(item) => String(item.movieId)}
-                contentContainerStyle={{ padding: GRID_PADDING, gap: GRID_GAP }}
-                renderItem={({ item }) => (
-                  <MovieGridItem
-                    id={item.movieId}
-                    title={item.title}
-                    posterPath={item.posterPath}
-                    width={cellWidth}
-                    onPress={() => {}}
-                    onRemove={() => stageRemove(item.movieId)}
-                  />
-                )}
-                onEndReached={() => {
-                  if (movies.hasNextPage && !movies.isFetchingNextPage) movies.fetchNextPage();
-                }}
-                onEndReachedThreshold={0.5}
-                ListFooterComponent={
-                  <InfiniteScrollFooter visible={movies.hasNextPage ?? false} loading={movies.isFetchingNextPage} />
-                }
-              />
+              <Animated.ScrollView ref={scrollableRef} contentContainerStyle={{ padding: GRID_PADDING }}>
+                <Txt variant="caption" color="mutedForeground" className="mb-2">
+                  {tooManyToSort
+                    ? `${COLLECTION_MOVIE_ORDER_MAX}편이 넘어 순서 편집은 지원하지 않아요`
+                    : '길게 눌러 끌면 순서를 바꿀 수 있어요 · 앞의 5편이 컬렉션 카드에 보여요'}
+                </Txt>
+                <Sortable.Grid
+                  columns={GRID_COLUMNS}
+                  rowGap={GRID_GAP}
+                  columnGap={GRID_GAP}
+                  data={order}
+                  keyExtractor={String}
+                  sortEnabled={!tooManyToSort}
+                  renderItem={({ item: movieId }) => {
+                    const movie = catalog.get(movieId);
+                    return (
+                      <EditableCell
+                        id={movieId}
+                        title={movie?.title ?? ''}
+                        posterPath={movie?.posterPath}
+                        width={cellWidth}
+                        onRemove={() => stageRemove(movieId)}
+                      />
+                    );
+                  }}
+                  onDragEnd={({ data }) => setOrder(data)}
+                  scrollableRef={scrollableRef}
+                />
+              </Animated.ScrollView>
             ))}
 
           {tab === 'search' && (
@@ -383,7 +436,35 @@ export function CollectionEditModal({
             ))}
         </View>
       </Screen>
+      </GestureHandlerRootView>
     </Modal>
+  );
+}
+
+interface EditableCellProps {
+  id: number;
+  title: string;
+  posterPath?: string | null;
+  width: number;
+  onRemove: () => void;
+}
+
+// "현재 영화" 탭의 셀 — 길게 누르면 끌리고, X를 누르면 빠진다. X는 Sortable.Touchable로 둔다:
+// 일반 Pressable이면 드래그 제스처와 탭이 서로 가로챈다(react-native-sortables 권장 방식).
+function EditableCell({ id, title, posterPath, width, onRemove }: EditableCellProps) {
+  return (
+    <View style={{ width }} accessibilityLabel={title}>
+      <PosterImage id={id} posterPath={posterPath} width={width} height={width * 1.5} />
+      <Sortable.Touchable onTap={onRemove} style={{ position: 'absolute', right: 4, top: 4 }}>
+        <View
+          accessibilityRole="button"
+          accessibilityLabel={`${title} 제거`}
+          className="h-6 w-6 items-center justify-center rounded-full bg-black/60"
+        >
+          <X size={14} color={colors.primaryForeground} />
+        </View>
+      </Sortable.Touchable>
+    </View>
   );
 }
 

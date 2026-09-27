@@ -8,7 +8,7 @@ import { WEEKDAY_LABELS } from '../../constants/weekday';
 import { useMonthlyReport } from '../../hooks/useReport';
 import type { MyPageStackParamList } from '../../navigation/types';
 import { useAuthStore } from '../../store/authStore';
-import { colors } from '../../theme/tokens';
+import { colors, ratingScale } from '../../theme/tokens';
 
 type Rt = RouteProp<MyPageStackParamList, 'MonthlyReport'>;
 
@@ -33,7 +33,7 @@ export function MonthlyReportScreen() {
 
   if (report.isLoading) {
     return (
-      <Screen>
+      <Screen edges={['left', 'right']}>
         <LoadingState variant="detail" />
       </Screen>
     );
@@ -41,7 +41,7 @@ export function MonthlyReportScreen() {
 
   if (report.isError || !report.data) {
     return (
-      <Screen>
+      <Screen edges={['left', 'right']}>
         <ErrorState message={report.error?.message} onRetry={() => report.refetch()} />
       </Screen>
     );
@@ -51,7 +51,7 @@ export function MonthlyReportScreen() {
 
   if (!data.movieCount) {
     return (
-      <Screen>
+      <Screen edges={['left', 'right']}>
         <Txt variant="body" color="mutedForeground" className="mt-12 text-center">
           {year}년 {month}월에는 기록이 없어요
         </Txt>
@@ -66,7 +66,7 @@ export function MonthlyReportScreen() {
   const ratingBuckets = (data.ratingDistribution ?? []).filter((b) => (b.count ?? 0) > 0);
 
   return (
-    <Screen scroll>
+    <Screen scroll edges={['left', 'right']}>
       <Spacer size="md" />
       <Txt variant="h3">
         {year}년 {month}월 리포트
@@ -85,15 +85,16 @@ export function MonthlyReportScreen() {
       </SectionCard>
       <Spacer size="md" />
 
-      {/* §4.1 — 월말 평점 분포는 PieChart. 표본이 적어 BarChart 10버킷보다 분포 형태가 낫다 */}
+      {/* §4.1 — 월말 별점 분포는 PieChart. 표본이 적어 BarChart 10버킷보다 분포 형태가 낫다 */}
       {ratingBuckets.length > 0 && (
         <>
-          <SectionCard title="평점 분포">
+          <SectionCard title="별점 분포">
             <ReportPieChart
               data={ratingBuckets.map((b) => ({
                 label: `${((b.rating ?? 0) / 2).toFixed(1)}점`,
                 value: b.count ?? 0,
-                color: colors.primary,
+                // 모든 조각이 같은 primary라 분간이 안 됐다 — 점수별 순차 팔레트(tokens.ratingScale)로.
+                color: ratingScale[Math.min(Math.max((b.rating ?? 1) - 1, 0), ratingScale.length - 1)],
               }))}
             />
           </SectionCard>

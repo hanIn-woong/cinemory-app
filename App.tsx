@@ -5,6 +5,7 @@ import { NavigationContainer } from '@react-navigation/native';
 import { QueryClientProvider } from '@tanstack/react-query';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AppLoadingScreen } from './src/components/common';
 import { useHomeBackgroundReady } from './src/hooks/useHomeBackgroundReady';
@@ -54,12 +55,16 @@ export default function App() {
 
   if (status === 'loading') return null; // 스플래시가 아직 떠 있다
 
+  // ⚠️ GestureHandlerRootView는 가장 바깥 — 빠뜨리면 에러 없이 드래그(react-native-sortables)만
+  // 조용히 안 먹는다(docs/collection-order-spec.md §3.1).
   return (
-    <QueryClientProvider client={queryClient}>
-      <SafeAreaProvider>
-        <AppContent />
-        <StatusBar style="auto" />
-      </SafeAreaProvider>
-    </QueryClientProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <QueryClientProvider client={queryClient}>
+        <SafeAreaProvider>
+          <AppContent />
+          <StatusBar style="auto" />
+        </SafeAreaProvider>
+      </QueryClientProvider>
+    </GestureHandlerRootView>
   );
 }

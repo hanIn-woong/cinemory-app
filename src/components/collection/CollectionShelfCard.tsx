@@ -1,19 +1,27 @@
 import { LinearGradient } from 'expo-linear-gradient';
-import { Pressable, View } from 'react-native';
+import { useState } from 'react';
+import { Pressable, useWindowDimensions, View } from 'react-native';
 import { PosterImage } from '../movie/PosterImage';
 import { Txt } from '../primitives/Txt';
 import { shelf } from '../../theme/tokens';
 
-const POSTER_WIDTH = 46;
-const POSTER_HEIGHT = 69;
+// 포스터 5장이 선반 폭을 좌우 끝까지 채운다(2026-09-27 — 고정 46×69는 카드 오른쪽이 비었다).
+// 폭은 선반 안쪽 폭에서 간격을 뺀 5등분, 높이는 2:3.
+const SLOTS = 5;
+const POSTER_GAP = 7;
+const SHELF_PADDING_X = 14;
 const POSTER_RADIUS = 3;
+// 첫 레이아웃 전 추정용 — CollectionListScreen의 contentContainerStyle padding(16)과 같다.
+// 추정이 틀려도 onLayout이 곧바로 실측값으로 바로잡는다(첫 프레임 크기 튐 방지용일 뿐).
+const LIST_PADDING_X = 16;
 
 interface CollectionShelfCardProps {
   id: number;
   name: string;
   movieCount: number;
   description?: string;
-  // B-6 대기 중 — CollectionResponse에 아직 필드가 없다. 오면 그대로 채운다(docs/M2C-screens-spec.md §5.2).
+  // CollectionResponse.previewPosterPaths(백엔드 5-4-A ③, B-6 해소 2026-09-27). posterPath 원형 —
+  // URL 조립은 PosterImage가 SHELF(w185)로 한다(2026-09-27 크기 확대로 w92에서 변경).
   posters?: string[];
   onPress: () => void;
 }
@@ -23,21 +31,35 @@ interface CollectionShelfCardProps {
 // 플랫폼별 결과가 달라 쓰지 않고, 접지 그림자는 LinearGradient 한 겹으로 대신한다.
 export function CollectionShelfCard({ id, name, movieCount, description, posters = [], onPress }: CollectionShelfCardProps) {
   // ⚠️ 부족분을 빈 회색 슬롯으로 채우지 않는다 — 선반 위에서는 로딩 실패처럼 보인다.
-  const visiblePosters = posters.slice(0, 5);
+  const visiblePosters = posters.slice(0, SLOTS);
+  const { width: windowWidth } = useWindowDimensions();
+  const [shelfWidth, setShelfWidth] = useState(windowWidth - LIST_PADDING_X * 2 - SHELF_PADDING_X * 2);
+  const posterWidth = (shelfWidth - POSTER_GAP * (SLOTS - 1)) / SLOTS;
+  const posterHeight = posterWidth * 1.5;
 
   return (
     <Pressable
       onPress={onPress}
       accessible
       accessibilityLabel={[`${name}, 영화 ${movieCount}편`, description].filter(Boolean).join(', ')}
+      // 테두리 — 카드 배경(bg-card)과 화면 배경이 같은 흰색 계열이라 경계가 보이지 않았다(2026-09-27).
+      // 색은 선반 토큰(shelf.cardBorder, 브랜드 primary)에서 — 선반 색은 전부 shelf에 모은다.
+      // ⚠️ 두께·색을 둘 다 style로 준다 — className `border`와 인라인 borderColor를 섞으면
+      // NativeWind가 기본 테두리 색을 함께 넣어 브랜드 색이 덮일 여지가 있다(2026-09-27).
       className="overflow-hidden rounded-lg bg-card"
+      style={{ borderWidth: 1, borderColor: shelf.cardBorder }}
     >
       {/* ♿ 선반·포스터는 장식이다 — 카드는 위 accessibilityLabel 하나로만 읽혀야 한다 */}
       <View importantForAccessibility="no-hide-descendants" accessibilityElementsHidden>
-        <View style={{ paddingHorizontal: 14, paddingTop: 12 }}>
-          <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 7, height: POSTER_HEIGHT }}>
+        {/* 벽 — 포스터 뒤만 채도 낮춘 브랜드 컬러로 칠한다. 선반 판(아래 그라디언트)에서 끝나고 그 아래
+            제목 영역은 카드 흰 바탕이라, 벽 → 선반 → 바닥의 층이 읽힌다 */}
+        <View style={{ paddingHorizontal: SHELF_PADDING_X, paddingTop: 12, backgroundColor: shelf.wall }}>
+          <View
+            onLayout={(e) => setShelfWidth(e.nativeEvent.layout.width)}
+            style={{ flexDirection: 'row', alignItems: 'flex-end', gap: POSTER_GAP, height: posterHeight }}
+          >
             {visiblePosters.map((posterPath, index) => (
-              <View key={index} style={{ width: POSTER_WIDTH, height: POSTER_HEIGHT }}>
+              <View key={index} style={{ width: posterWidth, height: posterHeight }}>
                 {/* 접지 그림자 — 포스터 뒤에 깐 그라디언트 한 겹 */}
                 <LinearGradient
                   colors={[shelf.groundShadow, 'transparent']}
@@ -46,9 +68,9 @@ export function CollectionShelfCard({ id, name, movieCount, description, posters
                 <PosterImage
                   id={id * 31 + index}
                   posterPath={posterPath}
-                  width={POSTER_WIDTH}
-                  height={POSTER_HEIGHT}
-                  size="BACKDROP_TILE"
+                  width={posterWidth}
+                  height={posterHeight}
+                  size="SHELF"
                   radius={POSTER_RADIUS}
                 />
                 {/* 광택 — 대각선, 값싼 장식이라 성능 이슈 시 가장 먼저 뺀다 */}

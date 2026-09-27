@@ -532,6 +532,40 @@ export interface paths {
         patch: operations["updateCollection"];
         trace?: never;
     };
+    "/api/collections/{collectionId}/movies/order": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** 컬렉션 내 영화 순서 저장 */
+        patch: operations["reorderCollectionMovies"];
+        trace?: never;
+    };
+    "/api/collections/order": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** 컬렉션 순서 저장 */
+        patch: operations["reorderCollections"];
+        trace?: never;
+    };
     "/api/wishes/me/{movieId}": {
         parameters: {
             query?: never;
@@ -1037,6 +1071,7 @@ export interface components {
             description?: string;
             /** Format: int64 */
             movieCount?: number;
+            previewPosterPaths?: string[];
             /** Format: date-time */
             createdAt?: string;
             /** Format: date-time */
@@ -1164,6 +1199,12 @@ export interface components {
         CollectionUpdateRequest: {
             name: string;
             description?: string;
+        };
+        CollectionMovieOrderRequest: {
+            movieIds: number[];
+        };
+        CollectionOrderRequest: {
+            collectionIds: number[];
         };
         Pageable: {
             /** Format: int32 */
@@ -2490,6 +2531,52 @@ export interface operations {
                 content: {
                     "*/*": components["schemas"]["CollectionResponse"];
                 };
+            };
+        };
+    };
+    reorderCollectionMovies: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                collectionId: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CollectionMovieOrderRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    reorderCollections: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CollectionOrderRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
