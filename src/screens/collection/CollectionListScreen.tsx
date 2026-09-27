@@ -76,6 +76,9 @@ export function CollectionListScreen() {
               name={item.name!}
               movieCount={item.movieCount ?? 0}
               description={item.description ?? undefined}
+              // position ASC 최대 5장. 포스터 없는 영화는 서버가 빼므로 movieCount보다 적을 수
+              // 있고, 빈 슬롯은 채우지 않는다(docs/collection-order-spec.md §2).
+              posters={item.previewPosterPaths ?? []}
               onPress={() =>
                 navigation.navigate('CollectionDetail', {
                   collectionId: item.id!,

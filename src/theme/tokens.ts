@@ -37,6 +37,12 @@ export const shelf = {
   edgeTop: '#C2C6CE',
   edgeBottom: '#AFB4BE',
   groundShadow: 'rgba(0,0,0,0.34)',
+  // 포스터 뒤 "벽" — 카드 흰 바탕과 달라야 선반 위에 물건이 놓인 깊이가 읽힌다(2026-09-27).
+  // 브랜드 딥(#37BEB0) — 테두리(primary #14D9D9)보다 한 단계 깊은 같은 계열이라 벽이 뒤로
+  // 물러나 보인다. 경위(2026-09-27): brandLight+brandDeep 테두리 조합 어색 → primary 채도만 낮춘
+  // #4DA0A0 탁함 → primary 명도 85% #B9F9F9 → 사용자 선택으로 brandDeep.
+  wall: colors.brandDeep,
+  cardBorder: colors.primary,
 } as const;
 
 // typography variant 클래스의 단일 출처는 src/components/primitives/Txt.tsx다 (§2).
