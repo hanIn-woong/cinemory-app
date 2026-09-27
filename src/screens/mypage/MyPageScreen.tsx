@@ -6,7 +6,6 @@ import {
   Bookmark,
   ChevronRight,
   Film,
-  Heart,
   Settings as SettingsIcon,
   User as UserIcon,
   type LucideIcon,
@@ -36,9 +35,8 @@ interface MenuItem {
 // (M2-C: 내 컬렉션·찜 목록·시청 분석)는 화면이 아직 자리만 있는 플레이스홀더다
 // (docs/M2B-screens-spec.md §5.6 — 탭은 와이어프레임 확정 사항이라 숨기지 않는다).
 const MENU_ITEMS: MenuItem[] = [
-  { label: '내 기록', icon: Film, onPress: (nav) => nav.navigate('MyRecords') },
+  { label: '내 기록', icon: Film, onPress: (nav) => nav.navigate('MyLibrary') },
   { label: '내 컬렉션', icon: Bookmark, onPress: (nav) => nav.navigate('CollectionList') },
-  { label: '찜 목록', icon: Heart, onPress: (nav) => nav.navigate('Wishlist') },
   { label: '시청 분석', icon: BarChart2, onPress: (nav) => nav.navigate('Report') },
   { label: '프로필 수정', icon: UserIcon, onPress: (nav) => nav.navigate('EditProfile') },
   { label: '설정', icon: SettingsIcon, onPress: (nav) => nav.navigate('Settings') },

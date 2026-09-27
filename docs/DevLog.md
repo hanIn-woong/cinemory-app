@@ -6,6 +6,26 @@ narrative로 남긴다.
 
 ---
 
+## 2026-09-26 (이어서) — 내 서재 통합 3단계 (`MyLibrary`)
+
+- **착수 전**: 실기기에서 "백엔드 연결 안 됨" — PC가 새 Wi-Fi(`192.168.0.5`)였는데 `.env.local`이
+  옛 IP였다. 고친 뒤 §4.1 3·4·5번 통과 보고. **관찰: 스크롤을 내릴수록 포스터 로드가 느려진다** —
+  이번 작업 범위 밖이라 기록만 해 둔다(이미지 캐시·동시 요청 수·`MovieGridItem` 이미지 크기 쪽을 먼저 볼 것).
+- **패키지**: `react-native-pager-view` 8.0.2 · `@react-navigation/material-top-tabs` 7.7.2,
+  `@react-navigation/native` 7.3.4 → 7.4.1. prebuild는 생략(autolinking이 빌드 시 수집).
+  `./gradlew assembleDebug`는 pager-view 컴파일 도중 **시스템 메모리 부족으로 중단** — 네이티브 빌드 성공은 미확인.
+- **구현**: `MyRecordsScreen`/`WishlistScreen`을 `src/screens/library/RecordsTab`/`WishesTab`으로
+  `git mv`하고 `MyLibraryScreen`이 탭으로 감싼다. 탭 전환 시 툴바는 `show()`(새로 추가)로 되살린다.
+- ⚠️ **부수**: 2단계 때 lint를 돌려 보려고 `npx expo lint`를 실행했더니 Expo가 **ESLint를 자동 설정**했다
+  (`eslint`·`eslint-config-expo` devDependency, `lint` 스크립트, `eslint.config.js`). 의도한 변경이 아니므로
+  남길지 정해야 한다.
+- **남은 것**: Dev Client 재빌드 → §4.2(8~14) → §8.6 검증표.
+- **결과 (이어서)**: `./gradlew --stop`으로 메모리를 확보한 뒤 사용자가 재빌드 — **§4.2·§8.6 모두 통과**,
+  prebuild 없이 pager-view 링크도 확인. 이어서 마이페이지 **`찜 목록` 메뉴를 삭제**하고 `내 기록` 하나로
+  진입하게 했다(내 서재 안 스와이프로 충분). `initialTab` 파라미터는 향후 경로용으로 남김. `tsc` 통과.
+
+---
+
 ## 2026-09-26 — 내 서재 정렬 1·2단계 (`library-sort-spec.md`)
 
 - **출발**: 정렬 UI 요청을 보다가 내 기록 Repository에 `ORDER BY`가 없다는 것을 발견 — 기능

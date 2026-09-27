@@ -40,7 +40,7 @@ export function useHomeBackground(minCount: number): HomeBackgroundPoster[] {
   const isAuthed = useAuthStore((s) => s.status === 'authenticated');
   const userId = useAuthStore((s) => s.user?.id);
 
-  // MyRecordsScreen의 무한스크롤(useMyRecords)과는 캐시 모양이 달라(페이징 X, size가
+  // RecordsTab의 무한스크롤(useMyRecords)과는 캐시 모양이 달라(페이징 X, size가
   // 화면마다 다름) 별도 쿼리로 뽑는다 — 첫 페이지 하나면 totalElements(임계값 판정)와
   // posterPath 전량을 한 번에 얻는다.
   const records = useQuery({

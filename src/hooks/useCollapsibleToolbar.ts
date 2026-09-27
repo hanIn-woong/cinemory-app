@@ -41,5 +41,12 @@ export function useCollapsibleToolbar(toolbarHeight: number) {
     lastScrollY.value = 0;
   }, [translateY, lastScrollY]);
 
-  return { onScroll, toolbarStyle, reset };
+  // 스크롤 위치는 그대로인 채 툴바만 다시 보이게 한다 — 탭 전환처럼 목록이 재생성되지 않는
+  // 경우용(docs/library-sort-spec.md §3.4). reset()처럼 lastScrollY를 0으로 되돌리면 다음 스크롤
+  // 이벤트의 delta가 현재 위치 전체가 되어 툴바가 곧바로 다시 숨는다.
+  const show = useCallback(() => {
+    translateY.value = withTiming(0, { duration: ANIMATION_MS });
+  }, [translateY]);
+
+  return { onScroll, toolbarStyle, reset, show };
 }

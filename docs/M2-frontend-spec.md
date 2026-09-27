@@ -981,8 +981,7 @@ MainTabNavigator
     ├── RecommendStack  Recommendation(3군, 플레이스홀더) → MovieDetail
     ├── CineMapStack    CineMap(3군, 플레이스홀더)
     ├── SocialStack     Social(3군, 플레이스홀더) → MovieDetail · CollectionDetail
-    └── MyPageStack     MyPage → MyRecords → MovieDetail
-                             → Wishlist → MovieDetail
+    └── MyPageStack     MyPage → MyLibrary[records | wishes 스와이프 탭] → MovieDetail
                              → CollectionList → CollectionDetail → MovieDetail
                              → Report(2군) · EditProfile · Settings
 ```
@@ -1036,8 +1035,7 @@ export type MyPageStackParamList = {
   MyPage: undefined;
   EditProfile: undefined;
   Settings: undefined;
-  MyRecords: undefined;
-  Wishlist: undefined;
+  MyLibrary: { initialTab?: 'records' | 'wishes' } | undefined;  // 2026-09-26 MyRecords·Wishlist 통합
   CollectionList: undefined;
   CollectionDetail: { collectionId: number; title: string };  // ⚠️ 단건 조회 API 부재 → title 동반 전달
   Report: undefined;                            // 2군
@@ -1440,8 +1438,12 @@ SectionList
   백엔드에 **화이트리스트 enum**(`RecordSort`·`WishSort`, 백엔드 5-0-D-1)을 두고 정렬 UI를 붙였다.
   기본값은 **최근 기록순**(이전엔 정렬이 없어 오래된 기록이 먼저 나왔다). `Wishlist`도 같다.
   ⚠️ **별점 필터는 여전히 없다** — 정렬과 별개 작업이다(`library-sort-spec.md` §5).
-- 와이어프레임의 시청/찜 2탭 구조는 **찜을 별도 화면(`Wishlist`, 2군)으로 분리**한다 —
-  엔드포인트가 다르고 응답 DTO도 다르다.
+- ~~와이어프레임의 시청/찜 2탭 구조는 **찜을 별도 화면(`Wishlist`, 2군)으로 분리**한다~~ →
+  **2026-09-26 `MyLibrary`(내 서재)로 다시 합쳤다** — 와이어프레임의 2탭 구조로 돌아간 것이다.
+  스와이프 상단 탭(`@react-navigation/material-top-tabs` + `react-native-pager-view`)이고,
+  각 탭은 `src/screens/library/RecordsTab`·`WishesTab`. 엔드포인트·DTO가 다른 것은 그대로라
+  탭마다 훅·정렬 옵션·그리드/리스트 상태를 따로 가진다. 마이페이지 진입점은 **`내 기록` 하나**
+  (`찜 목록` 메뉴는 2026-09-26 삭제 — 스와이프 한 번이라 중복). 설계·검증은 `docs/library-sort-spec.md` §3·§4.2.
 - **툴바에 "총 N편" 개수 표시** (2026-09-20 추가). 별도 count 조회 없이 무한스크롤 첫 페이지의
   `totalElements`를 그대로 쓴다.
 - **스크롤 시 툴바 접기 — 구현한다** (2026-09-02 확정, 종전 "M2에서 생략"에서 변경).
@@ -1894,6 +1896,8 @@ export { CineMapWebView as CineMapView } from './CineMapWebView';
 
 | 날짜                 | 내용 |
 |--------------------|---|
+| 2026-09-26 (이어서 2) | **마이페이지 `찜 목록` 메뉴 삭제 — `내 기록`만 `MyLibrary`로 진입.** 통합 직후엔 찜으로 바로 가는 길을 지키려 두 메뉴를 남겼으나, 실기기에서 내 서재 안 스와이프 한 번이면 충분해 중복으로 판단했다. §8.6 검증표는 `@react-navigation/native` 7.4.1 상향 후 재실행해 통과. 상세는 `docs/library-sort-spec.md` 변경 이력 |
+| 2026-09-26 (이어서) | **`MyRecords`·`Wishlist` 라우트를 `MyLibrary`(내 서재) 하나로 통합 — §8 네비게이션 트리·`MyPageStackParamList`·§9.4 갱신.** 결정적 이유는 **3군 소셜의 "팔로잉한 사람의 서재 보기"가 그대로 재사용된다**는 점이다 — 탭 컴포넌트가 `userId`를 prop으로 받게 해 두었다. 네이티브 패키지 `react-native-pager-view` 8.0.2가 추가되고 **`@react-navigation/native`가 7.3.4 → 7.4.1로 올라갔다**(material-top-tabs 7.7.2의 peer). ⚠️ 네비게이션 코어가 올라갔으므로 **§8.6 재발 방지 검증표를 재빌드 후 다시 돌린다**. §8.5의 코드 예시(`MyRecords`)는 헤더 설정 예시일 뿐이라 그대로 둔다. 실행·검증은 `docs/library-sort-spec.md` |
 | 2026-09-26 | **§9.4 "정렬 UI를 넣지 않는다"를 뒤집었다 — 내 기록·찜 목록 정렬 추가.** 근거는 5-0-D가 막으려던 것이 *임의 컬럼 정렬*이지 정렬 기능이 아니라는 것, 그리고 **내 기록 Repository에 정렬이 아예 없어** 오래된 기록이 먼저 나오고 21건부터 무한스크롤 페이지 경계에서 중복·누락이 날 수 있었다는 발견이다(§11 미등록 버그였다 — B-18과 같은 계열). 백엔드 enum 화이트리스트로 해결했고 계약은 백엔드 `controller-layer-spec.md` 5-0-D-1, 실행·검증은 `docs/library-sort-spec.md` |
 | 2026-09-24 | **§7.5 시작 로딩 화면 안전망 수정 — 타이머를 마운트 시점으로 앞당김.** M2-C2 실기기 검증을 시작하려다 앱이 `AppLoadingScreen`에서 영구 정지했다. 직접 원인은 PC가 핫스팟에 다시 붙으며 IP가 바뀌었는데(`10.216.149.151` → `10.254.172.151`) `.env.local`의 `EXPO_PUBLIC_API_BASE_URL`이 옛 값이었던 것이다. **그러나 8초 안전망이 있었는데도 멈춘 것이 진짜 결함이었다** — `useHomeBackgroundReady`는 포스터 쿼리가 성공해 `posters`가 채워져야 프리페치 이펙트에 들어가고, 안전망 타이머는 **그 이펙트 안에서** 걸렸다. 그래서 안전망이 대비하려던 바로 그 상황(백엔드 도달 불가)에서는 `posters.length === 0` 조기 반환에 막혀 타이머가 한 번도 설정되지 않았다. 타이머를 **마운트 시 한 번 거는 별도 이펙트**로 옮기고, 프리페치 쪽의 `Promise.race`는 제거했다(상한은 마운트 타이머 하나가 맡는다). 결과적으로 8초는 "프리페치 시작부터"가 아니라 "쿼리+프리페치 전체"의 상한이 됐다 — 정상 경로 실측(≈4~5초)보다 여전히 넉넉하다. `ready`가 한 번 `true`가 되면 내려가지 않는 규칙은 그대로다. `npx tsc --noEmit` 통과. 경위는 `docs/DevLog.md` 2026-09-24 |
 | 2026-09-23 | **M2-C2 구현 완료 — 실기기 검증 전.** `docs/M2C2-report-spec.md` §1 실행 순서를 그대로 따랐다. API 3종(`endpoints.ts`·`src/api/report.ts`) · 타입 별칭(`ReportStatisticsResponse` 등 13종, `gen:api` 스키마명 그대로) · `queryKeys.report`·`useReport.ts` 훅 3종 · **무효화 매트릭스**(`useCreateRecord`·`useUpdateRecord`·`useDeleteRecord`·`useSetRepresentative`·`useWriteReview`·`useDeleteReview` 여섯 곳에 `['report']` 추가, 리뷰 두 곳을 놓치기 쉬웠다) · 공통 부품(`SectionCard`·`StatTile`·`RankRow`·`ReportBarChart`·`ReportPieChart`·`CalendarView`, `src/components/report/`) · `ReportScreen`(10섹션 한 화면 스크롤) · `CalendarScreen`(월 이동 + 날짜 탭 확장) · `MonthlyReportScreen`(월 고정, 요일 차트 없음) · 마이페이지 캘린더 요약 위젯(`compact`, `Calendar`와 쿼리 키 공유)까지 전부 붙였다. `react-native-gifted-charts` 설치 후 **Dev Client 재빌드 없이 JS 번들만으로 동작** — `npx expo export --platform android`로 확인, 추가 네이티브 의존 없음(`react-native-svg`는 M2-A에서 이미 설치됨). `npx tsc --noEmit` 통과. **실기기 검증은 아직이다** — §7 검증 절차(무효화 동선·경계 케이스·게스트/타인 403) 전부 대기 |

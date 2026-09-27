@@ -1,11 +1,11 @@
-import { useNavigation } from '@react-navigation/native';
+import type { MaterialTopTabNavigationProp } from '@react-navigation/material-top-tabs';
+import { type CompositeNavigationProp, useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { LayoutGrid, List } from 'lucide-react-native';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { type FlatList, Pressable, useWindowDimensions, View } from 'react-native';
 import Animated from 'react-native-reanimated';
 import {
-  AuthRequired,
   EmptyState,
   ErrorState,
   InfiniteScrollFooter,
@@ -19,41 +19,53 @@ import { Screen, Txt } from '../../components/primitives';
 import { WISH_SORT_OPTIONS } from '../../constants/librarySort';
 import { useCollapsibleToolbar } from '../../hooks/useCollapsibleToolbar';
 import { useMyWishes } from '../../hooks/useWishlist';
-import type { MyPageStackParamList } from '../../navigation/types';
-import { useAuthStore } from '../../store/authStore';
+import type { LibraryTabParamList, MyPageStackParamList } from '../../navigation/types';
 import { colors, layout } from '../../theme/tokens';
 import type { WishListItemResponse, WishSort } from '../../types';
 
-// 가장 단순한 2군 화면 — API·훅·무한스크롤·게이트가 이미 다 있어 파이프가 통하는지
-// 검증하는 역할이다(M2C-screens-spec.md §5.1). MyRecordsScreen을 구조째 베낀다.
-type Nav = NativeStackNavigationProp<MyPageStackParamList, 'Wishlist'>;
+// 내 서재(MyLibrary)의 '찜 목록' 탭. 로그인 게이트는 MyLibraryScreen이 한 번에 한다.
+// RecordsTab과 구조가 같다(M2C-screens-spec.md §5.1에서 MyRecordsScreen을 구조째 베낀 화면).
+type Nav = CompositeNavigationProp<
+  MaterialTopTabNavigationProp<LibraryTabParamList, 'wishes'>,
+  NativeStackNavigationProp<MyPageStackParamList>
+>;
 type ViewMode = 'grid' | 'list';
 const GRID_COLUMNS = 3;
 const GRID_GAP = 2;
 const TOOLBAR_HEIGHT = 44;
 
-export function WishlistScreen() {
+interface WishesTabProps {
+  // 소셜의 "남의 서재 보기"로 재사용할 자리 — 목록 주인을 밖에서 받는다(§3.1).
+  userId: number;
+}
+
+export function WishesTab({ userId }: WishesTabProps) {
   const navigation = useNavigation<Nav>();
-  const isAuthed = useAuthStore((s) => s.status === 'authenticated');
-  const userId = useAuthStore((s) => s.user?.id);
   const { width: windowWidth } = useWindowDimensions();
   const [viewMode, setViewMode] = useState<ViewMode>('grid');
-  const { onScroll, toolbarStyle, reset } = useCollapsibleToolbar(TOOLBAR_HEIGHT);
+  const { onScroll, toolbarStyle, reset, show } = useCollapsibleToolbar(TOOLBAR_HEIGHT);
   // 정렬은 화면 state — 상세에 들어갔다 나와도 스택에 화면이 살아 있어 유지된다
   // (영속화는 하지 않는다, docs/library-sort-spec.md §5).
   const [sort, setSort] = useState<WishSort>('RECENT');
   const [sortVisible, setSortVisible] = useState(false);
   const listRef = useRef<FlatList<WishListItemResponse>>(null);
 
-  // ⚠️ user가 null이면 조회하지 않는다 — 화면 자체가 <AuthRequired>로 막히므로
-  // userId ?? 0은 훅에 넘길 더미 값일 뿐, 실제로 이 값으로 조회가 나가지 않는다.
-  const wishes = useMyWishes(userId ?? 0, sort);
+  const wishes = useMyWishes(userId, sort);
 
   // ⚠️ 그리드↔리스트 토글은 FlatList를 key로 재생성한다 — 스크롤은 0으로 가는데 툴바
   // 애니메이션 상태는 그대로라 숨김에 굳는다(§5.5 함정 1). 토글마다 되돌린다.
   useEffect(() => {
     reset();
   }, [viewMode, reset]);
+
+  // ⚠️ 탭 전환 시 툴바를 강제로 보인다 — 다른 탭에서 숨긴 채 스와이프해 오면 이 탭이
+  // 스크롤 0이라 되돌릴 스크롤이 없어 영영 안 보인다(docs/library-sort-spec.md §3.4,
+  // M2-B §5.5 함정 3과 같은 구조). 스크롤 위치는 유지하므로 reset()이 아니라 show().
+  useFocusEffect(
+    useCallback(() => {
+      show();
+    }, [show]),
+  );
 
   // ⚠️ 정렬 변경 = 리스트 리셋 — 이전 목록이 placeholder로 남아 FlatList가 재생성되지
   // 않으므로 스크롤을 직접 0으로 돌리고, 툴바도 숨김에 굳지 않게 되돌린다
@@ -63,10 +75,6 @@ export function WishlistScreen() {
     listRef.current?.scrollToOffset({ offset: 0, animated: false });
     reset();
   };
-
-  if (!isAuthed) {
-    return <AuthRequired description="찜 목록은 로그인 후 볼 수 있어요" />;
-  }
 
   if (wishes.isLoading) {
     return (
@@ -135,7 +143,7 @@ export function WishlistScreen() {
               paddingTop: TOOLBAR_HEIGHT,
               paddingHorizontal: viewMode === 'grid' ? 0 : layout.screenPadding,
               // 그리드는 화면 가장자리까지 채우는 게 목적이라 바닥도 예외를 두지 않는다
-              // (MyRecordsScreen과 동일, docs/M2C-screens-spec.md·M2B 변경 이력 참고).
+              // (RecordsTab과 동일, docs/M2C-screens-spec.md·M2B 변경 이력 참고).
               paddingBottom: viewMode === 'grid' ? 0 : 24,
               gap: viewMode === 'grid' ? GRID_GAP : 0,
             }}

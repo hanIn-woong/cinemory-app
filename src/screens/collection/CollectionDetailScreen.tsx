@@ -124,7 +124,7 @@ export function CollectionDetailScreen() {
               paddingTop: TOOLBAR_HEIGHT,
               paddingHorizontal: viewMode === 'grid' ? 0 : layout.screenPadding,
               // 그리드는 화면 가장자리까지 채우는 게 목적이라 바닥도 예외를 두지 않는다
-              // (MyRecordsScreen과 동일, docs/M2C-screens-spec.md·M2B 변경 이력 참고).
+              // (RecordsTab과 동일, docs/M2C-screens-spec.md·M2B 변경 이력 참고).
               paddingBottom: viewMode === 'grid' ? 0 : 24,
               gap: viewMode === 'grid' ? GRID_GAP : 0,
             }}
