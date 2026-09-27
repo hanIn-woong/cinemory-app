@@ -19,7 +19,7 @@
 ```
 M2-A 기반 ✅ ──► M2-B 1군 화면 ✅ ──► M2-C 2군 화면 🔨 ──► M2-D 3군 화면 🔒
    (완료)          (완료)          (구현 완료·검증 대기)      (백엔드 차단)
-                                        └─► M2-C2 리포트 🔒 (백엔드 M3-a 동반)
+                                        └─► M2-C2 리포트 🔨 구현 완료·검증 대기
 ```
 
 | 단계 | 범위 | 상태 | 백엔드 의존 | 상세 |
@@ -27,7 +27,7 @@ M2-A 기반 ✅ ──► M2-B 1군 화면 ✅ ──► M2-C 2군 화면 🔨 �
 | **M2-A**<br>기반 | 디자인 토큰 · 프리미티브 · API 클라이언트(단일 비행 인터셉터) · `authStore` · 부팅 시퀀스 · 네비게이션 골격 · 생성 타입 | ✅ **완료**<br>(실기기 검증 통과 2026-08-30) | 없음 | **`M2A-foundation-spec.md`** |
 | **M2-B**<br>1군 화면 (9월) | `Login` · `SignUp` · `Home` · `SearchResult` · `MovieDetail` · `MyRecords` · `MyPage`/`Settings` | ✅ **완료**<br>(실기기 검증 통과 2026-09-06 — §7.1·§7.2·§7.3 전부) | ⚠️ **B-4**(상세 평점 필드)는 여전히 미해소 — 평점 블록만 자리를 비워 두고 진행했다 | **`M2B-screens-spec.md`**<br>요구사항은 §9.1~9.5 · §6 |
 | **M2-C**<br>2군 화면 (10월) | `Wishlist` · `CollectionList`/`Detail` · `MovieDetail` 컬렉션 연결 | 🔨 **구현 완료 — 실기기 검증 전**<br>(`npx tsc --noEmit`·`expo export android` 통과 2026-09-09) | ✅ **API 완비 — 막는 것 없음**<br>B-6·B-7·B-18은 품질 개선(차단 아님) | **`M2C-screens-spec.md`**<br>요구사항은 §9.6~9.7 |
-| **M2-C2**<br>리포트 | `Report`(통계·캘린더·월말) | 🔒 **차단** | **B-8** — 백엔드 M3-a 미착수. **엔드포인트 모양(응답 DTO·기간·타임존)부터 확정**해야 한다 | §9.8 · §11 B-8 |
+| **M2-C2**<br>리포트 | `Report`(통계) · `Calendar` · `MonthlyReport` + 마이페이지 캘린더 요약 | 🔨 **구현 완료 — 실기기 검증 전**<br>(`npx tsc --noEmit` 통과 2026-09-23) | ~~B-8~~ ✅ **해소** — 백엔드 M3-a 완료 | `M2C2-report-spec.md` · §9.8 |
 | **M2-D**<br>3군 화면 (여유 시) | `Social` · `CineMap` · `Recommend` | 🔒 **차단** | **B-9**(`theater` 테이블 비어 있음)<br>**B-10**(활동 피드 API 없음)<br>**B-11**(M3-b 설계 백지) | §9.9~9.11 · §13 |
 
 ### M2-A 완료 근거
@@ -54,7 +54,7 @@ multiline 높이 고정 · 무한스크롤 풋터 마운트/언마운트로 인�
 | | 조건 |
 |---|---|
 | **M2-C** | 없음 — 바로 착수 가능 (2026-09-09 `Report` 분리로 블로커가 사라졌다) |
-| **M2-C2** | **B-8.** 백엔드 M3-a와 동반. 차트 라이브러리(`react-native-gifted-charts`)도 이 시점에 설치한다 |
+| **M2-C2** | ~~B-8~~ ✅ **해소(2026-09-22)** — 백엔드 M3-a 완료. 차트 라이브러리(`react-native-gifted-charts`)를 이 시점에 설치한다(`M2C2-report-spec.md` §4.1) |
 | **M2-D** | **셋 다 백엔드 선행이 필요하다.** 지금 만들면 빈 화면이 나온다(§2·§11) |
 
 ### ✅ 워크플로 전환 완료 — Expo Go → Dev Client (2026-09-11)
@@ -1496,16 +1496,17 @@ SectionList
 영화 추가는 `POST /api/collections/{id}/movies` **벌크·멱등**(최대 50) → `{addedCount, skippedCount}`를
 토스트로 알린다.
 
-#### 9.8 ReportScreen — ⚠️ 백엔드 미구현
+#### 9.8 ReportScreen — 🔨 구현 완료 — 실기기 검증 전 (2026-09-23)
 
-통계·캘린더·월말 리포트는 **M3-a**다. 설계(가중치 공식·집계 쿼리)는 기획노트 2-4절에 완료돼
-있으나 **API가 없다.** §11 참고. M2에서는 화면을 만들지 않고, 2군 진입 시점에 백엔드
-M3-a와 함께 진행한다.
+**설계 확정본은 `docs/M2C2-report-spec.md`다.** B-8(리포트 API)이 해소돼 M2-C2를 연다.
 
-와이어프레임의 `StatisticsScreen`·`MonthlyReportScreen`·`CalendarScreen`이 여기 해당한다.
-차트는 `react-native-gifted-charts`(`BarChart` 별점 분포 / `PieChart` 평점 분포).
-`CalendarView`는 `compact` prop을 유지해 마이페이지 요약과 상세가 공용한다.
-⚠️ 와이어프레임이 초기 월을 `new Date(2026, 4, 1)`로 하드코딩한 것을 오늘 날짜로 바꿀 것.
+- 화면 셋 + 위젯 하나 — `Report`(마이페이지 메뉴) · `Calendar`(마이페이지 요약 위젯 탭) ·
+  `MonthlyReport`(캘린더에서 진입) · 마이페이지 캘린더 요약(`CalendarView`의 `compact`)
+- **한 화면 스크롤.** 섹션 탭 분할은 로딩이 실제 문제가 될 때 논의한다
+- 차트는 `react-native-gifted-charts`(`BarChart` 별점·월별·요일·연대 / `PieChart` 관람 방식)
+- ⚠️ **연말 리포트는 만들지 않는다** — 백엔드에 해당 엔드포인트가 없고 범위 밖으로 확정됐다
+- ⚠️ 와이어프레임의 `new Date(2026, 4, 1)` 하드코딩은 오늘 날짜로, `useCalendarData`의
+  **날짜당 한 편 가정은 배열로** 고친다(실제 데이터 모델과 맞지 않는다)
 
 ---
 
@@ -1582,7 +1583,7 @@ npm i nativewind && npm i -D tailwindcss
 | B-5 | 마이페이지 "N편 관람" | `UserProfileResponse`에 `watchedCount` 없음 | 없어도 우회 가능(`records`의 `totalElements`) | 낮음 |
 | B-6 | 컬렉션 카드 미리보기 포스터 | `CollectionResponse`에 포스터 없음 | 없으면 N+1. 미리보기 필드 추가 | 2군 |
 | B-7 | **컬렉션 단건 조회** | Service 메서드 부재 (잔여 #4) | 딥링크 필요 시 `getCollection` 추가 | 2군 |
-| **B-8** | **리포트 API 전체** | **M3-a 미착수** — 설계는 기획노트 2-4에 완료 | 통계·캘린더·월말 리포트 엔드포인트 | **2군 블로커** |
+| ~~B-8~~ | ~~리포트 API 전체~~ | ✅ **백엔드 완료(2026-09-22)** — `GET /api/users/{userId}/report/statistics·monthly·calendar`. 설계 근거는 백엔드 `M3a-report-spec.md`, 프론트 설계는 `M2C2-report-spec.md` | 없음 | — |
 | **B-9** | **`theater` 테이블이 비어 있음** | `TheaterSeedService` 호출 엔드포인트 부재 (잔여 #5) | 좌표계 EPSG:5174→WGS84 확인 + 시드 엔드포인트 | **3군 블로커** |
 | **B-10** | **소셜 활동 피드 API 없음** | 팔로우·댓글은 있으나 피드가 없다 | 아래 참고 | **3군 블로커** |
 | **B-11** | 추천 API | **M3-b 백지** (R-1~R-4 미결) | 설계 세션 선행 | 3군 블로커 |
@@ -1894,6 +1895,9 @@ export { CineMapWebView as CineMapView } from './CineMapWebView';
 
 | 날짜                 | 내용 |
 |--------------------|---|
+| 2026-09-24 | **§7.5 시작 로딩 화면 안전망 수정 — 타이머를 마운트 시점으로 앞당김.** M2-C2 실기기 검증을 시작하려다 앱이 `AppLoadingScreen`에서 영구 정지했다. 직접 원인은 PC가 핫스팟에 다시 붙으며 IP가 바뀌었는데(`10.216.149.151` → `10.254.172.151`) `.env.local`의 `EXPO_PUBLIC_API_BASE_URL`이 옛 값이었던 것이다. **그러나 8초 안전망이 있었는데도 멈춘 것이 진짜 결함이었다** — `useHomeBackgroundReady`는 포스터 쿼리가 성공해 `posters`가 채워져야 프리페치 이펙트에 들어가고, 안전망 타이머는 **그 이펙트 안에서** 걸렸다. 그래서 안전망이 대비하려던 바로 그 상황(백엔드 도달 불가)에서는 `posters.length === 0` 조기 반환에 막혀 타이머가 한 번도 설정되지 않았다. 타이머를 **마운트 시 한 번 거는 별도 이펙트**로 옮기고, 프리페치 쪽의 `Promise.race`는 제거했다(상한은 마운트 타이머 하나가 맡는다). 결과적으로 8초는 "프리페치 시작부터"가 아니라 "쿼리+프리페치 전체"의 상한이 됐다 — 정상 경로 실측(≈4~5초)보다 여전히 넉넉하다. `ready`가 한 번 `true`가 되면 내려가지 않는 규칙은 그대로다. `npx tsc --noEmit` 통과. 경위는 `docs/DevLog.md` 2026-09-24 |
+| 2026-09-23 | **M2-C2 구현 완료 — 실기기 검증 전.** `docs/M2C2-report-spec.md` §1 실행 순서를 그대로 따랐다. API 3종(`endpoints.ts`·`src/api/report.ts`) · 타입 별칭(`ReportStatisticsResponse` 등 13종, `gen:api` 스키마명 그대로) · `queryKeys.report`·`useReport.ts` 훅 3종 · **무효화 매트릭스**(`useCreateRecord`·`useUpdateRecord`·`useDeleteRecord`·`useSetRepresentative`·`useWriteReview`·`useDeleteReview` 여섯 곳에 `['report']` 추가, 리뷰 두 곳을 놓치기 쉬웠다) · 공통 부품(`SectionCard`·`StatTile`·`RankRow`·`ReportBarChart`·`ReportPieChart`·`CalendarView`, `src/components/report/`) · `ReportScreen`(10섹션 한 화면 스크롤) · `CalendarScreen`(월 이동 + 날짜 탭 확장) · `MonthlyReportScreen`(월 고정, 요일 차트 없음) · 마이페이지 캘린더 요약 위젯(`compact`, `Calendar`와 쿼리 키 공유)까지 전부 붙였다. `react-native-gifted-charts` 설치 후 **Dev Client 재빌드 없이 JS 번들만으로 동작** — `npx expo export --platform android`로 확인, 추가 네이티브 의존 없음(`react-native-svg`는 M2-A에서 이미 설치됨). `npx tsc --noEmit` 통과. **실기기 검증은 아직이다** — §7 검증 절차(무효화 동선·경계 케이스·게스트/타인 403) 전부 대기 |
+| 2026-09-22 | **M2-C2 설계 확정 — `docs/M2C2-report-spec.md` 신설, B-8 종결.** 백엔드 M3-a 완료로 2군 마지막 블로커가 풀렸다. **진입 구조** — 시청 분석은 마이페이지 메뉴(이미 존재), 캘린더는 **마이페이지 요약 위젯**(§9.8이 `compact`를 전제로 설계돼 있었다), 월말은 캘린더에서 현재 월을 넘겨 진입. **월말에는 월 이동 UI를 두지 않는다**(캘린더와 둘 다 두면 상태가 갈린다). ⚠️ **연말 리포트는 만들지 않는다** — 백엔드에 엔드포인트가 없고, `monthlyTrend`로 흉내내면 편수·회차·시간 셋뿐이라 *"올해의 감독·장르"* 가 안 나온다. **한 화면 스크롤**로 가고 섹션 분할은 로딩이 실제 문제가 될 때 논의한다. ★ **요일 매핑을 1-based 배열로 고정** — `DAYOFWEEK()`(1=일)·`getDay()`(0=일)·캘린더 헤더의 오프셋이 달라 `['', '일', …]`로 0번을 비워 **서버 값을 변환 없이 인덱싱**한다. ★ **`reviewRate`는 비율로 쓰지 않는다** — 리뷰가 기록 없이도 작성 가능해 **1.0을 넘을 수 있다**(→ *"135편 중 42편에 리뷰"*). ★ **무효화에 리뷰를 포함** — `reviewRate` 때문에 리뷰만 써도 통계가 바뀐다. 찜은 리포트에 영향이 없다 |
 | 2026-09-22 | **B-20 프론트 반영 완료 + M3 백엔드 반영 `gen:api` 재생성.** 백엔드 M3(`f2b3e20` 시청 분석 리포트 포함) 구현 완료에 맞춰 로컬 백엔드(`cinemory-backend`, `develop`)를 띄우고 `npm run gen:api`로 `src/types/api.d.ts` 재생성 — `WatchRecordResponse`/`WatchRecordCreateRequest`/`WatchRecordUpdateRequest`의 `note` 필드가 사라지고 `privateReview`로 확인됐다(§11 B-20 그대로). `rating`은 문서 예상대로 JSON 숫자 그대로라 타입 변화 없음. B-20이 지목한 두 파일 반영 — `MovieDetailScreen.tsx`(대표 기록 별점 탭 수정의 `PATCH` 페이로드, 회차 목록의 메모 표시 2곳) · `WatchRecordModal.tsx`(수정 모드 초기값, 저장 페이로드)에서 `note` → `privateReview`로 교체(로컬 UI state 변수명 `note`/`setNote`는 API 필드가 아니므로 그대로 둠). `npx tsc --noEmit` 통과로 다른 `note` 잔존 참조 없음을 확인. M3 리포트 API(`RatingBucketResponse` 등)는 타입만 생성됐고 화면 반영은 별도 작업(B-8 해소분, 착수 전) |
 | 2026-09-20 | **§9.4·§9.6 — `MyRecordsScreen`/`WishlistScreen` 툴바에 "총 N편" 개수 표시 추가.** B-20 등록 확인 후 별도 특이사항이 없어 진행. 두 화면 다 이미 무한스크롤로 `PageResponse`(`totalElements` 포함)를 받고 있어 **별도 count API 호출 없이** 첫 페이지(`data.pages[0].totalElements`)를 그대로 읽었다 — §9.5 `MyPageScreen`의 "N편 관람"이 이미 같은 방식(size=1 별도 조회)을 쓰지만, 이 두 화면은 어차피 전체 목록을 불러오므로 그 방식을 그대로 재사용하면 낭비 요청이 된다. 토글 버튼 2개를 `View`로 묶어 `justify-between`으로 개수(좌)·토글(우) 배치 — 기존 `justify-end`에 세 번째 요소를 그냥 추가하면 셋이 고르게 벌어져 토글 버튼 사이가 벌어지는 문제가 있어 그룹핑했다. 컬렉션 화면(§9.7)은 이번 범위 밖 |
 | 2026-09-17 | **B-1 검증 결과 확정(6/7) + 백엔드 `security-spec.md` L-7·L-9 종결 반영.** §11 B-1 행이 9/11 시점 문구(*"검증표 1번 통과, 나머지 6항목 진행 중"*) 그대로 남아 있어 실제 결과로 갱신했다. **4번(이메일 동의 거부)만 미통과인데, 빠뜨린 것이 아니라 재현할 수 없었다** — 콘솔에서 이메일을 **필수 동의**로 설정하면 사용자가 거부할 방법이 *로그인 취소*뿐이라 3번과 같은 경로로 끝난다. 이 결과로 백엔드의 **L-7이 완전 종결**됐다 — 2026-08-27 부분 종결이 남긴 구멍(*"통과한 `aud`는 REST API 키"*)이 **실기기 로그인 성공으로 닫혔다.** `allowed-audiences`의 네이티브 앱 키가 매칭되지 않았다면 `INVALID_OAUTH_TOKEN`이 났을 것이므로 로그인 성공 자체가 `aud` 검증이다. **L-9(이메일 미동의 안내 UX)도 종결** — 필수 동의 설정에서는 안내 문구가 설 자리가 없다(단, 동의 철회 경로가 있으므로 **서버 측 A-1 거부는 유지**). ⚠️ **미등록 서명 키 2종이 남는다** — EAS 키스토어(팀 배포)와 **Play 앱 서명 키(M5)**. 후자를 빠뜨리면 개발 내내 정상이다가 스토어 배포 후에만 깨진다. **발견의 계기는 문서 규칙의 구멍이었다** — 2026-09-02에 *"백엔드 계약의 단일 출처는 백엔드 리포"* 를 정했지만 **백엔드 미결이 프론트 작업으로 닫히는 반대 방향에는 경로가 없어** L-7이 6일간 낡은 채였다. **프론트 세션이 백엔드 항목을 해소하면 백엔드 문서로 돌려보낸다** |

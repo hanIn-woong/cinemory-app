@@ -6,6 +6,9 @@ import { MovieDetailScreen } from '../../screens/movie/MovieDetailScreen';
 import { MyPageScreen } from '../../screens/mypage/MyPageScreen';
 import { SettingsScreen } from '../../screens/mypage/SettingsScreen';
 import { MyRecordsScreen } from '../../screens/records/MyRecordsScreen';
+import { CalendarScreen } from '../../screens/report/CalendarScreen';
+import { MonthlyReportScreen } from '../../screens/report/MonthlyReportScreen';
+import { ReportScreen } from '../../screens/report/ReportScreen';
 import { WishlistScreen } from '../../screens/wishlist/WishlistScreen';
 import { MOVIE_DETAIL_OPTIONS } from '../movieDetailScreenOptions';
 import type { MyPageStackParamList } from '../types';
@@ -22,11 +25,9 @@ export function MyPageStack() {
       <Stack.Screen name="Wishlist" component={WishlistScreen} options={{ title: '찜한 작품' }} />
       <Stack.Screen name="CollectionList" component={CollectionListScreen} options={{ title: '내 컬렉션' }} />
       <Stack.Screen name="CollectionDetail" component={CollectionDetailScreen} options={{ title: '컬렉션' }} />
-      <Stack.Screen
-        name="Report"
-        component={makePlaceholder('리포트', 'M3-a 미구현 — 2군')}
-        options={{ title: '리포트' }}
-      />
+      <Stack.Screen name="Report" component={ReportScreen} options={{ title: '시청 분석' }} />
+      <Stack.Screen name="Calendar" component={CalendarScreen} options={{ title: '캘린더' }} />
+      <Stack.Screen name="MonthlyReport" component={MonthlyReportScreen} options={{ title: '이달의 리포트' }} />
       <Stack.Screen name="MovieDetail" component={MovieDetailScreen} options={MOVIE_DETAIL_OPTIONS} />
     </Stack.Navigator>
   );

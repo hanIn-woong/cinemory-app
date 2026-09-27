@@ -63,6 +63,11 @@ export const EP = {
     update: (commentId: number) => `/api/comments/${commentId}`,
     remove: (commentId: number) => `/api/comments/${commentId}`,
   },
+  report: {
+    statistics: (userId: number) => `/api/users/${userId}/report/statistics`,
+    monthly: (userId: number) => `/api/users/${userId}/report/monthly`,
+    calendar: (userId: number) => `/api/users/${userId}/report/calendar`,
+  },
   theaters: {
     nearby: '/api/theaters/nearby',
   },

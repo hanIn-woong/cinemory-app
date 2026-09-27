@@ -92,3 +92,20 @@ export type CollectionMovieListItemResponse = S['CollectionMovieListItemResponse
 // 벌크·멱등, 최대 50. 1편 추가도 배열로 보낸다(docs/M2C-screens-spec.md §2).
 export type AddMoviesToCollectionRequest = S['AddMoviesToCollectionRequest'];
 export type AddMoviesToCollectionResponse = S['AddMoviesToCollectionResponse'];
+
+// 리포트 — docs/M2C2-report-spec.md §2.3. PageResponse로 감싸지 않는다(TOP N, 서버 상수 개수).
+export type ReportStatisticsResponse = S['ReportStatisticsResponse'];
+export type ReportMonthlyResponse = S['ReportMonthlyResponse'];
+export type ReportCalendarResponse = S['ReportCalendarResponse'];
+export type RatingBucketResponse = S['RatingBucketResponse'];
+export type PreferenceItemResponse = S['PreferenceItemResponse'];
+export type MonthlyTrendItemResponse = S['MonthlyTrendItemResponse'];
+export type WatchTypeCountResponse = S['WatchTypeCountResponse'];
+export type OttPlatformCountResponse = S['OttPlatformCountResponse'];
+export type DecadeCountResponse = S['DecadeCountResponse'];
+export type WeekdayCountResponse = S['WeekdayCountResponse'];
+export type MovieRatingGapResponse = S['MovieRatingGapResponse'];
+export type RewatchItemResponse = S['RewatchItemResponse'];
+export type OldestWatchedResponse = S['OldestWatchedResponse'];
+export type CalendarDayResponse = S['CalendarDayResponse'];
+export type CalendarRecordItemResponse = S['CalendarRecordItemResponse'];

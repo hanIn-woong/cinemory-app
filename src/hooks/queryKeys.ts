@@ -29,4 +29,11 @@ export const queryKeys = {
   users: {
     me: () => ['users', 'me'] as const,
   },
+  report: {
+    statistics: (userId: number) => ['report', 'statistics', userId] as const,
+    // 월을 키에 넣는다 — 캘린더는 월을 넘길 때마다 호출되고, 월이 키에 없으면 이전 달로
+    // 돌아갈 때 매번 재요청한다(docs/M2C2-report-spec.md §3.1).
+    monthly: (userId: number, year: number, month: number) => ['report', 'monthly', userId, year, month] as const,
+    calendar: (userId: number, year: number, month: number) => ['report', 'calendar', userId, year, month] as const,
+  },
 } as const;

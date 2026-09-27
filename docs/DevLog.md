@@ -6,6 +6,70 @@ narrative로 남긴다.
 
 ---
 
+## 2026-09-26 — M2-C2 §7 검증 수정 ① 별점 분포 4.5·5.0 막대 누락
+
+- **증상**: 시청 분석의 별점 분포 그래프에 4.5점·5점 칸이 없었다.
+- **원인**: 서버는 10버킷을 다 준다(§4.1). `ReportBarChart`가 막대 24 + 간격 16 고정이라
+  10개면 ≈400px인데 카드 폭은 그보다 좁고 `disableScroll`이라 오른쪽 두 개가 잘려 보였다.
+- **수정**: 스크롤 없는 차트는 `onLayout`으로 폭을 재서 칸 폭 = (폭 − y축 라벨 35) ÷ 막대 수,
+  칸이 40보다 좁으면 막대 60%·간격 40%로 축소. 양끝 여백 = 간격/2. 스크롤 켜기는 분포를
+  한눈에 보는 목적과 맞지 않아 기각. `npx tsc --noEmit` 통과, 실기기 확인은 아직.
+  근거는 `M2C2-report-spec.md` 변경 이력 2026-09-26.
+
+---
+
+## 2026-09-24 — M2-C2 실기기 검증 착수 중 시작 로딩 화면 무한정지
+
+- **증상**: 실기기에서 앱이 `AppLoadingScreen`(스피너)에서 넘어가지 않았다. M2-C2 변경분을
+  먼저 의심했지만 `NavigationContainer`가 마운트되기 전 단계라 리포트·마이페이지 코드는
+  렌더되지도 않는다 — 무관했다. `react-native-gifted-charts`도 새 네이티브 의존이 없다.
+- **직접 원인**: PC Wi-Fi(핫스팟 `hh S`) IP가 `10.254.172.151`로 바뀌었는데
+  `.env.local`의 `EXPO_PUBLIC_API_BASE_URL`은 옛 `10.216.149.151`이었다. PC에서 옛 IP는
+  타임아웃, 새 IP의 `/api/movies/random`은 200으로 확인. `.env.local`을 새 IP로 고쳤다
+  (`EXPO_PUBLIC_*`는 번들에 인라인되므로 `npx expo start -c`로 재시작 필요).
+- **근본 결함**: `useHomeBackgroundReady`의 8초 안전망이 프리페치 이펙트 안, 즉
+  `posters.length === 0` 조기 반환 **뒤**에서 걸렸다. 포스터 쿼리가 실패하면 그 줄에서
+  돌아가 타이머가 영영 안 걸린다 — 안전망이 대비하던 상황에서만 정확히 무력했다.
+  타이머를 마운트 시 한 번 거는 별도 이펙트로 옮기고 프리페치 쪽 `race`는 지웠다.
+  8초의 의미가 "프리페치 시작부터"에서 "마운트부터"로 바뀌지만 정상 경로(≈4~5초)보다 넉넉하다.
+  `npx tsc --noEmit` 통과. 스펙 반영은 `M2-frontend-spec.md` 변경 이력 2026-09-24.
+- **남은 것**: 실기기에서 ① 새 IP로 정상 부팅 ② 백엔드를 끈 상태에서 8초 뒤 진입하는지
+  확인 후 M2-C2 §7 검증으로 넘어간다. IP가 바뀔 때마다 반복되는 문제라 USB +
+  `adb reverse tcp:8080 tcp:8080` + `localhost` 전환도 고려할 만하다.
+
+---
+
+## 2026-09-23 — M2-C2(시청 분석 리포트) 구현
+
+- 전날(2026-09-22) 확정된 `docs/M2C2-report-spec.md`를 §1 실행 순서 그대로 따라 착수했다.
+  설계 세션에서 이미 백엔드 계약(DTO·쿼리 파라미터)과 화면 규칙을 다 정해 둔 상태라, 이번
+  세션은 **설계 재검토 없이 구현만** 했다 — 스펙과 다르게 간 지점이 없다.
+- 순서대로 — `react-native-gifted-charts` 설치 → `endpoints.ts`/`src/api/report.ts` →
+  `types/index.ts` 별칭 13종(스키마명 그대로, 손으로 안 바꿈) → `queryKeys.report` +
+  `useReport.ts`(훅 3종) → **무효화 매트릭스**(`useRecords.ts`의 create·update·remove·
+  setRepresentative 네 곳, `useReview.ts`의 write·remove 두 곳에 `['report']` 추가) →
+  공통 부품(`src/components/report/` — `SectionCard`·`StatTile`·`RankRow`·
+  `ReportBarChart`·`ReportPieChart`·`CalendarView`) → `ReportScreen`(10섹션) →
+  `CalendarScreen` → `MonthlyReportScreen` → 마이페이지 위젯 → 네비게이션 연결
+  (`navigation/types.ts`·`MyPageStack.tsx`의 플레이스홀더 3개 교체).
+- **문서가 미리 경고해 둔 함정들을 그대로 코드에 반영**했다 — `reviewRate`를 퍼센트로
+  안 쓰고 "N편 중 M편에 리뷰"로, 선호 TOP 카드에 `count` 안 붙이기(score 정렬과 안 맞아
+  보임), `watchTypeDistribution`의 `UNSPECIFIED`가 과반이면 파이차트 대신 유도 문구,
+  요일 상수를 `['', '일', …]` 1-based로 0번을 비워 서버 `DAYOFWEEK()`를 변환 없이
+  인덱싱, 월말 리포트에는 요일 차트를 안 그림. 리뷰 무효화 두 곳(`useWriteReview`·
+  `useDeleteReview`)이 실제로 놓치기 가장 쉬운 자리였다 — 기록 쪽 넷을 먼저 훑고 나면
+  리뷰가 통계에 영향을 준다는 사실을 잊기 쉽다.
+- **차트 라이브러리 검증** — `react-native-gifted-charts`는 `react-native-svg`(M2-A에서
+  이미 설치)에만 의존해 순수 JS라, 설치 후 `npx expo export --platform android`로
+  번들이 끝까지 도는지 확인했다(Dev Client 재빌드가 필요했으면 그 자체가 별도 이슈였을
+  것). `npx tsc --noEmit`도 통과.
+- **실기기 검증은 하지 않았다** — 백엔드가 로컬에서 실행 중이어야 리포트 API를 때릴 수
+  있는데, 이번 세션은 코드 작성까지만 진행했다. `M2C2-report-spec.md` §7의 검증 절차
+  (특히 리뷰만 작성 시 통계 갱신, 캘린더 다음 달 이동, 마이페이지 위젯→상세 재요청 없음
+  세 경로)가 다음 세션 과제로 남는다.
+
+---
+
 ## 2026-09-17 — `SignUp` 헤더 잘림 수정 + `SearchResult` "내 서재에 있는 작품" 라벨 정정
 
 - **버그 리포트**: "현재 회원 가입 화면의 헤더 부분이 짤리고 있어." 확인해 보니

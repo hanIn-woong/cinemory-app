@@ -12,6 +12,9 @@ import { useHomeBackground } from './useHomeBackground';
 // 2026-09-12). 전용 로딩 화면에서는 팝인이 아예 안 보이므로 끝까지 기다려도 된다.
 // 네트워크가 완전히 막힌 경우를 위한 안전망만 넉넉히 둔다 — 정상 경로에서는 거의 발동하지
 // 않아야 한다(4.1초 실측보다 충분히 크게).
+// ⚠️ 안전망은 **마운트 시점**부터 잰다 — 포스터 쿼리 자체가 실패·지연(백엔드 IP 불일치,
+// 오프라인)하면 posters가 계속 비어 프리페치 단계에 도달하지 못한다. 예전엔 타이머를
+// 프리페치 단계에서 걸어서 바로 그 상황에 로딩 화면이 영구 정지했다(2026-09-24 실기기).
 const SAFETY_TIMEOUT_MS = 8000;
 
 // 앱 시작 시 홈 배경에 쓸 포스터를 전부 프리페치할 때까지 false를 반환한다. `useHomeBackground`
@@ -28,6 +31,14 @@ export function useHomeBackgroundReady(): boolean {
   // 새 포스터를 백그라운드로 프리페치하지만, 이미 화면에 들어간 사용자를 다시
   // 로딩 화면으로 내쫓지 않는다 — 그 경우의 팝인은 PosterBackdrop의 개별 transition이
   // 맡는다(빈도가 훨씬 낮은 이벤트라 이 정도 타협은 받아들인다).
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      console.log(`[boot] safety timeout +${Date.now() - APP_T0}ms — 포스터 준비 전에 진입`);
+      setReady(true);
+    }, SAFETY_TIMEOUT_MS);
+    return () => clearTimeout(timer);
+  }, []);
+
   const signature = posters.map((p) => p.id).join(',');
   useEffect(() => {
     if (posters.length === 0) return; // 쿼리가 아직 안 끝났다 — signature가 바뀌면 재시도된다
@@ -43,9 +54,8 @@ export function useHomeBackgroundReady(): boolean {
     }
 
     let cancelled = false;
-    const prefetch = Promise.allSettled(uris.map((uri) => Image.prefetch(uri, 'memory-disk')));
-    const timeout = new Promise<void>((resolve) => setTimeout(resolve, SAFETY_TIMEOUT_MS));
-    Promise.race([prefetch, timeout]).then(() => {
+    // 시간 상한은 위의 마운트 타이머가 맡는다 — 여기서 따로 race하지 않는다.
+    Promise.allSettled(uris.map((uri) => Image.prefetch(uri, 'memory-disk'))).then(() => {
       console.log(`[boot] poster prefetch ready +${Date.now() - APP_T0}ms (${uris.length}장)`);
       if (!cancelled) setReady(true);
     });

@@ -37,9 +37,12 @@ export function useWriteReview(movieId: number): UseMutationResult<ReviewRespons
   return useMutation({
     mutationFn: (body) => reviewApi.write(movieId, body),
     onSuccess: () => {
-      // 리뷰 upsert → ['reviews','me',movieId] · ['movies','reviews',movieId] 무효화 (§3.2)
+      // 리뷰 upsert → ['reviews','me',movieId] · ['movies','reviews',movieId] · ['report'] 무효화
+      // (§3.2). ['report']는 docs/M2C2-report-spec.md §3.3 — 기록을 건드리지 않고 리뷰만
+      // 써도 reviewRate가 바뀐다. 놓치기 쉬운 경로다.
       queryClient.invalidateQueries({ queryKey: queryKeys.reviews.me(movieId) });
       queryClient.invalidateQueries({ queryKey: ['movies', 'reviews', movieId] });
+      queryClient.invalidateQueries({ queryKey: ['report'] });
     },
   });
 }
@@ -49,8 +52,10 @@ export function useDeleteReview(): UseMutationResult<void, ApiError, number> {
   return useMutation({
     mutationFn: (movieId) => reviewApi.remove(movieId),
     onSuccess: (_data, movieId) => {
+      // docs/M2C2-report-spec.md §3.3
       queryClient.invalidateQueries({ queryKey: queryKeys.reviews.me(movieId) });
       queryClient.invalidateQueries({ queryKey: ['movies', 'reviews', movieId] });
+      queryClient.invalidateQueries({ queryKey: ['report'] });
     },
   });
 }

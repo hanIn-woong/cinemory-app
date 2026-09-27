@@ -64,9 +64,11 @@ export function useCreateRecord(): UseMutationResult<void, ApiError, CreateRecor
   return useMutation({
     mutationFn: (body) => recordApi.create(body).then(() => undefined),
     onSuccess: (_data, variables) => {
-      // 시청 기록 생성 → ['records'] · ['movies','detail',movieId] 무효화 (§3.2 무효화 매트릭스)
+      // 시청 기록 생성 → ['records'] · ['movies','detail',movieId] · ['report'] 무효화
+      // (§3.2 무효화 매트릭스, docs/M2C2-report-spec.md §3.3)
       queryClient.invalidateQueries({ queryKey: ['records'] });
       queryClient.invalidateQueries({ queryKey: queryKeys.movies.detail(variables.movieId) });
+      queryClient.invalidateQueries({ queryKey: ['report'] });
     },
   });
 }
@@ -82,12 +84,14 @@ export function useUpdateRecord(): UseMutationResult<WatchRecordResponse, ApiErr
   return useMutation({
     mutationFn: ({ recordId, body }) => recordApi.update(recordId, body),
     onSuccess: (_data, { movieId }) => {
-      // 시청 기록 수정 → ['records'] · ['movies','detail',movieId] · ['reviews'] 무효화 (§3.2).
-      // 대표 기록의 rating을 고치면 공개 리뷰에 표시되는 별점도 파생돼서 바뀐다(§7.3) — 리뷰
-      // 쪽을 안 지우면 화면에 옛 별점이 남는다.
+      // 시청 기록 수정 → ['records'] · ['movies','detail',movieId] · ['reviews'] · ['report']
+      // 무효화 (§3.2). 대표 기록의 rating을 고치면 공개 리뷰에 표시되는 별점도 파생돼서
+      // 바뀐다(§7.3) — 리뷰 쪽을 안 지우면 화면에 옛 별점이 남는다. ['report']는
+      // docs/M2C2-report-spec.md §3.3 — 편수·시간·별점 분포 등이 이 기록에 얽혀 있다.
       queryClient.invalidateQueries({ queryKey: ['records'] });
       queryClient.invalidateQueries({ queryKey: queryKeys.movies.detail(movieId) });
       queryClient.invalidateQueries({ queryKey: ['reviews'] });
+      queryClient.invalidateQueries({ queryKey: ['report'] });
     },
   });
 }
@@ -98,6 +102,8 @@ export function useDeleteRecord(): UseMutationResult<void, ApiError, number> {
     mutationFn: (recordId) => recordApi.remove(recordId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['records'] });
+      // docs/M2C2-report-spec.md §3.3
+      queryClient.invalidateQueries({ queryKey: ['report'] });
     },
   });
 }
@@ -113,8 +119,10 @@ export function useSetRepresentative(): UseMutationResult<void, ApiError, SetRep
   return useMutation({
     mutationFn: ({ recordId }) => recordApi.setRepresentative(recordId),
     onSuccess: (_data, { userId, movieId }) => {
-      // 대표 기록 변경 → ['records','ofUserMovie',userId,movieId] 무효화 (§3.2 무효화 매트릭스)
+      // 대표 기록 변경 → ['records','ofUserMovie',userId,movieId] · ['report'] 무효화
+      // (§3.2 무효화 매트릭스, docs/M2C2-report-spec.md §3.3)
       queryClient.invalidateQueries({ queryKey: queryKeys.records.ofUserMovie(userId, movieId) });
+      queryClient.invalidateQueries({ queryKey: ['report'] });
     },
   });
 }

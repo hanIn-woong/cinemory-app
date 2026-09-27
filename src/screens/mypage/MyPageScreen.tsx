@@ -13,9 +13,11 @@ import {
 } from 'lucide-react-native';
 import { Image, Pressable, View } from 'react-native';
 import { AuthRequired, ErrorState, LoadingState } from '../../components/common';
-import { Divider, Screen, Spacer, Txt } from '../../components/primitives';
+import { Card, Divider, Screen, Spacer, Txt } from '../../components/primitives';
+import { CalendarView } from '../../components/report';
 import { useMe } from '../../hooks/useAuth';
 import { useMyRecordsCount } from '../../hooks/useRecords';
+import { useCalendar } from '../../hooks/useReport';
 import type { MyPageStackParamList } from '../../navigation/types';
 import { useAuthStore } from '../../store/authStore';
 import { colors } from '../../theme/tokens';
@@ -49,6 +51,10 @@ export function MyPageScreen() {
   const userId = useAuthStore((s) => s.user?.id);
   const me = useMe();
   const recordsCount = useMyRecordsCount(userId ?? 0);
+  const today = new Date();
+  // 쿼리 키가 Calendar 상세와 같다(['report','calendar',userId,year,month]) — 탭해서
+  // 진입해도 재요청이 없다(docs/M2C2-report-spec.md §5.4).
+  const calendar = useCalendar(userId, today.getFullYear(), today.getMonth() + 1);
 
   if (!isAuthed) {
     return <AuthRequired description="마이페이지는 로그인 후 이용할 수 있어요" />;
@@ -87,6 +93,29 @@ export function MyPageScreen() {
       </View>
 
       <Spacer size="xl" />
+      <View className="px-4">
+        <Pressable onPress={() => navigation.navigate('Calendar')}>
+          <Card>
+            <View className="flex-row items-center justify-between">
+              <Txt variant="h4">
+                {today.getMonth() + 1}월 캘린더
+              </Txt>
+              <ChevronRight size={18} color={colors.mutedForeground} />
+            </View>
+            <Spacer size="sm" />
+            {calendar.data && (
+              <CalendarView
+                year={today.getFullYear()}
+                month={today.getMonth() + 1}
+                days={calendar.data.days ?? []}
+                compact
+              />
+            )}
+          </Card>
+        </Pressable>
+      </View>
+
+      <Spacer size="lg" />
       <View className="border-t border-border">
         {MENU_ITEMS.map((item) => (
           <View key={item.label}>
