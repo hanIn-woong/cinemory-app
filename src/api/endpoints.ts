@@ -46,6 +46,9 @@ export const EP = {
     update: (collectionId: number) => `/api/collections/${collectionId}`,
     remove: (collectionId: number) => `/api/collections/${collectionId}`,
     removeMovie: (collectionId: number, movieId: number) => `/api/collections/${collectionId}/movies/${movieId}`,
+    // 리터럴 `order`가 `{collectionId}`보다 우선 매칭된다(백엔드 5-4-A ②).
+    order: '/api/collections/order',
+    moviesOrder: (collectionId: number) => `/api/collections/${collectionId}/movies/order`,
   },
   users: {
     me: '/api/users/me',

@@ -16,6 +16,27 @@ narrative로 남긴다.
 
 ---
 
+## 2026-09-28 — 영화 순서 편집을 컬렉션 편집 모달로 통합
+
+- 2단계 실기기 정상 확인 후 요청: 상세 화면의 별도 순서 편집 → 컬렉션 수정 모달의 "현재 영화" 탭으로.
+- 상세 화면은 HEAD로 복원. 모달 탭을 전량 로드 + `Sortable.Grid`로, X는 `Sortable.Touchable`.
+  저장 = 정보 → 담기 → 빼기 → (필요할 때만) 순서. 모달 안에 `GestureHandlerRootView`(Android Modal 별도 루트).
+- 새로 담은 영화를 맨 앞에 보이도록 수정 — 서버는 나중에 고른 것을 맨 위에 둔다(저장 전후 불일치 잠복 버그).
+- `useReorderCollectionMovies`는 `movieIds`만 받는 단순 저장으로(낙관적 업데이트 제거). `tsc`·`expo export android` 통과.
+
+---
+
+## 2026-09-27 (이어서 8) — 컬렉션 드래그 순서 편집 (`collection-order-spec.md` 2단계)
+
+- 패키지: gesture-handler 2.32.0(네이티브), sortables 1.10.1. `App.tsx` 최바깥 `GestureHandlerRootView`.
+- ⚠️ 스펙의 `size=200/500` 전량 로드는 서버 `max-page-size = 100`에 조용히 잘린다(실측) → 100씩 `last`까지.
+- 공통 훅 `useReorderMode`(편집 상태·dirty·`usePreventRemove` 경고), 로더 2종 + 순서 저장 뮤테이션 2종
+  (낙관적으로 무한스크롤 캐시를 새 순서로 재절단, 실패 시 롤백). 영화 순서 저장은 `movies`+`ofUser` 이중 무효화.
+- 목록: 헤더 `⇅`로 진입, 간소화 카드. 상세: `ActionSheet` "순서 편집", 그리드 고정.
+- `tsc`·`expo export android` 통과. **남은 것: Dev Client 재빌드 → §4.2 → §8.6 검증표.**
+
+---
+
 ## 2026-09-27 (이어서 6) — 선반 벽 + 브랜드 컬러
 
 - 테두리 확인 통과. 선반 느낌을 위해 포스터 뒤 벽을 `brandLight`로, 테두리를 `brandDeep`로. `shelf.wall`·`shelf.cardBorder` 토큰 추가. `tsc` 통과.

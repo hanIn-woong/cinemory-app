@@ -5,21 +5,24 @@ import type {
   AddMoviesToCollectionResponse,
   CollectionCreateRequest,
   CollectionMovieListItemResponse,
+  CollectionMovieOrderRequest,
+  CollectionOrderRequest,
   CollectionResponse,
   CollectionUpdateRequest,
   PageResponse,
 } from '../types';
 
 export const collectionApi = {
-  ofUser: (userId: number, page: number) =>
+  // size는 순서 편집의 전량 로드에서만 넘긴다(서버 상한 100, constants/collectionOrder.ts).
+  ofUser: (userId: number, page: number, size?: number) =>
     api
-      .get<PageResponse<CollectionResponse>>(EP.collections.ofUser(userId), { params: { page } })
+      .get<PageResponse<CollectionResponse>>(EP.collections.ofUser(userId), { params: { page, size } })
       .then((r) => r.data),
 
   // ⚠️ 컬렉션 단건 조회 API가 없다 — 제목 등은 목록에서 받은 값을 화면 파라미터로 넘겨야 한다.
-  movies: (collectionId: number, page: number) =>
+  movies: (collectionId: number, page: number, size?: number) =>
     api
-      .get<PageResponse<CollectionMovieListItemResponse>>(EP.collections.movies(collectionId), { params: { page } })
+      .get<PageResponse<CollectionMovieListItemResponse>>(EP.collections.movies(collectionId), { params: { page, size } })
       .then((r) => r.data),
 
   create: (body: CollectionCreateRequest) =>
@@ -39,4 +42,10 @@ export const collectionApi = {
 
   removeMovie: (collectionId: number, movieId: number) =>
     api.delete<void>(EP.collections.removeMovie(collectionId, movieId)).then(() => undefined),
+
+  // 204. 전체 배열을 한 번에 — 집합이 서버와 다르면 400(부분 저장 없음).
+  reorder: (body: CollectionOrderRequest) => api.patch<void>(EP.collections.order, body).then(() => undefined),
+
+  reorderMovies: (collectionId: number, body: CollectionMovieOrderRequest) =>
+    api.patch<void>(EP.collections.moviesOrder(collectionId), body).then(() => undefined),
 };
