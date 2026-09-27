@@ -3,7 +3,7 @@ import { type CompositeNavigationProp, useFocusEffect, useNavigation } from '@re
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { LayoutGrid, List } from 'lucide-react-native';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { type FlatList, Pressable, useWindowDimensions, View } from 'react-native';
+import { type FlatList, type ListRenderItemInfo, Pressable, useWindowDimensions, View } from 'react-native';
 import Animated from 'react-native-reanimated';
 import {
   EmptyState,
@@ -76,6 +76,38 @@ export function RecordsTab({ userId }: RecordsTabProps) {
     reset();
   };
 
+  // 그리드는 화면 가장자리까지 채운다 — 좌우 여백 없이 열 사이 간격만 최소로 둔다.
+  const cellWidth = (windowWidth - GRID_GAP * (GRID_COLUMNS - 1)) / GRID_COLUMNS;
+
+  // renderItem을 고정한다 — 인라인이면 페이지가 붙을 때마다(isFetchingNextPage 토글 포함)
+  // 마운트된 셀 전부가 새 함수로 다시 그려진다. early return보다 위에 둬야 훅 순서가 유지된다.
+  const openMovie = useCallback(
+    (movieId: number) => navigation.navigate('MovieDetail', { movieId }),
+    [navigation],
+  );
+  const renderItem = useCallback(
+    ({ item }: ListRenderItemInfo<UserMovieListItemResponse>) =>
+      viewMode === 'grid' ? (
+        <MovieGridItem
+          id={item.movieId!}
+          title={item.title!}
+          posterPath={item.posterPath}
+          width={cellWidth}
+          onPress={() => openMovie(item.movieId!)}
+        />
+      ) : (
+        <MovieListItem
+          id={item.movieId!}
+          title={item.title!}
+          posterPath={item.posterPath}
+          releaseDate={item.releaseDate}
+          subtitle={item.genres?.map((g) => g.name).join(', ')}
+          onPress={() => openMovie(item.movieId!)}
+        />
+      ),
+    [viewMode, cellWidth, openMovie],
+  );
+
   if (records.isLoading) {
     return (
       <Screen>
@@ -93,8 +125,6 @@ export function RecordsTab({ userId }: RecordsTabProps) {
   }
 
   const items = records.data.pages.flatMap((p) => p.content);
-  // 그리드는 화면 가장자리까지 채운다 — 좌우 여백 없이 열 사이 간격만 최소로 둔다.
-  const cellWidth = (windowWidth - GRID_GAP * (GRID_COLUMNS - 1)) / GRID_COLUMNS;
   // 무한스크롤 첫 페이지의 totalElements를 그대로 쓴다 — 별도 count 조회 없이 이미
   // 받아온 응답으로 충당된다.
   const totalCount = records.data.pages[0]?.totalElements ?? 0;
@@ -150,30 +180,25 @@ export function RecordsTab({ userId }: RecordsTabProps) {
             keyExtractor={(item) => String(item.movieId)}
             onScroll={onScroll}
             scrollEventThrottle={16}
-            renderItem={({ item }) =>
-              viewMode === 'grid' ? (
-                <MovieGridItem
-                  id={item.movieId!}
-                  title={item.title!}
-                  posterPath={item.posterPath}
-                  width={cellWidth}
-                  onPress={() => navigation.navigate('MovieDetail', { movieId: item.movieId! })}
-                />
-              ) : (
-                <MovieListItem
-                  id={item.movieId!}
-                  title={item.title!}
-                  posterPath={item.posterPath}
-                  releaseDate={item.releaseDate}
-                  subtitle={item.genres?.map((g) => g.name).join(', ')}
-                  onPress={() => navigation.navigate('MovieDetail', { movieId: item.movieId! })}
-                />
-              )
-            }
+            renderItem={renderItem}
+            // 창 = 이미지 선요청 범위다. 셀이 창에 들어오는 순간 포스터 요청이 나가고, 창 밖으로
+            // 나가면 언마운트되며 요청도 취소된다 — 취소되지 않는 Image.prefetch 대신 이 창을
+            // 선요청 수단으로 쓴다(2026-09-26 측정 후 결정). 기본 21(위아래 10화면)은 넓어 빠른
+            // 스크롤에서 요청이 과하게 쌓이고, 5는 새 페이지 포스터가 늦게 시작됐다 — 위아래 4화면.
+            windowSize={9}
+            // numColumns가 있으면 단위가 '행'이다 — 그리드 6행 ≈ 첫 화면 + 여유 1행.
+            initialNumToRender={viewMode === 'grid' ? 6 : 8}
             onEndReached={() => {
-              if (records.hasNextPage && !records.isFetchingNextPage) records.fetchNextPage();
+              // ⚠️ cancelRefetch: false — 기본값 true면 진행 중인 요청을 무시하고 매번 새로 부른다.
+              // onEndReached가 한 렌더 안에 연달아 불리면 isFetchingNextPage 가드가 갱신되기 전이라
+              // 같은 페이지가 두 번 요청됐다(2026-09-26 [perf] 로그에서 확인).
+              if (records.hasNextPage && !records.isFetchingNextPage) {
+                records.fetchNextPage({ cancelRefetch: false });
+              }
             }}
-            onEndReachedThreshold={0.5}
+            // 끝에서 2화면 전에 다음 페이지를 부른다 — 데이터가 일찍 와야 셀이 창에 일찍 들어와
+            // 포스터 요청도 일찍 시작된다. 0.5면 스피너를 보고 기다리게 된다.
+            onEndReachedThreshold={2}
             ListFooterComponent={
               <InfiniteScrollFooter visible={records.hasNextPage ?? false} loading={records.isFetchingNextPage} />
             }

@@ -6,6 +6,70 @@ narrative로 남긴다.
 
 ---
 
+## 2026-09-27 (이어서 2) — 스켈레톤 철회, 스피너로
+
+- 실기기: 반짝임 스켈레톤이 빠른 스크롤에서 프레임 드랍 심함 → 사용자 요청으로 제거, `ActivityIndicator`만 남김.
+- 해석 메모: 사용자 표현은 "색 그라데이션"이었지만 바뀐 것은 회색 반짝임이라 그쪽으로 해석했다.
+  정적 색 그라데이션(포스터 없음/실패)은 유지 — 다르면 다시 조정.
+- `tsc` 통과, 실기기 확인 전.
+
+---
+
+## 2026-09-27 (이어서) — 포스터 로딩 스켈레톤
+
+- 남는 로딩 시간 동안 칸이 비어 보이는 문제. 색 그라데이션 / 회색 블록+반짝임 / 스피너 중 사용자가 **회색 블록+반짝임** 선택.
+- `PosterImage`에 `LoadingBlock`(reanimated opacity 1↔0.45 왕복) 추가, `onLoad`에서 제거. `onError` 시 색 폴백.
+- 공용 컴포넌트라 전 화면 적용. `tsc` 통과, 실기기 확인 전.
+
+---
+
+## 2026-09-27 — 포스터 지연 작업 종료
+
+- 3차 수정 후 재측정: 중복 요청 사라짐, 캐시된 구간 즉시 표시. 남은 건 처음 보는 구간 빠른 스크롤뿐.
+- TMDB CDN: RTT 0.16s, 새 연결 첫 바이트 0.5s, 재사용 시 장당 0.25s, w185/w342 시간 차 거의 없음 → 지연 지배, 크기 축소 이득 작음.
+- 사용자 결정: 여기서 마무리. 임시 계측(`hooks/perfLog.ts`, `PosterImage`의 onLoad 로그) 제거, `tsc` 통과.
+- 교훈: 마운트 기준 계측은 창이 넓을수록 체감보다 크게 나온다.
+
+---
+
+## 2026-09-26 (이어서 4) — 포스터 지연 3차: 계측 결과로 원인 확정
+
+- **로그 판독**: API 페이지 왕복 60~240ms(깊이 무관) / slow poster 전부 `none`, 2.4 → 4.4 → 7~9s로 증가
+  → 이미지 네트워크 대기열 적체. 서버는 무죄.
+- **적체 원인 두 가지(둘 다 2차 수정이 만든 것)**: 취소 불가능한 `Image.prefetch`의 누적 + 선요청/표시 요청 이중 다운로드,
+  그리고 `fetchNextPage`의 `cancelRefetch` 기본값 `true` 때문에 같은 페이지가 두 번 요청됨.
+- **수정**: prefetch 삭제(`posterPrefetch.ts` → `perfLog.ts`로 이름 변경, 계측만 남김), `cancelRefetch: false`,
+  `windowSize` 9. `tsc` 통과.
+- **다음**: 실기기에서 같은 방식으로 로그 재수집 → 효과 확인되면 계측 제거. `cancelRefetch`는 다른 6곳에도 적용 검토.
+
+---
+
+## 2026-09-26 (이어서 3) — 포스터 지연 2차: 진단 수정 + 계측
+
+- **실기기 결과(1차 수정 후)**: 첫 화면은 빨라짐 / **새 페이지 로딩은 늘어남** / 깊이에 따른 지연 증가는 그대로.
+- **회귀 원인**: `windowSize` 21이 다음 페이지 포스터를 미리 요청하는 역할을 하고 있었다. 5로 줄이며 사라짐.
+  → `hooks/posterPrefetch.ts`의 `prefetchPosters`로 페이지 도착 시 `disk` 선요청 + `onEndReachedThreshold` 2.
+- **서버 측정**: user 276(대표 기록 1,035편) 기준 목록 쿼리 `EXPLAIN ANALYZE` — offset 0/500/1000에서
+  2.6/12.8/27.2ms. 오프셋 페이징이라 늘긴 하지만 체감 원인으로는 작다.
+- **임시 계측**: `[perf] records|wishes page N: Xms`(API 왕복) · `[perf] slow poster Xms (none|disk|memory)`(800ms 초과).
+  Metro 로그로 확인 후 원인 확정되면 제거.
+
+---
+
+## 2026-09-26 (이어서 2) — 내 서재 포스터 로드가 스크롤할수록 느려지는 문제
+
+- **진단**: 네트워크가 아니라 FlatList 기본 `windowSize` 21(위아래 10화면씩 마운트 유지). RN 0.86
+  `VirtualizedListProps.windowSizeOrDefault`로 기본값을 확인했다. 페이지가 쌓일수록 동시 요청·디코드되는
+  포스터가 늘어 보이는 포스터가 뒤로 밀린다.
+- **수정**: `RecordsTab`·`WishesTab`에 `windowSize={5}`, `initialNumToRender`(그리드 6행/리스트 8),
+  `renderItem`·`openMovie`를 `useCallback`으로 고정. `tsc` 통과.
+- **미해결로 남긴 것**: 그리드는 `numColumns` 때문에 FlatList가 행 배열을 매번 새로 만들어 행 재렌더가 남는다
+  (`FlatList._getItem`). 셀 `memo` + id 기반 `onPress`는 `windowSize` 효과를 보고 결정.
+  `CollectionDetailScreen`도 같은 패턴 — 이번엔 손대지 않음.
+- **확인 필요**: 실기기에서 기록 100편 이상 내려가며 체감 비교(JS만 바뀌어 재빌드 불필요).
+
+---
+
 ## 2026-09-26 (이어서) — 내 서재 통합 3단계 (`MyLibrary`)
 
 - **착수 전**: 실기기에서 "백엔드 연결 안 됨" — PC가 새 Wi-Fi(`192.168.0.5`)였는데 `.env.local`이
