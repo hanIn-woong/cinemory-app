@@ -19,7 +19,7 @@
 ```
 M2-A 기반 ✅ ──► M2-B 1군 화면 ✅ ──► M2-C 2군 화면 🔨 ──► M2-D 3군 화면 🔒
    (완료)          (완료)          (구현 완료·검증 대기)      (백엔드 차단)
-                                        └─► M2-C2 리포트 🔒 (백엔드 M3-a 동반)
+                                        └─► M2-C2 리포트 🔨 구현 완료·검증 대기
 ```
 
 | 단계 | 범위 | 상태 | 백엔드 의존 | 상세 |
@@ -27,7 +27,7 @@ M2-A 기반 ✅ ──► M2-B 1군 화면 ✅ ──► M2-C 2군 화면 🔨 �
 | **M2-A**<br>기반 | 디자인 토큰 · 프리미티브 · API 클라이언트(단일 비행 인터셉터) · `authStore` · 부팅 시퀀스 · 네비게이션 골격 · 생성 타입 | ✅ **완료**<br>(실기기 검증 통과 2026-08-30) | 없음 | **`M2A-foundation-spec.md`** |
 | **M2-B**<br>1군 화면 (9월) | `Login` · `SignUp` · `Home` · `SearchResult` · `MovieDetail` · `MyRecords` · `MyPage`/`Settings` | ✅ **완료**<br>(실기기 검증 통과 2026-09-06 — §7.1·§7.2·§7.3 전부) | ⚠️ **B-4**(상세 평점 필드)는 여전히 미해소 — 평점 블록만 자리를 비워 두고 진행했다 | **`M2B-screens-spec.md`**<br>요구사항은 §9.1~9.5 · §6 |
 | **M2-C**<br>2군 화면 (10월) | `Wishlist` · `CollectionList`/`Detail` · `MovieDetail` 컬렉션 연결 | 🔨 **구현 완료 — 실기기 검증 전**<br>(`npx tsc --noEmit`·`expo export android` 통과 2026-09-09) | ✅ **API 완비 — 막는 것 없음**<br>B-6·B-7·B-18은 품질 개선(차단 아님) | **`M2C-screens-spec.md`**<br>요구사항은 §9.6~9.7 |
-| **M2-C2**<br>리포트 | `Report`(통계·캘린더·월말) | 🔒 **차단** | **B-8** — 백엔드 M3-a 미착수. **엔드포인트 모양(응답 DTO·기간·타임존)부터 확정**해야 한다 | §9.8 · §11 B-8 |
+| **M2-C2**<br>리포트 | `Report`(통계) · `Calendar` · `MonthlyReport` + 마이페이지 캘린더 요약 | 🔨 **구현 완료 — 실기기 검증 전**<br>(`npx tsc --noEmit` 통과 2026-09-23) | ~~B-8~~ ✅ **해소** — 백엔드 M3-a 완료 | `M2C2-report-spec.md` · §9.8 |
 | **M2-D**<br>3군 화면 (여유 시) | `Social` · `CineMap` · `Recommend` | 🔒 **차단** | **B-9**(`theater` 테이블 비어 있음)<br>**B-10**(활동 피드 API 없음)<br>**B-11**(M3-b 설계 백지) | §9.9~9.11 · §13 |
 
 ### M2-A 완료 근거
@@ -54,7 +54,7 @@ multiline 높이 고정 · 무한스크롤 풋터 마운트/언마운트로 인�
 | | 조건 |
 |---|---|
 | **M2-C** | 없음 — 바로 착수 가능 (2026-09-09 `Report` 분리로 블로커가 사라졌다) |
-| **M2-C2** | **B-8.** 백엔드 M3-a와 동반. 차트 라이브러리(`react-native-gifted-charts`)도 이 시점에 설치한다 |
+| **M2-C2** | ~~B-8~~ ✅ **해소(2026-09-22)** — 백엔드 M3-a 완료. 차트 라이브러리(`react-native-gifted-charts`)를 이 시점에 설치한다(`M2C2-report-spec.md` §4.1) |
 | **M2-D** | **셋 다 백엔드 선행이 필요하다.** 지금 만들면 빈 화면이 나온다(§2·§11) |
 
 ### ✅ 워크플로 전환 완료 — Expo Go → Dev Client (2026-09-11)
@@ -676,6 +676,11 @@ export function tmdbImageUrl(path: string | null | undefined, size: string): str
 - `posterPath` · `backdropPath` · `profilePath` 모두 **nullable**이다. `backdropPath`는 특히
   자주 비어 있다 → `PosterImage` 컴포넌트가 `posterFallbackPalette[movieId % 8]` 그라데이션으로
   폴백한다. **색상은 `movieId` 기반 결정론적**이어야 재렌더 시 깜빡이지 않는다.
+- **로딩 중과 "포스터 없음"은 모양을 다르게 한다(2026-09-27).** 로딩 중에는 칸 가운데
+  **`ActivityIndicator`(small, `mutedForeground`)** 가 깔리고, 도착한 포스터가 `transition`으로 그 위에
+  덮인다. 경로가 없거나 **로드에 실패**하면 위의 색 그라데이션이다(이전엔 실패 시 빈칸이었다).
+  ⚠️ **reanimated 스켈레톤(opacity 반짝임)은 쓰지 않는다** — 빠른 스크롤에서 로딩 중인 칸마다
+  애니메이션이 돌아 프레임 드랍이 심했다. 스피너는 Android 네이티브 `ProgressBar`라 그 경로를 타지 않는다.
 - ⚠️ **TMDB 출처 표기(attribution) 요건 확인 필요** — 기획노트가 남겨둔 항목.
   마이페이지나 설정에 표기 위치를 잡을 것.
 - ⚠️ **위 코드 블록은 초판이라 현행과 다르다.** 실제 `src/constants/tmdb.ts`는
@@ -981,8 +986,7 @@ MainTabNavigator
     ├── RecommendStack  Recommendation(3군, 플레이스홀더) → MovieDetail
     ├── CineMapStack    CineMap(3군, 플레이스홀더)
     ├── SocialStack     Social(3군, 플레이스홀더) → MovieDetail · CollectionDetail
-    └── MyPageStack     MyPage → MyRecords → MovieDetail
-                             → Wishlist → MovieDetail
+    └── MyPageStack     MyPage → MyLibrary[records | wishes 스와이프 탭] → MovieDetail
                              → CollectionList → CollectionDetail → MovieDetail
                              → Report(2군) · EditProfile · Settings
 ```
@@ -1036,8 +1040,7 @@ export type MyPageStackParamList = {
   MyPage: undefined;
   EditProfile: undefined;
   Settings: undefined;
-  MyRecords: undefined;
-  Wishlist: undefined;
+  MyLibrary: { initialTab?: 'records' | 'wishes' } | undefined;  // 2026-09-26 MyRecords·Wishlist 통합
   CollectionList: undefined;
   CollectionDetail: { collectionId: number; title: string };  // ⚠️ 단건 조회 API 부재 → title 동반 전달
   Report: undefined;                            // 2군
@@ -1436,13 +1439,16 @@ SectionList
 
 - `GET /api/users/{myId}/records` → `PageResponse<UserMovieListItemResponse>`
 - 그리드(3열) ↔ 리스트 토글
-- ⚠️ **와이어프레임의 정렬·별점 필터는 서버가 지원하지 않는다.** `sortOption`/`ratingFilter`
-  state가 선언만 되고 목록에 반영되지 않는 것도 와이어프레임의 미구현 부분이다.
-  **5-0-D에서 클라이언트 `sort` 파라미터를 의도적으로 지원하지 않기로 확정**했으므로
-  (인덱스를 타지 않는 정렬이 조용히 만들어지는 것을 막기 위함), M2에서는 **정렬·필터 UI를
-  넣지 않는다.** 필요해지면 백엔드에 정렬 옵션을 요청한다.
-- 와이어프레임의 시청/찜 2탭 구조는 **찜을 별도 화면(`Wishlist`, 2군)으로 분리**한다 —
-  엔드포인트가 다르고 응답 DTO도 다르다.
+- **정렬 — 2026-09-26 추가(`docs/library-sort-spec.md`).** 5-0-D는 *자유* `sort`를 막는 것이라
+  백엔드에 **화이트리스트 enum**(`RecordSort`·`WishSort`, 백엔드 5-0-D-1)을 두고 정렬 UI를 붙였다.
+  기본값은 **최근 기록순**(이전엔 정렬이 없어 오래된 기록이 먼저 나왔다). `Wishlist`도 같다.
+  ⚠️ **별점 필터는 여전히 없다** — 정렬과 별개 작업이다(`library-sort-spec.md` §5).
+- ~~와이어프레임의 시청/찜 2탭 구조는 **찜을 별도 화면(`Wishlist`, 2군)으로 분리**한다~~ →
+  **2026-09-26 `MyLibrary`(내 서재)로 다시 합쳤다** — 와이어프레임의 2탭 구조로 돌아간 것이다.
+  스와이프 상단 탭(`@react-navigation/material-top-tabs` + `react-native-pager-view`)이고,
+  각 탭은 `src/screens/library/RecordsTab`·`WishesTab`. 엔드포인트·DTO가 다른 것은 그대로라
+  탭마다 훅·정렬 옵션·그리드/리스트 상태를 따로 가진다. 마이페이지 진입점은 **`내 기록` 하나**
+  (`찜 목록` 메뉴는 2026-09-26 삭제 — 스와이프 한 번이라 중복). 설계·검증은 `docs/library-sort-spec.md` §3·§4.2.
 - **툴바에 "총 N편" 개수 표시** (2026-09-20 추가). 별도 count 조회 없이 무한스크롤 첫 페이지의
   `totalElements`를 그대로 쓴다.
 - **스크롤 시 툴바 접기 — 구현한다** (2026-09-02 확정, 종전 "M2에서 생략"에서 변경).
@@ -1496,16 +1502,17 @@ SectionList
 영화 추가는 `POST /api/collections/{id}/movies` **벌크·멱등**(최대 50) → `{addedCount, skippedCount}`를
 토스트로 알린다.
 
-#### 9.8 ReportScreen — ⚠️ 백엔드 미구현
+#### 9.8 ReportScreen — 🔨 구현 완료 — 실기기 검증 전 (2026-09-23)
 
-통계·캘린더·월말 리포트는 **M3-a**다. 설계(가중치 공식·집계 쿼리)는 기획노트 2-4절에 완료돼
-있으나 **API가 없다.** §11 참고. M2에서는 화면을 만들지 않고, 2군 진입 시점에 백엔드
-M3-a와 함께 진행한다.
+**설계 확정본은 `docs/M2C2-report-spec.md`다.** B-8(리포트 API)이 해소돼 M2-C2를 연다.
 
-와이어프레임의 `StatisticsScreen`·`MonthlyReportScreen`·`CalendarScreen`이 여기 해당한다.
-차트는 `react-native-gifted-charts`(`BarChart` 별점 분포 / `PieChart` 평점 분포).
-`CalendarView`는 `compact` prop을 유지해 마이페이지 요약과 상세가 공용한다.
-⚠️ 와이어프레임이 초기 월을 `new Date(2026, 4, 1)`로 하드코딩한 것을 오늘 날짜로 바꿀 것.
+- 화면 셋 + 위젯 하나 — `Report`(마이페이지 메뉴) · `Calendar`(마이페이지 요약 위젯 탭) ·
+  `MonthlyReport`(캘린더에서 진입) · 마이페이지 캘린더 요약(`CalendarView`의 `compact`)
+- **한 화면 스크롤.** 섹션 탭 분할은 로딩이 실제 문제가 될 때 논의한다
+- 차트는 `react-native-gifted-charts`(`BarChart` 별점·월별·요일·연대 / `PieChart` 관람 방식)
+- ⚠️ **연말 리포트는 만들지 않는다** — 백엔드에 해당 엔드포인트가 없고 범위 밖으로 확정됐다
+- ⚠️ 와이어프레임의 `new Date(2026, 4, 1)` 하드코딩은 오늘 날짜로, `useCalendarData`의
+  **날짜당 한 편 가정은 배열로** 고친다(실제 데이터 모델과 맞지 않는다)
 
 ---
 
@@ -1582,7 +1589,7 @@ npm i nativewind && npm i -D tailwindcss
 | B-5 | 마이페이지 "N편 관람" | `UserProfileResponse`에 `watchedCount` 없음 | 없어도 우회 가능(`records`의 `totalElements`) | 낮음 |
 | B-6 | 컬렉션 카드 미리보기 포스터 | `CollectionResponse`에 포스터 없음 | 없으면 N+1. 미리보기 필드 추가 | 2군 |
 | B-7 | **컬렉션 단건 조회** | Service 메서드 부재 (잔여 #4) | 딥링크 필요 시 `getCollection` 추가 | 2군 |
-| **B-8** | **리포트 API 전체** | **M3-a 미착수** — 설계는 기획노트 2-4에 완료 | 통계·캘린더·월말 리포트 엔드포인트 | **2군 블로커** |
+| ~~B-8~~ | ~~리포트 API 전체~~ | ✅ **백엔드 완료(2026-09-22)** — `GET /api/users/{userId}/report/statistics·monthly·calendar`. 설계 근거는 백엔드 `M3a-report-spec.md`, 프론트 설계는 `M2C2-report-spec.md` | 없음 | — |
 | **B-9** | **`theater` 테이블이 비어 있음** | `TheaterSeedService` 호출 엔드포인트 부재 (잔여 #5) | 좌표계 EPSG:5174→WGS84 확인 + 시드 엔드포인트 | **3군 블로커** |
 | **B-10** | **소셜 활동 피드 API 없음** | 팔로우·댓글은 있으나 피드가 없다 | 아래 참고 | **3군 블로커** |
 | **B-11** | 추천 API | **M3-b 백지** (R-1~R-4 미결) | 설계 세션 선행 | 3군 블로커 |
@@ -1592,7 +1599,7 @@ npm i nativewind && npm i -D tailwindcss
 | **B-13** | **OTT 플랫폼 목록 조회 API 없음** | `WatchRecordCreateRequest.ottPlatformId`는 필수인데 유효 ID를 얻을 방법이 없다 | `OttPlatformResponse`를 반환하는 목록 엔드포인트 추가 | 1군 (상세 화면 — 지금은 `watchType=OTT` 저장을 막고 THEATER/ETC만 지원) |
 | B-14 | 상세 히어로 배경 | `MovieDetailResponse`에 `backdropPath` 없음(`posterPath`만) | 필요하면 필드 추가 — 없어도 `posterPath`로 우회 가능 | 낮음 |
 | **B-17** | **랜덤 영화 조회 API 없음** | `GET /api/movies`는 `findAll(pageable)`이 정렬 미지정이라 **매번 같은 목록**이 나온다(5-0-D가 클라이언트 `sort`를 의도적으로 미지원) | **`GET /api/movies/random?size=`** 신설 — `poster_path IS NOT NULL` 필터 포함. 설계 확정본은 **백엔드 docs**(`controller-layer-spec.md` 5-2 · `service-layer-spec.md` 4-2) | **1군 (홈 배경).** 없으면 게스트 배경이 **항상 같은 영화**가 된다 |
-| **B-20** | **`WatchRecord`의 `note` → `privateReview` 리네임 + `rating` 타입 변경 (v16)** | 백엔드가 **컬럼명과 필드명이 갈린 상태**(`@Column(name="review")` ↔ 필드 `note`)를 닫으면서 `private_review`/`privateReview`로 통일했고, `rating`이 `double` → `DECIMAL(3,1)`(Java `BigDecimal`)로 바뀌었다. 설계 확정본은 **백엔드 docs**(`schema/v16-delta.sql` · `jpa-entity-spec.md`) | `npm run gen:api` 재생성 후 **`MovieDetailScreen.tsx`(3곳)·`WatchRecordModal.tsx`(2곳)** 의 `note` → `privateReview`. ⚠️ **`PATCH /api/records/{id}`가 전체 치환(B-15)이라 `privateReview`를 안 실어 보내면 감상 텍스트가 null로 지워진다** — 대표 기록 별점 탭 수정(2026-09-10) 경로가 특히 위험하다. `rating`은 JSON 숫자 그대로라 타입 변경의 프론트 영향은 없다 | **백엔드 v16 적용과 동시** — 적용 후 재생성하지 않으면 타입 불일치가 조용히 남는다 |
+| ~~B-20~~ | ~~`WatchRecord`의 `note` → `privateReview` 리네임 + `rating` 타입 변경 (v16)~~ | ✅ **완료(2026-09-22)** — `gen:api` 재생성 확인, `MovieDetailScreen.tsx`·`WatchRecordModal.tsx` 반영, `npx tsc --noEmit` 통과 | 없음 | — |
 | ~~B-15~~ | ~~시청 기록 수정 API 없음~~ | ✅ **백엔드 완료(`PATCH /api/records/{recordId}`), 프론트 연동 완료** — `gen:api` 재생성 확인(2026-09-04) | 없음 | — |
 | ~~B-16~~ | ~~`review.rating` 제거 + 별점 파생~~ | ✅ **백엔드 완료(`ReviewWriteRequest`에서 `rating` 제거 확인), 프론트 연동 완료**(`ReviewModal` 별점 입력 제거) — `gen:api` 재생성 확인(2026-09-02) | 없음 | — |
 
@@ -1894,6 +1901,19 @@ export { CineMapWebView as CineMapView } from './CineMapWebView';
 
 | 날짜                 | 내용 |
 |--------------------|---|
+| 2026-09-27 (이어서 2) | **§4 로딩 표시를 스켈레톤 → 스피너로 교체.** 바로 아래 항목(②안)을 실기기에서 보니 **프레임 드랍이 심했다** — 빠른 스크롤로 캐시 없는 구간에 들어가면 로딩 중인 칸이 수십 개가 되고, 칸마다 reanimated `withRepeat` opacity 애니메이션이 돌며 매 프레임 뷰 속성을 갱신한다. 사용자 판단으로 **스켈레톤을 빼고 스피너만** 남겼다. `ActivityIndicator`는 Android 네이티브 `ProgressBar`라 그리기가 JS·reanimated를 거치지 않는다 — 앞서 우려했던 "스피너 십여 개의 산만함"은 **실측한 프레임 드랍보다 가벼운 문제**로 판단이 바뀌었다. 칸 바탕은 투명(배경색)이고 스피너만 가운데 둔다. "포스터 없음/로드 실패 = 색 그라데이션"은 그대로다(정적이라 비용 없음). `tsc` 통과, 실기기 확인 전 |
+| 2026-09-27 (이어서) | **§4 `PosterImage` — 로딩 중 스켈레톤 추가, 로드 실패 시 색 폴백.** 포스터 지연 작업을 "네트워크 한계로 수용"으로 닫으면서, 남는 지연 동안 **무엇을 보여줄지**를 정했다. 지금까지는 포스터가 오기 전 칸이 **완전히 비어** 빠른 스크롤에서 목록이 뚫려 보였다. 셋을 비교했다 — ① 기존 색 그라데이션을 깔기(조용하지만 **"포스터 없는 영화"와 구분이 안 된다**) ② 회색 블록 + 은은한 반짝임 ③ 스피너(로딩이 가장 분명하지만 **한 화면 15칸이 동시에 돌아** 산만하고 애니메이션 비용도 든다). **사용자가 ②를 선택.** 구현: 이미지 아래에 `muted` 블록을 깔고 opacity를 1 ↔ 0.45로 왕복(700ms씩, reanimated — UI 스레드라 스크롤 JS와 경쟁하지 않는다), `onLoad`에서 블록을 걷는다. 캐시 히트는 이미지가 위 레이어라 블록이 비치지 않는다. 상태를 **`uri` 기준**(`loadedUri === uri`)으로 둬 같은 컴포넌트에 다른 포스터가 들어와도 자동으로 로딩 상태가 된다. 함께 **`onError` → 색 폴백**을 넣었다(이전엔 실패하면 빈칸으로 남았다). 공용 컴포넌트라 **그리드·리스트·컬렉션·리포트 전부에 적용**된다. 시스템 '동작 줄이기'는 `withTiming` 기본값(`ReduceMotion.System`)으로 따른다. `tsc` 통과, 실기기 확인 전 |
+| 2026-09-27 | **포스터 지연 작업 종료 — 남은 지연은 네트워크 한계로 수용, 임시 계측 제거.** 이어서 5의 수정 후 재측정: **중복 페이지 요청 0건**, API 60~270ms로 깊이 무관, **이미 본 구간(0~31페이지)은 느린 포스터 0건**(디스크 캐시). 남은 지연은 **처음 보는 구간을 빠르게 넘길 때**뿐이다. PC에서 TMDB 이미지 CDN을 재 보니 **RTT ≈ 0.16s, 새 연결 첫 바이트 ≈ 0.5s, 연결 재사용 시 장당 ≈ 0.25s**이고 **w185(~17KB)와 w342(~50KB)의 시간 차가 거의 없다** — 대역폭이 아니라 지연 지배라 이미지 크기를 낮춰도 이득이 작다(그리드 w342 유지, 2026-09-10 화질 결정 존중). 동시 다운로드 수가 한정돼 **초당 약 한 화면**이 처리 상한이고 그보다 빠른 스크롤은 대기열이 쌓인다. ⚠️ 계측의 "slow poster Xms"는 **마운트 기준**이라 `windowSize` 9에서는 화면에 보이기 ~4화면 전부터 재므로 **체감보다 크게** 찍혔다 — 이런 계측을 다시 넣을 때는 가시성(`onViewableItemsChanged`) 기준으로 잴 것. 최종 상태: `windowSize={9}`, `initialNumToRender` 그리드 6행/리스트 8, `renderItem` 고정, `onEndReachedThreshold={2}`, `fetchNextPage({ cancelRefetch: false })`. 로딩 중 빈칸 표시(플레이스홀더/로딩 표시)는 별도 논의 |
+| 2026-09-26 (이어서 5) | **포스터 지연 — 계측으로 원인 확정, 이어서 4의 prefetch를 철회.** 실기기 `[perf]` 로그: **API 왕복은 페이지 0~28 내내 60~240ms**(1회 1175ms)로 깊이와 무관 → 서버·오프셋 페이징은 원인이 아니다. 반면 **800ms를 넘긴 포스터는 전부 `cacheType: none`(네트워크)** 이고 지연이 **2.4s → 4.4s → 7~9s로 단조 증가** — 이미지 다운로드 **대기열 적체**다. 적체를 키운 것은 둘이었다. ① **`Image.prefetch`는 셀이 창 밖으로 나가도 취소되지 않는다** — 빠르게 스크롤하면 지나간 페이지 요청이 계속 쌓이고, 선요청과 셀의 표시 요청이 **따로 다운로드**됐다(선요청이 먹혔다면 `disk`로 떴어야 한다). ② **같은 페이지가 두 번씩 요청됐다**(`records page 4` ×2 등) — react-query v5 `fetchNextPage`의 **`cancelRefetch` 기본값 `true`** 는 진행 중 요청을 무시하고 새로 부르는데, `onEndReachedThreshold`를 2로 넓히며 `onEndReached`가 한 렌더 안에 연달아 불렸다(`isFetchingNextPage` 가드가 갱신되기 전). → **prefetch 삭제**, `fetchNextPage({ cancelRefetch: false })`, **`windowSize` 5 → 9** — 창 자체를 **취소 가능한 선요청 범위**로 쓴다(창에 들어오면 요청, 나가면 취소). 21은 빠른 스크롤에서 과했고 5는 새 페이지 포스터가 늦게 시작됐다. ⚠️ **`cancelRefetch` 문제는 `fetchNextPage`를 부르는 다른 6곳(컬렉션·검색)에도 잠재**한다 — 그쪽은 임계값 0.5라 드러나지 않았을 뿐이다. 계측(`hooks/perfLog.ts`, `PosterImage`의 slow poster 로그)은 이번 수정 효과 확인 후 제거 |
+| 2026-09-26 (이어서 4) | **바로 아래 항목(이어서 3)의 진단이 절반만 맞았다 — 실기기 결과: 첫 화면은 빨라졌으나 새 페이지 로딩이 늘었고, 깊이에 따른 지연 증가는 그대로.** ① **회귀 원인**: `windowSize` 21은 사실상 **다음 페이지 포스터의 선요청** 역할을 하고 있었다(페이지가 도착하면 20장이 곧바로 창 안에 들어와 요청됐다). 5로 줄이자 셀이 창에 들어와서야 요청이 시작됐다. → 페이지 도착 시 `Image.prefetch(uris, 'disk')`로 **명시적으로 선요청**하고(`hooks/posterPrefetch.ts`, 'memory-disk'가 아닌 이유는 스크롤할수록 디코드 비트맵이 쌓이지 않게), `onEndReachedThreshold`를 0.5 → **2**(끝 2화면 전)로 앞당겼다. `windowSize={5}`는 유지. ② **깊이에 따른 증가는 원인 미확정** — DB에서 같은 쿼리를 `EXPLAIN ANALYZE`로 재 보니 offset 0/500/1000에서 **2.6/12.8/27.2ms**로 늘긴 하지만 체감 지연을 설명하기엔 작다. 추측을 한 번 더 하지 않고 **임시 계측**을 넣었다 — 페이지 API 왕복(`[perf] records page N: Xms`)과 800ms를 넘긴 포스터(`[perf] slow poster Xms (cacheType)`). 로그를 보고 원인이 API인지 이미지 파이프라인인지 가른 뒤 계측을 지운다 |
+| 2026-09-26 (이어서 3) | **내 서재 목록 성능 — "스크롤을 내릴수록 포스터 로드가 느려진다"(실기기 보고) 수정. 실기기 재확인 전.** 원인은 네트워크가 아니라 **FlatList 가상화 기본값**이다. `windowSize` 기본 21은 **화면 위아래 10화면씩** 셀을 마운트한 채 두는데, 그리드 한 화면이 포스터 ~15장이라 페이지가 쌓이면 **수백 장이 동시에 요청·디코드**되고 **지금 보이는 포스터가 화면 밖 요청 뒤에 줄을 선다** — 누적될수록 느려지는 증상과 정확히 맞는다. `windowSize={5}`로 줄였다(밖으로 나간 셀이 언마운트되면 `expo-image`의 요청도 함께 취소된다). 함께 **`renderItem`을 `useCallback`으로 고정**했다 — 인라인이면 페이지가 붙을 때마다(`isFetchingNextPage` 토글까지 합쳐 페이지당 3번) 마운트된 셀 전부가 다시 그려진다. ⚠️ **그리드는 이것만으로 재렌더가 완전히 사라지지 않는다** — `numColumns`가 있으면 FlatList가 행마다 **새 배열**을 만들어 `CellRenderer`(PureComponent)의 비교가 늘 실패한다. 행 재렌더까지 없애려면 셀 컴포넌트를 `memo`하고 `onPress`를 id 기반으로 바꿔야 하는데, `MovieGridItem`을 쓰는 곳(컬렉션 편집 등)이 여럿이라 **`windowSize` 효과를 먼저 보고** 판단한다. `initialNumToRender`는 그리드 6행/리스트 8개(`numColumns`가 있으면 단위가 행이다). `getItemLayout`은 `paddingTop`(툴바)·행 간격이 오프셋에 섞여 잘못 넣으면 빈 영역이 생기므로 넣지 않았다. **같은 패턴이 `CollectionDetailScreen`에도 있다** — 컬렉션은 보통 작아 이번엔 두고, 큰 컬렉션에서 같은 증상이 보이면 같은 처방을 한다 |
+| 2026-09-26 (이어서 2) | **마이페이지 `찜 목록` 메뉴 삭제 — `내 기록`만 `MyLibrary`로 진입.** 통합 직후엔 찜으로 바로 가는 길을 지키려 두 메뉴를 남겼으나, 실기기에서 내 서재 안 스와이프 한 번이면 충분해 중복으로 판단했다. §8.6 검증표는 `@react-navigation/native` 7.4.1 상향 후 재실행해 통과. 상세는 `docs/library-sort-spec.md` 변경 이력 |
+| 2026-09-26 (이어서) | **`MyRecords`·`Wishlist` 라우트를 `MyLibrary`(내 서재) 하나로 통합 — §8 네비게이션 트리·`MyPageStackParamList`·§9.4 갱신.** 결정적 이유는 **3군 소셜의 "팔로잉한 사람의 서재 보기"가 그대로 재사용된다**는 점이다 — 탭 컴포넌트가 `userId`를 prop으로 받게 해 두었다. 네이티브 패키지 `react-native-pager-view` 8.0.2가 추가되고 **`@react-navigation/native`가 7.3.4 → 7.4.1로 올라갔다**(material-top-tabs 7.7.2의 peer). ⚠️ 네비게이션 코어가 올라갔으므로 **§8.6 재발 방지 검증표를 재빌드 후 다시 돌린다**. §8.5의 코드 예시(`MyRecords`)는 헤더 설정 예시일 뿐이라 그대로 둔다. 실행·검증은 `docs/library-sort-spec.md` |
+| 2026-09-26 | **§9.4 "정렬 UI를 넣지 않는다"를 뒤집었다 — 내 기록·찜 목록 정렬 추가.** 근거는 5-0-D가 막으려던 것이 *임의 컬럼 정렬*이지 정렬 기능이 아니라는 것, 그리고 **내 기록 Repository에 정렬이 아예 없어** 오래된 기록이 먼저 나오고 21건부터 무한스크롤 페이지 경계에서 중복·누락이 날 수 있었다는 발견이다(§11 미등록 버그였다 — B-18과 같은 계열). 백엔드 enum 화이트리스트로 해결했고 계약은 백엔드 `controller-layer-spec.md` 5-0-D-1, 실행·검증은 `docs/library-sort-spec.md` |
+| 2026-09-24 | **§7.5 시작 로딩 화면 안전망 수정 — 타이머를 마운트 시점으로 앞당김.** M2-C2 실기기 검증을 시작하려다 앱이 `AppLoadingScreen`에서 영구 정지했다. 직접 원인은 PC가 핫스팟에 다시 붙으며 IP가 바뀌었는데(`10.216.149.151` → `10.254.172.151`) `.env.local`의 `EXPO_PUBLIC_API_BASE_URL`이 옛 값이었던 것이다. **그러나 8초 안전망이 있었는데도 멈춘 것이 진짜 결함이었다** — `useHomeBackgroundReady`는 포스터 쿼리가 성공해 `posters`가 채워져야 프리페치 이펙트에 들어가고, 안전망 타이머는 **그 이펙트 안에서** 걸렸다. 그래서 안전망이 대비하려던 바로 그 상황(백엔드 도달 불가)에서는 `posters.length === 0` 조기 반환에 막혀 타이머가 한 번도 설정되지 않았다. 타이머를 **마운트 시 한 번 거는 별도 이펙트**로 옮기고, 프리페치 쪽의 `Promise.race`는 제거했다(상한은 마운트 타이머 하나가 맡는다). 결과적으로 8초는 "프리페치 시작부터"가 아니라 "쿼리+프리페치 전체"의 상한이 됐다 — 정상 경로 실측(≈4~5초)보다 여전히 넉넉하다. `ready`가 한 번 `true`가 되면 내려가지 않는 규칙은 그대로다. `npx tsc --noEmit` 통과. 경위는 `docs/DevLog.md` 2026-09-24 |
+| 2026-09-23 | **M2-C2 구현 완료 — 실기기 검증 전.** `docs/M2C2-report-spec.md` §1 실행 순서를 그대로 따랐다. API 3종(`endpoints.ts`·`src/api/report.ts`) · 타입 별칭(`ReportStatisticsResponse` 등 13종, `gen:api` 스키마명 그대로) · `queryKeys.report`·`useReport.ts` 훅 3종 · **무효화 매트릭스**(`useCreateRecord`·`useUpdateRecord`·`useDeleteRecord`·`useSetRepresentative`·`useWriteReview`·`useDeleteReview` 여섯 곳에 `['report']` 추가, 리뷰 두 곳을 놓치기 쉬웠다) · 공통 부품(`SectionCard`·`StatTile`·`RankRow`·`ReportBarChart`·`ReportPieChart`·`CalendarView`, `src/components/report/`) · `ReportScreen`(10섹션 한 화면 스크롤) · `CalendarScreen`(월 이동 + 날짜 탭 확장) · `MonthlyReportScreen`(월 고정, 요일 차트 없음) · 마이페이지 캘린더 요약 위젯(`compact`, `Calendar`와 쿼리 키 공유)까지 전부 붙였다. `react-native-gifted-charts` 설치 후 **Dev Client 재빌드 없이 JS 번들만으로 동작** — `npx expo export --platform android`로 확인, 추가 네이티브 의존 없음(`react-native-svg`는 M2-A에서 이미 설치됨). `npx tsc --noEmit` 통과. **실기기 검증은 아직이다** — §7 검증 절차(무효화 동선·경계 케이스·게스트/타인 403) 전부 대기 |
+| 2026-09-22 | **M2-C2 설계 확정 — `docs/M2C2-report-spec.md` 신설, B-8 종결.** 백엔드 M3-a 완료로 2군 마지막 블로커가 풀렸다. **진입 구조** — 시청 분석은 마이페이지 메뉴(이미 존재), 캘린더는 **마이페이지 요약 위젯**(§9.8이 `compact`를 전제로 설계돼 있었다), 월말은 캘린더에서 현재 월을 넘겨 진입. **월말에는 월 이동 UI를 두지 않는다**(캘린더와 둘 다 두면 상태가 갈린다). ⚠️ **연말 리포트는 만들지 않는다** — 백엔드에 엔드포인트가 없고, `monthlyTrend`로 흉내내면 편수·회차·시간 셋뿐이라 *"올해의 감독·장르"* 가 안 나온다. **한 화면 스크롤**로 가고 섹션 분할은 로딩이 실제 문제가 될 때 논의한다. ★ **요일 매핑을 1-based 배열로 고정** — `DAYOFWEEK()`(1=일)·`getDay()`(0=일)·캘린더 헤더의 오프셋이 달라 `['', '일', …]`로 0번을 비워 **서버 값을 변환 없이 인덱싱**한다. ★ **`reviewRate`는 비율로 쓰지 않는다** — 리뷰가 기록 없이도 작성 가능해 **1.0을 넘을 수 있다**(→ *"135편 중 42편에 리뷰"*). ★ **무효화에 리뷰를 포함** — `reviewRate` 때문에 리뷰만 써도 통계가 바뀐다. 찜은 리포트에 영향이 없다 |
+| 2026-09-22 | **B-20 프론트 반영 완료 + M3 백엔드 반영 `gen:api` 재생성.** 백엔드 M3(`f2b3e20` 시청 분석 리포트 포함) 구현 완료에 맞춰 로컬 백엔드(`cinemory-backend`, `develop`)를 띄우고 `npm run gen:api`로 `src/types/api.d.ts` 재생성 — `WatchRecordResponse`/`WatchRecordCreateRequest`/`WatchRecordUpdateRequest`의 `note` 필드가 사라지고 `privateReview`로 확인됐다(§11 B-20 그대로). `rating`은 문서 예상대로 JSON 숫자 그대로라 타입 변화 없음. B-20이 지목한 두 파일 반영 — `MovieDetailScreen.tsx`(대표 기록 별점 탭 수정의 `PATCH` 페이로드, 회차 목록의 메모 표시 2곳) · `WatchRecordModal.tsx`(수정 모드 초기값, 저장 페이로드)에서 `note` → `privateReview`로 교체(로컬 UI state 변수명 `note`/`setNote`는 API 필드가 아니므로 그대로 둠). `npx tsc --noEmit` 통과로 다른 `note` 잔존 참조 없음을 확인. M3 리포트 API(`RatingBucketResponse` 등)는 타입만 생성됐고 화면 반영은 별도 작업(B-8 해소분, 착수 전) |
 | 2026-09-20 | **§9.4·§9.6 — `MyRecordsScreen`/`WishlistScreen` 툴바에 "총 N편" 개수 표시 추가.** B-20 등록 확인 후 별도 특이사항이 없어 진행. 두 화면 다 이미 무한스크롤로 `PageResponse`(`totalElements` 포함)를 받고 있어 **별도 count API 호출 없이** 첫 페이지(`data.pages[0].totalElements`)를 그대로 읽었다 — §9.5 `MyPageScreen`의 "N편 관람"이 이미 같은 방식(size=1 별도 조회)을 쓰지만, 이 두 화면은 어차피 전체 목록을 불러오므로 그 방식을 그대로 재사용하면 낭비 요청이 된다. 토글 버튼 2개를 `View`로 묶어 `justify-between`으로 개수(좌)·토글(우) 배치 — 기존 `justify-end`에 세 번째 요소를 그냥 추가하면 셋이 고르게 벌어져 토글 버튼 사이가 벌어지는 문제가 있어 그룹핑했다. 컬렉션 화면(§9.7)은 이번 범위 밖 |
 | 2026-09-17 | **B-1 검증 결과 확정(6/7) + 백엔드 `security-spec.md` L-7·L-9 종결 반영.** §11 B-1 행이 9/11 시점 문구(*"검증표 1번 통과, 나머지 6항목 진행 중"*) 그대로 남아 있어 실제 결과로 갱신했다. **4번(이메일 동의 거부)만 미통과인데, 빠뜨린 것이 아니라 재현할 수 없었다** — 콘솔에서 이메일을 **필수 동의**로 설정하면 사용자가 거부할 방법이 *로그인 취소*뿐이라 3번과 같은 경로로 끝난다. 이 결과로 백엔드의 **L-7이 완전 종결**됐다 — 2026-08-27 부분 종결이 남긴 구멍(*"통과한 `aud`는 REST API 키"*)이 **실기기 로그인 성공으로 닫혔다.** `allowed-audiences`의 네이티브 앱 키가 매칭되지 않았다면 `INVALID_OAUTH_TOKEN`이 났을 것이므로 로그인 성공 자체가 `aud` 검증이다. **L-9(이메일 미동의 안내 UX)도 종결** — 필수 동의 설정에서는 안내 문구가 설 자리가 없다(단, 동의 철회 경로가 있으므로 **서버 측 A-1 거부는 유지**). ⚠️ **미등록 서명 키 2종이 남는다** — EAS 키스토어(팀 배포)와 **Play 앱 서명 키(M5)**. 후자를 빠뜨리면 개발 내내 정상이다가 스토어 배포 후에만 깨진다. **발견의 계기는 문서 규칙의 구멍이었다** — 2026-09-02에 *"백엔드 계약의 단일 출처는 백엔드 리포"* 를 정했지만 **백엔드 미결이 프론트 작업으로 닫히는 반대 방향에는 경로가 없어** L-7이 6일간 낡은 채였다. **프론트 세션이 백엔드 항목을 해소하면 백엔드 문서로 돌려보낸다** |
 | 2026-09-17 | **§9.2 `SearchResult` `registered` 섹션 라벨 "내 서재에 있는 작품" → "등록된 작품" 수정.** 2026-09-05(이어서) 검증 때 이미 지적됐던 문제 — `registered`는 로그인한 사용자 개인화가 아니라 CineMory DB(`movie` 테이블) 전체에서 제목 매칭된 결과라, 다른 유저나 백엔드 시드가 한 번이라도 TMDB 동기화한 적 있으면 누구 검색에서든 뜬다. "내 서재"(개인 소장/기록)로 읽히는 기존 문구가 이 사실과 반대라 사용자가 오해할 수 있다는 지적을 받아 이번에 반영 — `SearchResultScreen.tsx`·본 문서·`M2B-screens-spec.md` §5.3 3곳 동시 수정 |

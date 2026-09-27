@@ -6,6 +6,170 @@ narrative로 남긴다.
 
 ---
 
+## 2026-09-27 (이어서 2) — 스켈레톤 철회, 스피너로
+
+- 실기기: 반짝임 스켈레톤이 빠른 스크롤에서 프레임 드랍 심함 → 사용자 요청으로 제거, `ActivityIndicator`만 남김.
+- 해석 메모: 사용자 표현은 "색 그라데이션"이었지만 바뀐 것은 회색 반짝임이라 그쪽으로 해석했다.
+  정적 색 그라데이션(포스터 없음/실패)은 유지 — 다르면 다시 조정.
+- `tsc` 통과, 실기기 확인 전.
+
+---
+
+## 2026-09-27 (이어서) — 포스터 로딩 스켈레톤
+
+- 남는 로딩 시간 동안 칸이 비어 보이는 문제. 색 그라데이션 / 회색 블록+반짝임 / 스피너 중 사용자가 **회색 블록+반짝임** 선택.
+- `PosterImage`에 `LoadingBlock`(reanimated opacity 1↔0.45 왕복) 추가, `onLoad`에서 제거. `onError` 시 색 폴백.
+- 공용 컴포넌트라 전 화면 적용. `tsc` 통과, 실기기 확인 전.
+
+---
+
+## 2026-09-27 — 포스터 지연 작업 종료
+
+- 3차 수정 후 재측정: 중복 요청 사라짐, 캐시된 구간 즉시 표시. 남은 건 처음 보는 구간 빠른 스크롤뿐.
+- TMDB CDN: RTT 0.16s, 새 연결 첫 바이트 0.5s, 재사용 시 장당 0.25s, w185/w342 시간 차 거의 없음 → 지연 지배, 크기 축소 이득 작음.
+- 사용자 결정: 여기서 마무리. 임시 계측(`hooks/perfLog.ts`, `PosterImage`의 onLoad 로그) 제거, `tsc` 통과.
+- 교훈: 마운트 기준 계측은 창이 넓을수록 체감보다 크게 나온다.
+
+---
+
+## 2026-09-26 (이어서 4) — 포스터 지연 3차: 계측 결과로 원인 확정
+
+- **로그 판독**: API 페이지 왕복 60~240ms(깊이 무관) / slow poster 전부 `none`, 2.4 → 4.4 → 7~9s로 증가
+  → 이미지 네트워크 대기열 적체. 서버는 무죄.
+- **적체 원인 두 가지(둘 다 2차 수정이 만든 것)**: 취소 불가능한 `Image.prefetch`의 누적 + 선요청/표시 요청 이중 다운로드,
+  그리고 `fetchNextPage`의 `cancelRefetch` 기본값 `true` 때문에 같은 페이지가 두 번 요청됨.
+- **수정**: prefetch 삭제(`posterPrefetch.ts` → `perfLog.ts`로 이름 변경, 계측만 남김), `cancelRefetch: false`,
+  `windowSize` 9. `tsc` 통과.
+- **다음**: 실기기에서 같은 방식으로 로그 재수집 → 효과 확인되면 계측 제거. `cancelRefetch`는 다른 6곳에도 적용 검토.
+
+---
+
+## 2026-09-26 (이어서 3) — 포스터 지연 2차: 진단 수정 + 계측
+
+- **실기기 결과(1차 수정 후)**: 첫 화면은 빨라짐 / **새 페이지 로딩은 늘어남** / 깊이에 따른 지연 증가는 그대로.
+- **회귀 원인**: `windowSize` 21이 다음 페이지 포스터를 미리 요청하는 역할을 하고 있었다. 5로 줄이며 사라짐.
+  → `hooks/posterPrefetch.ts`의 `prefetchPosters`로 페이지 도착 시 `disk` 선요청 + `onEndReachedThreshold` 2.
+- **서버 측정**: user 276(대표 기록 1,035편) 기준 목록 쿼리 `EXPLAIN ANALYZE` — offset 0/500/1000에서
+  2.6/12.8/27.2ms. 오프셋 페이징이라 늘긴 하지만 체감 원인으로는 작다.
+- **임시 계측**: `[perf] records|wishes page N: Xms`(API 왕복) · `[perf] slow poster Xms (none|disk|memory)`(800ms 초과).
+  Metro 로그로 확인 후 원인 확정되면 제거.
+
+---
+
+## 2026-09-26 (이어서 2) — 내 서재 포스터 로드가 스크롤할수록 느려지는 문제
+
+- **진단**: 네트워크가 아니라 FlatList 기본 `windowSize` 21(위아래 10화면씩 마운트 유지). RN 0.86
+  `VirtualizedListProps.windowSizeOrDefault`로 기본값을 확인했다. 페이지가 쌓일수록 동시 요청·디코드되는
+  포스터가 늘어 보이는 포스터가 뒤로 밀린다.
+- **수정**: `RecordsTab`·`WishesTab`에 `windowSize={5}`, `initialNumToRender`(그리드 6행/리스트 8),
+  `renderItem`·`openMovie`를 `useCallback`으로 고정. `tsc` 통과.
+- **미해결로 남긴 것**: 그리드는 `numColumns` 때문에 FlatList가 행 배열을 매번 새로 만들어 행 재렌더가 남는다
+  (`FlatList._getItem`). 셀 `memo` + id 기반 `onPress`는 `windowSize` 효과를 보고 결정.
+  `CollectionDetailScreen`도 같은 패턴 — 이번엔 손대지 않음.
+- **확인 필요**: 실기기에서 기록 100편 이상 내려가며 체감 비교(JS만 바뀌어 재빌드 불필요).
+
+---
+
+## 2026-09-26 (이어서) — 내 서재 통합 3단계 (`MyLibrary`)
+
+- **착수 전**: 실기기에서 "백엔드 연결 안 됨" — PC가 새 Wi-Fi(`192.168.0.5`)였는데 `.env.local`이
+  옛 IP였다. 고친 뒤 §4.1 3·4·5번 통과 보고. **관찰: 스크롤을 내릴수록 포스터 로드가 느려진다** —
+  이번 작업 범위 밖이라 기록만 해 둔다(이미지 캐시·동시 요청 수·`MovieGridItem` 이미지 크기 쪽을 먼저 볼 것).
+- **패키지**: `react-native-pager-view` 8.0.2 · `@react-navigation/material-top-tabs` 7.7.2,
+  `@react-navigation/native` 7.3.4 → 7.4.1. prebuild는 생략(autolinking이 빌드 시 수집).
+  `./gradlew assembleDebug`는 pager-view 컴파일 도중 **시스템 메모리 부족으로 중단** — 네이티브 빌드 성공은 미확인.
+- **구현**: `MyRecordsScreen`/`WishlistScreen`을 `src/screens/library/RecordsTab`/`WishesTab`으로
+  `git mv`하고 `MyLibraryScreen`이 탭으로 감싼다. 탭 전환 시 툴바는 `show()`(새로 추가)로 되살린다.
+- ⚠️ **부수**: 2단계 때 lint를 돌려 보려고 `npx expo lint`를 실행했더니 Expo가 **ESLint를 자동 설정**했다
+  (`eslint`·`eslint-config-expo` devDependency, `lint` 스크립트, `eslint.config.js`). 의도한 변경이 아니므로
+  남길지 정해야 한다.
+- **남은 것**: Dev Client 재빌드 → §4.2(8~14) → §8.6 검증표.
+- **결과 (이어서)**: `./gradlew --stop`으로 메모리를 확보한 뒤 사용자가 재빌드 — **§4.2·§8.6 모두 통과**,
+  prebuild 없이 pager-view 링크도 확인. 이어서 마이페이지 **`찜 목록` 메뉴를 삭제**하고 `내 기록` 하나로
+  진입하게 했다(내 서재 안 스와이프로 충분). `initialTab` 파라미터는 향후 경로용으로 남김. `tsc` 통과.
+
+---
+
+## 2026-09-26 — 내 서재 정렬 1·2단계 (`library-sort-spec.md`)
+
+- **출발**: 정렬 UI 요청을 보다가 내 기록 Repository에 `ORDER BY`가 없다는 것을 발견 — 기능
+  추가이자 버그 수정이 됐다. 1단계(백엔드)가 미구현이라 사용자 확인 후 **백엔드까지 이 세션에서** 진행했다.
+  3단계(`MyLibrary` 통합)는 네이티브 패키지 추가라 **2단계까지만**으로 범위를 합의했다.
+- **백엔드**: `RecordSort`·`WishSort` enum → Controller `sort` 파라미터 → Service에서
+  `PageRequest`로 재조립(자유 `sort` 폐기). 스펙에 없던 `id DESC` 보조키를 넣었다(동률 정렬의
+  페이지 경계 버그 방지). `LibrarySortTest` 4건 + 전체 129건 통과. 문서는 백엔드 docs로 이관.
+- **프론트**: `gen:api` → `RecordSort`/`WishSort` 별칭 → 쿼리 키에 `sort` → `SortSheet`/`SortButton`
+  → 두 화면 툴바. 정렬 변경 시 전체 로딩 깜빡임을 피하려 `keepPreviousData`를 쓰고, 그 대가로
+  `scrollToOffset(0)` + `reset()`을 직접 부른다. `tsc`·`expo export android` 통과.
+- **남은 것**: §4.1 실기기 검증 — 특히 **4번(기록 21건 이상 무한스크롤 중복·누락 없음)** 과
+  5번(날짜/별점 없는 기록이 맨 위에 오지 않음). 부수 효과로 홈 배경이 최근 기록 기준으로 바뀐 것도 눈으로 확인.
+
+---
+
+## 2026-09-26 — M2-C2 §7 검증 수정 ① 별점 분포 4.5·5.0 막대 누락
+
+- **증상**: 시청 분석의 별점 분포 그래프에 4.5점·5점 칸이 없었다.
+- **원인**: 서버는 10버킷을 다 준다(§4.1). `ReportBarChart`가 막대 24 + 간격 16 고정이라
+  10개면 ≈400px인데 카드 폭은 그보다 좁고 `disableScroll`이라 오른쪽 두 개가 잘려 보였다.
+- **수정**: 스크롤 없는 차트는 `onLayout`으로 폭을 재서 칸 폭 = (폭 − y축 라벨 35) ÷ 막대 수,
+  칸이 40보다 좁으면 막대 60%·간격 40%로 축소. 양끝 여백 = 간격/2. 스크롤 켜기는 분포를
+  한눈에 보는 목적과 맞지 않아 기각. `npx tsc --noEmit` 통과, 실기기 확인은 아직.
+  근거는 `M2C2-report-spec.md` 변경 이력 2026-09-26.
+
+---
+
+## 2026-09-24 — M2-C2 실기기 검증 착수 중 시작 로딩 화면 무한정지
+
+- **증상**: 실기기에서 앱이 `AppLoadingScreen`(스피너)에서 넘어가지 않았다. M2-C2 변경분을
+  먼저 의심했지만 `NavigationContainer`가 마운트되기 전 단계라 리포트·마이페이지 코드는
+  렌더되지도 않는다 — 무관했다. `react-native-gifted-charts`도 새 네이티브 의존이 없다.
+- **직접 원인**: PC Wi-Fi(핫스팟 `hh S`) IP가 `10.254.172.151`로 바뀌었는데
+  `.env.local`의 `EXPO_PUBLIC_API_BASE_URL`은 옛 `10.216.149.151`이었다. PC에서 옛 IP는
+  타임아웃, 새 IP의 `/api/movies/random`은 200으로 확인. `.env.local`을 새 IP로 고쳤다
+  (`EXPO_PUBLIC_*`는 번들에 인라인되므로 `npx expo start -c`로 재시작 필요).
+- **근본 결함**: `useHomeBackgroundReady`의 8초 안전망이 프리페치 이펙트 안, 즉
+  `posters.length === 0` 조기 반환 **뒤**에서 걸렸다. 포스터 쿼리가 실패하면 그 줄에서
+  돌아가 타이머가 영영 안 걸린다 — 안전망이 대비하던 상황에서만 정확히 무력했다.
+  타이머를 마운트 시 한 번 거는 별도 이펙트로 옮기고 프리페치 쪽 `race`는 지웠다.
+  8초의 의미가 "프리페치 시작부터"에서 "마운트부터"로 바뀌지만 정상 경로(≈4~5초)보다 넉넉하다.
+  `npx tsc --noEmit` 통과. 스펙 반영은 `M2-frontend-spec.md` 변경 이력 2026-09-24.
+- **남은 것**: 실기기에서 ① 새 IP로 정상 부팅 ② 백엔드를 끈 상태에서 8초 뒤 진입하는지
+  확인 후 M2-C2 §7 검증으로 넘어간다. IP가 바뀔 때마다 반복되는 문제라 USB +
+  `adb reverse tcp:8080 tcp:8080` + `localhost` 전환도 고려할 만하다.
+
+---
+
+## 2026-09-23 — M2-C2(시청 분석 리포트) 구현
+
+- 전날(2026-09-22) 확정된 `docs/M2C2-report-spec.md`를 §1 실행 순서 그대로 따라 착수했다.
+  설계 세션에서 이미 백엔드 계약(DTO·쿼리 파라미터)과 화면 규칙을 다 정해 둔 상태라, 이번
+  세션은 **설계 재검토 없이 구현만** 했다 — 스펙과 다르게 간 지점이 없다.
+- 순서대로 — `react-native-gifted-charts` 설치 → `endpoints.ts`/`src/api/report.ts` →
+  `types/index.ts` 별칭 13종(스키마명 그대로, 손으로 안 바꿈) → `queryKeys.report` +
+  `useReport.ts`(훅 3종) → **무효화 매트릭스**(`useRecords.ts`의 create·update·remove·
+  setRepresentative 네 곳, `useReview.ts`의 write·remove 두 곳에 `['report']` 추가) →
+  공통 부품(`src/components/report/` — `SectionCard`·`StatTile`·`RankRow`·
+  `ReportBarChart`·`ReportPieChart`·`CalendarView`) → `ReportScreen`(10섹션) →
+  `CalendarScreen` → `MonthlyReportScreen` → 마이페이지 위젯 → 네비게이션 연결
+  (`navigation/types.ts`·`MyPageStack.tsx`의 플레이스홀더 3개 교체).
+- **문서가 미리 경고해 둔 함정들을 그대로 코드에 반영**했다 — `reviewRate`를 퍼센트로
+  안 쓰고 "N편 중 M편에 리뷰"로, 선호 TOP 카드에 `count` 안 붙이기(score 정렬과 안 맞아
+  보임), `watchTypeDistribution`의 `UNSPECIFIED`가 과반이면 파이차트 대신 유도 문구,
+  요일 상수를 `['', '일', …]` 1-based로 0번을 비워 서버 `DAYOFWEEK()`를 변환 없이
+  인덱싱, 월말 리포트에는 요일 차트를 안 그림. 리뷰 무효화 두 곳(`useWriteReview`·
+  `useDeleteReview`)이 실제로 놓치기 가장 쉬운 자리였다 — 기록 쪽 넷을 먼저 훑고 나면
+  리뷰가 통계에 영향을 준다는 사실을 잊기 쉽다.
+- **차트 라이브러리 검증** — `react-native-gifted-charts`는 `react-native-svg`(M2-A에서
+  이미 설치)에만 의존해 순수 JS라, 설치 후 `npx expo export --platform android`로
+  번들이 끝까지 도는지 확인했다(Dev Client 재빌드가 필요했으면 그 자체가 별도 이슈였을
+  것). `npx tsc --noEmit`도 통과.
+- **실기기 검증은 하지 않았다** — 백엔드가 로컬에서 실행 중이어야 리포트 API를 때릴 수
+  있는데, 이번 세션은 코드 작성까지만 진행했다. `M2C2-report-spec.md` §7의 검증 절차
+  (특히 리뷰만 작성 시 통계 갱신, 캘린더 다음 달 이동, 마이페이지 위젯→상세 재요청 없음
+  세 경로)가 다음 세션 과제로 남는다.
+
+---
+
 ## 2026-09-17 — `SignUp` 헤더 잘림 수정 + `SearchResult` "내 서재에 있는 작품" 라벨 정정
 
 - **버그 리포트**: "현재 회원 가입 화면의 헤더 부분이 짤리고 있어." 확인해 보니

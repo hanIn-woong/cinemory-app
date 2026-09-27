@@ -128,7 +128,7 @@ export function MovieDetailScreen() {
           watchType: representativeRecord.watchType ?? undefined,
           placeDetail: representativeRecord.placeDetail ?? undefined,
           rating: nextRating,
-          note: representativeRecord.note ?? undefined,
+          privateReview: representativeRecord.privateReview ?? undefined,
         },
       },
       { onError: (error) => Alert.alert('저장 실패', error.message) },
@@ -338,11 +338,11 @@ export function MovieDetailScreen() {
                           {record.representative ? ' · 대표' : ''}
                         </Txt>
                       </View>
-                      {record.note && (
+                      {record.privateReview && (
                         <>
                           <Spacer size="xs" />
                           <Txt variant="caption" color="mutedForeground">
-                            {record.note}
+                            {record.privateReview}
                           </Txt>
                         </>
                       )}

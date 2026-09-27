@@ -1,4 +1,5 @@
 import {
+  keepPreviousData,
   useInfiniteQuery,
   useMutation,
   useQuery,
@@ -11,7 +12,7 @@ import {
 import { wishlistApi } from '../api/wishlist';
 import type { ApiError } from '../api/client';
 import { useAuthStore } from '../store/authStore';
-import type { PageResponse, WishListItemResponse } from '../types';
+import type { PageResponse, WishListItemResponse, WishSort } from '../types';
 import { queryKeys } from './queryKeys';
 
 export function useWishToggle(): UseMutationResult<{ wished: boolean }, ApiError, number> {
@@ -48,11 +49,14 @@ export function useIsWished(movieId: number): UseQueryResult<{ wished: boolean }
 // 그대로 넣으면 .data.pages가 타입에 잡히지 않는다.
 export function useMyWishes(
   userId: number,
+  sort: WishSort = 'RECENT',
 ): UseInfiniteQueryResult<InfiniteData<PageResponse<WishListItemResponse>>, ApiError> {
   return useInfiniteQuery({
-    queryKey: queryKeys.wishes.ofUser(userId),
-    queryFn: ({ pageParam }) => wishlistApi.ofUser(userId, pageParam),
+    queryKey: queryKeys.wishes.ofUser(userId, sort),
+    queryFn: ({ pageParam }) => wishlistApi.ofUser(userId, pageParam, sort),
     initialPageParam: 0,
     getNextPageParam: (lastPage, allPages) => (lastPage.last ? undefined : allPages.length),
+    // 정렬 변경 시 이전 목록 유지 — useMyRecords와 같은 이유.
+    placeholderData: keepPreviousData,
   });
 }

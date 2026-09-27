@@ -61,7 +61,7 @@ export function WatchRecordModal({ visible, onClose, movieId, editing, minDate }
     setWatchType(editing?.watchType ?? null);
     setPlaceDetail(editing?.placeDetail ?? '');
     setRating(editing?.rating ?? 0);
-    setNote(editing?.note ?? '');
+    setNote(editing?.privateReview ?? '');
   }, [visible, editing]);
 
   function openDatePicker() {
@@ -100,7 +100,7 @@ export function WatchRecordModal({ visible, onClose, movieId, editing, minDate }
       watchType: watchType ?? undefined,
       placeDetail: placeDetail.trim() || undefined,
       rating: rating > 0 ? rating : undefined,
-      note: note.trim() || undefined,
+      privateReview: note.trim() || undefined,
     };
 
     if (editing) {

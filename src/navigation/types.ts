@@ -45,16 +45,26 @@ export type SocialStackParamList = {
   CollectionDetail: { collectionId: number; title: string; description?: string };
 };
 
+// MyLibrary 안의 상단 탭(스와이프). 탭 이름이 곧 initialTab 값이다.
+export type LibraryTab = 'records' | 'wishes';
+export type LibraryTabParamList = {
+  records: undefined;
+  wishes: undefined;
+};
+
 export type MyPageStackParamList = {
   MyPage: undefined;
   EditProfile: undefined;
   Settings: undefined;
-  MyRecords: undefined;
-  Wishlist: undefined;
+  // 내 기록·찜 목록 통합(docs/library-sort-spec.md §3.3). 마이페이지 진입점은 `내 기록` 하나이고
+  // 기본 탭은 records다. initialTab은 찜 탭으로 바로 여는 경로(소셜·딥링크 등)용으로 남겨 둔다.
+  MyLibrary: { initialTab?: LibraryTab } | undefined;
   CollectionList: undefined;
   // ⚠️ description도 함께 넘긴다 — CollectionUpdateRequest가 전체 치환이라 description을
   // 모르면 수정 폼을 열 때마다 설명이 지워진다(단건 조회 API 부재, docs/M2C-screens-spec.md §5.3).
   CollectionDetail: { collectionId: number; title: string; description?: string }; // ⚠️ 단건 조회 API 부재 → title 동반 전달
-  Report: undefined; // 2군
+  Report: undefined;
+  Calendar: undefined;
+  MonthlyReport: { year: number; month: number };
   MovieDetail: { movieId: number };
 };

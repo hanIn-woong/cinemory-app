@@ -6,16 +6,17 @@ import {
   Bookmark,
   ChevronRight,
   Film,
-  Heart,
   Settings as SettingsIcon,
   User as UserIcon,
   type LucideIcon,
 } from 'lucide-react-native';
 import { Image, Pressable, View } from 'react-native';
 import { AuthRequired, ErrorState, LoadingState } from '../../components/common';
-import { Divider, Screen, Spacer, Txt } from '../../components/primitives';
+import { Card, Divider, Screen, Spacer, Txt } from '../../components/primitives';
+import { CalendarView } from '../../components/report';
 import { useMe } from '../../hooks/useAuth';
 import { useMyRecordsCount } from '../../hooks/useRecords';
+import { useCalendar } from '../../hooks/useReport';
 import type { MyPageStackParamList } from '../../navigation/types';
 import { useAuthStore } from '../../store/authStore';
 import { colors } from '../../theme/tokens';
@@ -34,9 +35,8 @@ interface MenuItem {
 // (M2-C: 내 컬렉션·찜 목록·시청 분석)는 화면이 아직 자리만 있는 플레이스홀더다
 // (docs/M2B-screens-spec.md §5.6 — 탭은 와이어프레임 확정 사항이라 숨기지 않는다).
 const MENU_ITEMS: MenuItem[] = [
-  { label: '내 기록', icon: Film, onPress: (nav) => nav.navigate('MyRecords') },
+  { label: '내 기록', icon: Film, onPress: (nav) => nav.navigate('MyLibrary') },
   { label: '내 컬렉션', icon: Bookmark, onPress: (nav) => nav.navigate('CollectionList') },
-  { label: '찜 목록', icon: Heart, onPress: (nav) => nav.navigate('Wishlist') },
   { label: '시청 분석', icon: BarChart2, onPress: (nav) => nav.navigate('Report') },
   { label: '프로필 수정', icon: UserIcon, onPress: (nav) => nav.navigate('EditProfile') },
   { label: '설정', icon: SettingsIcon, onPress: (nav) => nav.navigate('Settings') },
@@ -49,6 +49,10 @@ export function MyPageScreen() {
   const userId = useAuthStore((s) => s.user?.id);
   const me = useMe();
   const recordsCount = useMyRecordsCount(userId ?? 0);
+  const today = new Date();
+  // 쿼리 키가 Calendar 상세와 같다(['report','calendar',userId,year,month]) — 탭해서
+  // 진입해도 재요청이 없다(docs/M2C2-report-spec.md §5.4).
+  const calendar = useCalendar(userId, today.getFullYear(), today.getMonth() + 1);
 
   if (!isAuthed) {
     return <AuthRequired description="마이페이지는 로그인 후 이용할 수 있어요" />;
@@ -87,6 +91,29 @@ export function MyPageScreen() {
       </View>
 
       <Spacer size="xl" />
+      <View className="px-4">
+        <Pressable onPress={() => navigation.navigate('Calendar')}>
+          <Card>
+            <View className="flex-row items-center justify-between">
+              <Txt variant="h4">
+                {today.getMonth() + 1}월 캘린더
+              </Txt>
+              <ChevronRight size={18} color={colors.mutedForeground} />
+            </View>
+            <Spacer size="sm" />
+            {calendar.data && (
+              <CalendarView
+                year={today.getFullYear()}
+                month={today.getMonth() + 1}
+                days={calendar.data.days ?? []}
+                compact
+              />
+            )}
+          </Card>
+        </Pressable>
+      </View>
+
+      <Spacer size="lg" />
       <View className="border-t border-border">
         {MENU_ITEMS.map((item) => (
           <View key={item.label}>

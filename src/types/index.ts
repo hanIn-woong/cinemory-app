@@ -4,9 +4,14 @@
  * (docs/M2A-foundation-spec.md §11 — DTO를 추측하면 반드시 어긋난다).
  * `gen:api`를 다시 돌릴 때마다 아래 별칭들이 여전히 유효한지 확인한다.
  */
-import type { components } from './api';
+import type { components, operations } from './api';
 
 type S = components['schemas'];
+
+// 목록 정렬 화이트리스트 — 백엔드 enum(RecordSort·WishSort)이 쿼리 파라미터 리터럴 유니온으로
+// 생성된다(docs/library-sort-spec.md §1.2). 두 목록의 옵션 집합이 달라 하나로 합치지 않는다.
+export type RecordSort = NonNullable<operations['getUserMovieList']['parameters']['query']['sort']>;
+export type WishSort = NonNullable<operations['getUserWishList']['parameters']['query']['sort']>;
 
 // 로그인/재발급 응답 — 생성 스키마는 세 필드 모두 optional이지만, 성공 응답에서는
 // 항상 채워진다는 백엔드 계약(docs/M2-frontend-spec.md §6.1)을 반영해 Required로 좁힌다.
@@ -92,3 +97,20 @@ export type CollectionMovieListItemResponse = S['CollectionMovieListItemResponse
 // 벌크·멱등, 최대 50. 1편 추가도 배열로 보낸다(docs/M2C-screens-spec.md §2).
 export type AddMoviesToCollectionRequest = S['AddMoviesToCollectionRequest'];
 export type AddMoviesToCollectionResponse = S['AddMoviesToCollectionResponse'];
+
+// 리포트 — docs/M2C2-report-spec.md §2.3. PageResponse로 감싸지 않는다(TOP N, 서버 상수 개수).
+export type ReportStatisticsResponse = S['ReportStatisticsResponse'];
+export type ReportMonthlyResponse = S['ReportMonthlyResponse'];
+export type ReportCalendarResponse = S['ReportCalendarResponse'];
+export type RatingBucketResponse = S['RatingBucketResponse'];
+export type PreferenceItemResponse = S['PreferenceItemResponse'];
+export type MonthlyTrendItemResponse = S['MonthlyTrendItemResponse'];
+export type WatchTypeCountResponse = S['WatchTypeCountResponse'];
+export type OttPlatformCountResponse = S['OttPlatformCountResponse'];
+export type DecadeCountResponse = S['DecadeCountResponse'];
+export type WeekdayCountResponse = S['WeekdayCountResponse'];
+export type MovieRatingGapResponse = S['MovieRatingGapResponse'];
+export type RewatchItemResponse = S['RewatchItemResponse'];
+export type OldestWatchedResponse = S['OldestWatchedResponse'];
+export type CalendarDayResponse = S['CalendarDayResponse'];
+export type CalendarRecordItemResponse = S['CalendarRecordItemResponse'];
