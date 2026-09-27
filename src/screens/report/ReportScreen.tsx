@@ -39,7 +39,7 @@ export function ReportScreen() {
 
   if (stats.isLoading) {
     return (
-      <Screen>
+      <Screen edges={['left', 'right']}>
         <LoadingState variant="detail" />
       </Screen>
     );
@@ -47,7 +47,7 @@ export function ReportScreen() {
 
   if (stats.isError || !stats.data) {
     return (
-      <Screen>
+      <Screen edges={['left', 'right']}>
         <ErrorState message={stats.error?.message} onRetry={() => stats.refetch()} />
       </Screen>
     );
@@ -58,7 +58,7 @@ export function ReportScreen() {
   // 기록 0건이면 404가 아니라 빈 값이 200으로 온다(RA-5) — EmptyState로 유도한다.
   if (!data.movieCount) {
     return (
-      <Screen>
+      <Screen edges={['left', 'right']}>
         <View className="flex-1 items-center justify-center px-6">
           <Txt variant="h4" className="text-center">
             아직 기록이 없습니다
@@ -85,7 +85,9 @@ export function ReportScreen() {
   const reviewCount = data.movieCount ? Math.round((data.reviewRate ?? 0) * data.movieCount) : 0;
 
   return (
-    <Screen scroll>
+    // ⚠️ top을 뺀다 — 네이티브 헤더가 이미 상단 안전영역을 소화하므로, 기본 edges(top 포함)면
+    // 헤더 아래에 안전영역 높이만큼 빈 띠가 한 번 더 생겨 툴바처럼 보였다(2026-09-28, 리포트 3화면 공통).
+    <Screen scroll edges={['left', 'right']}>
       <Spacer size="md" />
 
       {/* 1. 요약 타일 */}

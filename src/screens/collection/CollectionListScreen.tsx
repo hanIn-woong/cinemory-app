@@ -138,7 +138,7 @@ export function CollectionListScreen() {
 
   if (collections.isLoading) {
     return (
-      <Screen>
+      <Screen edges={['left', 'right']}>
         <LoadingState variant="detail" />
       </Screen>
     );
@@ -146,7 +146,7 @@ export function CollectionListScreen() {
 
   if (collections.isError || !collections.data) {
     return (
-      <Screen>
+      <Screen edges={['left', 'right']}>
         <ErrorState message={collections.error?.message} onRetry={() => collections.refetch()} />
       </Screen>
     );

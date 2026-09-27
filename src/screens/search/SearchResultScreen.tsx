@@ -39,7 +39,7 @@ export function SearchResultScreen() {
 
   if (search.isLoading) {
     return (
-      <Screen>
+      <Screen edges={['left', 'right']}>
         <LoadingState variant="detail" />
       </Screen>
     );
@@ -47,7 +47,7 @@ export function SearchResultScreen() {
 
   if (search.isError || !search.data) {
     return (
-      <Screen>
+      <Screen edges={['left', 'right']}>
         <ErrorState message={search.error?.message} onRetry={() => search.refetch()} />
       </Screen>
     );
@@ -64,7 +64,7 @@ export function SearchResultScreen() {
 
   if (registered.length === 0 && suggestions.length === 0) {
     return (
-      <Screen>
+      <Screen edges={['left', 'right']}>
         <EmptyState title="검색 결과가 없습니다" description={`'${query}'에 대한 결과를 찾지 못했어요`} />
       </Screen>
     );
@@ -102,7 +102,7 @@ export function SearchResultScreen() {
   ].filter((s) => s.data.length > 0);
 
   return (
-    <Screen padded={false}>
+    <Screen padded={false} edges={['left', 'right']}>
       <SectionList
         sections={sections}
         keyExtractor={(item) => `${item.kind}-${item.id}`}

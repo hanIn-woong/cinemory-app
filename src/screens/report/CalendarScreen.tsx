@@ -42,7 +42,7 @@ export function CalendarScreen() {
   const selectedDay = days.find((d) => d.date === selectedDate);
 
   return (
-    <Screen scroll>
+    <Screen scroll edges={['left', 'right']}>
       <Spacer size="md" />
       <View className="flex-row items-center justify-between">
         <Pressable onPress={() => goToMonth(-1)} hitSlop={8}>

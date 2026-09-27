@@ -33,7 +33,7 @@ export function MonthlyReportScreen() {
 
   if (report.isLoading) {
     return (
-      <Screen>
+      <Screen edges={['left', 'right']}>
         <LoadingState variant="detail" />
       </Screen>
     );
@@ -41,7 +41,7 @@ export function MonthlyReportScreen() {
 
   if (report.isError || !report.data) {
     return (
-      <Screen>
+      <Screen edges={['left', 'right']}>
         <ErrorState message={report.error?.message} onRetry={() => report.refetch()} />
       </Screen>
     );
@@ -51,7 +51,7 @@ export function MonthlyReportScreen() {
 
   if (!data.movieCount) {
     return (
-      <Screen>
+      <Screen edges={['left', 'right']}>
         <Txt variant="body" color="mutedForeground" className="mt-12 text-center">
           {year}년 {month}월에는 기록이 없어요
         </Txt>
@@ -66,7 +66,7 @@ export function MonthlyReportScreen() {
   const ratingBuckets = (data.ratingDistribution ?? []).filter((b) => (b.count ?? 0) > 0);
 
   return (
-    <Screen scroll>
+    <Screen scroll edges={['left', 'right']}>
       <Spacer size="md" />
       <Txt variant="h3">
         {year}년 {month}월 리포트

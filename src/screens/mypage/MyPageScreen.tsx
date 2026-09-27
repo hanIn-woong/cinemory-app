@@ -60,7 +60,7 @@ export function MyPageScreen() {
 
   if (me.isLoading) {
     return (
-      <Screen>
+      <Screen edges={['left', 'right']}>
         <LoadingState variant="detail" />
       </Screen>
     );
@@ -68,7 +68,7 @@ export function MyPageScreen() {
 
   if (me.isError || !me.data) {
     return (
-      <Screen>
+      <Screen edges={['left', 'right']}>
         <ErrorState message={me.error?.message} onRetry={() => me.refetch()} />
       </Screen>
     );
