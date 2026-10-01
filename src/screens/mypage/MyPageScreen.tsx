@@ -3,9 +3,9 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { LinearGradient } from 'expo-linear-gradient';
 import {
   BarChart2,
-  Bookmark,
   ChevronRight,
   Film,
+  LibraryBig,
   Pencil,
   Settings as SettingsIcon,
   User as UserIcon,
@@ -14,7 +14,7 @@ import {
 import { Image, Pressable, View } from 'react-native';
 import { AuthRequired, ErrorState, LoadingState } from '../../components/common';
 import { Card, Divider, Screen, Spacer, Txt } from '../../components/primitives';
-import { CalendarView } from '../../components/report';
+import { CalendarView, ReportLinkCard } from '../../components/report';
 import { useMe } from '../../hooks/useAuth';
 import { useMyRecordsCount } from '../../hooks/useRecords';
 import { useCalendar } from '../../hooks/useReport';
@@ -26,6 +26,7 @@ type Nav = NativeStackNavigationProp<MyPageStackParamList, 'MyPage'>;
 
 const COVER_HEIGHT = 128;
 const AVATAR_SIZE = 96;
+const AVATAR_RING = 2;
 
 interface MenuItem {
   label: string;
@@ -36,12 +37,7 @@ interface MenuItem {
 // 찜 목록은 별도 메뉴가 아니라 "내 영화"(MyLibrary) 화면 안의 탭에서 진입한다(library-sort-spec §3.3).
 const GRID_ITEMS: MenuItem[] = [
   { label: '내 영화', icon: Film, onPress: (nav) => nav.navigate('MyLibrary') },
-  { label: '내 컬렉션', icon: Bookmark, onPress: (nav) => nav.navigate('CollectionList') },
-];
-
-const LIST_ITEMS: MenuItem[] = [
-  { label: '시청 분석 리포트', icon: BarChart2, onPress: (nav) => nav.navigate('Report') },
-  { label: '설정', icon: SettingsIcon, onPress: (nav) => nav.navigate('Settings') },
+  { label: '내 컬렉션', icon: LibraryBig, onPress: (nav) => nav.navigate('CollectionList') },
 ];
 
 export function MyPageScreen() {
@@ -78,19 +74,37 @@ export function MyPageScreen() {
 
   return (
     <Screen scroll padded={false} edges={['left', 'right']}>
-      <LinearGradient
-        colors={[colors.primary, colors.brandDeep]}
-        style={{ height: COVER_HEIGHT }}
-      />
-      <View className="items-center px-4" style={{ marginTop: -AVATAR_SIZE / 2 }}>
-        <ProfileAvatar uri={me.data.profileImage} />
+      <View style={{ height: COVER_HEIGHT }}>
+        <LinearGradient colors={[colors.primary, colors.brandDeep]} style={{ flex: 1 }} />
+        <Pressable
+          onPress={() => navigation.navigate('Settings')}
+          hitSlop={8}
+          className="absolute right-4 top-4 h-9 w-9 items-center justify-center rounded-full bg-black/15"
+        >
+          <SettingsIcon size={20} color={colors.primaryForeground} />
+        </Pressable>
+      </View>
+      <View className="items-center px-4" style={{ marginTop: -(AVATAR_SIZE + AVATAR_RING * 2) / 2 }}>
+        {/* 흰 border-4(커버 컷아웃) 바깥에 브랜드 링을 한 겹 더 두른다. */}
+        <View className="rounded-full" style={{ borderWidth: AVATAR_RING, borderColor: colors.primary }}>
+          <ProfileAvatar uri={me.data.profileImage} />
+        </View>
         <Spacer size="sm" />
         <Txt variant="h3">{me.data.nickname}</Txt>
         <Spacer size="xs" />
-        <Txt variant="caption" color="mutedForeground">
-          {recordsCount.isSuccess ? `영화 ${recordsCount.data}편 관람` : ' '}
-        </Txt>
+        <View className="h-0.5 w-8 rounded-full bg-primary" />
         <Spacer size="sm" />
+        {/* 로딩 중에도 자리를 지켜 아래 요소가 튀지 않게 투명 처리만 한다. */}
+        <View
+          className="flex-row items-center rounded-full px-3 py-1"
+          style={{ backgroundColor: colors.brandLight, opacity: recordsCount.isSuccess ? 1 : 0 }}
+        >
+          <Film size={12} color={colors.brandDeep} />
+          <Txt variant="caption" className="ml-1 font-semibold" style={{ color: colors.brandDeep }}>
+            영화 {recordsCount.data ?? 0}편 관람
+          </Txt>
+        </View>
+        <Spacer size="md" />
         <Pressable
           onPress={() => navigation.navigate('EditProfile')}
           className="flex-row items-center rounded-full border border-border px-4 py-1.5"
@@ -102,17 +116,23 @@ export function MyPageScreen() {
         </Pressable>
       </View>
 
-      <Spacer size="xl" />
+      <Spacer size="lg" />
+      <View className="px-4">
+        <Divider />
+      </View>
+      <Spacer size="lg" />
       <View className="flex-row px-4" style={{ gap: 12 }}>
         {GRID_ITEMS.map((item) => (
           <Pressable
             key={item.label}
             onPress={() => item.onPress(navigation)}
-            className="flex-1 items-center justify-center rounded-lg border border-border bg-card py-5"
+            className="flex-1 items-center justify-center rounded-lg border border-primary bg-card py-5"
           >
-            <item.icon size={22} color={colors.foreground} />
+            <item.icon size={22} color={colors.primary} />
             <Spacer size="xs" />
-            <Txt variant="body">{item.label}</Txt>
+            <Txt variant="body" color="primary">
+              {item.label}
+            </Txt>
           </Pressable>
         ))}
       </View>
@@ -120,9 +140,14 @@ export function MyPageScreen() {
       <Spacer size="lg" />
       <View className="px-4">
         <Pressable onPress={() => navigation.navigate('Calendar')}>
-          <Card>
+          {/* Card의 border-border를 className으로 덮으면 우선순위가 보장되지 않아 style로 준다. */}
+          <Card style={{ borderColor: colors.primary }}>
+            {/* 제목을 가운데 둔다 — 왼쪽에 쉐브런과 같은 너비의 빈 칸을 둬서 오른쪽
+                쉐브런과 무게를 맞춘다. 안 그러면 제목이 왼쪽으로 치우쳐서 아래 7칸
+                요일 그리드(가운데 정렬)와 어긋나 보인다. */}
             <View className="flex-row items-center justify-between">
-              <Txt variant="h4">
+              <View style={{ width: 18 }} />
+              <Txt variant="h4" className="flex-1 text-center">
                 {today.getMonth() + 1}월 캘린더
               </Txt>
               <ChevronRight size={18} color={colors.mutedForeground} />
@@ -141,23 +166,16 @@ export function MyPageScreen() {
       </View>
 
       <Spacer size="lg" />
-      <View className="border-t border-border">
-        {LIST_ITEMS.map((item) => (
-          <View key={item.label}>
-            <Pressable
-              className="flex-row items-center px-4 py-4"
-              onPress={() => item.onPress(navigation)}
-            >
-              <item.icon size={20} color={colors.mutedForeground} />
-              <Txt variant="body" className="ml-3 flex-1">
-                {item.label}
-              </Txt>
-              <ChevronRight size={18} color={colors.mutedForeground} />
-            </Pressable>
-            <Divider />
-          </View>
-        ))}
+      <View className="px-4">
+        <ReportLinkCard
+          icon={BarChart2}
+          title="시청 분석 리포트"
+          description="지금까지의 시청 기록으로 나의 취향을 확인해보세요"
+          onPress={() => navigation.navigate('Report')}
+        />
       </View>
+
+      <Spacer size="xl" />
     </Screen>
   );
 }

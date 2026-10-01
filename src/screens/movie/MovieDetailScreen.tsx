@@ -1,7 +1,7 @@
 import { useRoute, type RouteProp } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
-import { Heart, Maximize2, User as UserIcon, X } from 'lucide-react-native';
+import { Bookmark, Maximize2, User as UserIcon, X } from 'lucide-react-native';
 import { useState } from 'react';
 import { Alert, Image, Modal, Pressable, ScrollView, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -291,10 +291,10 @@ export function MovieDetailScreen() {
               onPress={() => requireAuth(() => wishToggle.mutate(movieId))}
               disabled={wishToggle.isPending}
             >
-              <Heart
+              <Bookmark
                 size={24}
-                color={colors.destructive}
-                fill={isAuthed && isWished.data?.wished ? colors.destructive : 'transparent'}
+                color={colors.primary}
+                fill={isAuthed && isWished.data?.wished ? colors.primary : 'transparent'}
               />
             </Pressable>
           </View>

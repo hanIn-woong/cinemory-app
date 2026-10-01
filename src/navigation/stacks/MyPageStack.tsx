@@ -20,7 +20,7 @@ export function MyPageStack() {
       <Stack.Screen name="MyPage" component={MyPageScreen} options={{ title: '마이페이지' }} />
       <Stack.Screen name="EditProfile" component={makePlaceholder('프로필 수정')} options={{ title: '프로필 수정' }} />
       <Stack.Screen name="Settings" component={SettingsScreen} options={{ title: '설정' }} />
-      <Stack.Screen name="MyLibrary" component={MyLibraryScreen} options={{ title: '내 서재' }} />
+      <Stack.Screen name="MyLibrary" component={MyLibraryScreen} options={{ title: '내 영화' }} />
       <Stack.Screen name="CollectionList" component={CollectionListScreen} options={{ title: '내 컬렉션' }} />
       <Stack.Screen name="CollectionDetail" component={CollectionDetailScreen} options={{ title: '컬렉션' }} />
       <Stack.Screen name="Report" component={ReportScreen} options={{ title: '시청 분석 리포트' }} />
