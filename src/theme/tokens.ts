@@ -17,6 +17,9 @@ export const colors = {
   border: 'rgba(0,0,0,0.1)',
   inputBackground: '#F3F3F5',
   star: '#FACC15',
+  // 카카오 브랜드 컬러 — 공식 가이드 고정값(임의 선택 아님). 다른 색과 섞어 쓰지 않는다.
+  kakaoYellow: '#FEE500',
+  kakaoBubble: '#191919',
 } as const;
 
 export const radius = { sm: 6, md: 10, lg: 12, xl: 16, full: 9999 } as const;

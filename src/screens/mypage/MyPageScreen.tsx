@@ -6,6 +6,7 @@ import {
   Bookmark,
   ChevronRight,
   Film,
+  Pencil,
   Settings as SettingsIcon,
   User as UserIcon,
   type LucideIcon,
@@ -32,13 +33,14 @@ interface MenuItem {
   onPress: (navigation: Nav) => void;
 }
 
-// (M2-C: 내 컬렉션·찜 목록·시청 분석)는 화면이 아직 자리만 있는 플레이스홀더다
-// (docs/M2B-screens-spec.md §5.6 — 탭은 와이어프레임 확정 사항이라 숨기지 않는다).
-const MENU_ITEMS: MenuItem[] = [
-  { label: '내 기록', icon: Film, onPress: (nav) => nav.navigate('MyLibrary') },
+// 찜 목록은 별도 메뉴가 아니라 "내 영화"(MyLibrary) 화면 안의 탭에서 진입한다(library-sort-spec §3.3).
+const GRID_ITEMS: MenuItem[] = [
+  { label: '내 영화', icon: Film, onPress: (nav) => nav.navigate('MyLibrary') },
   { label: '내 컬렉션', icon: Bookmark, onPress: (nav) => nav.navigate('CollectionList') },
+];
+
+const LIST_ITEMS: MenuItem[] = [
   { label: '시청 분석 리포트', icon: BarChart2, onPress: (nav) => nav.navigate('Report') },
-  { label: '프로필 수정', icon: UserIcon, onPress: (nav) => nav.navigate('EditProfile') },
   { label: '설정', icon: SettingsIcon, onPress: (nav) => nav.navigate('Settings') },
 ];
 
@@ -88,9 +90,34 @@ export function MyPageScreen() {
         <Txt variant="caption" color="mutedForeground">
           {recordsCount.isSuccess ? `영화 ${recordsCount.data}편 관람` : ' '}
         </Txt>
+        <Spacer size="sm" />
+        <Pressable
+          onPress={() => navigation.navigate('EditProfile')}
+          className="flex-row items-center rounded-full border border-border px-4 py-1.5"
+        >
+          <Pencil size={14} color={colors.mutedForeground} />
+          <Txt variant="caption" className="ml-1.5">
+            프로필 수정
+          </Txt>
+        </Pressable>
       </View>
 
       <Spacer size="xl" />
+      <View className="flex-row px-4" style={{ gap: 12 }}>
+        {GRID_ITEMS.map((item) => (
+          <Pressable
+            key={item.label}
+            onPress={() => item.onPress(navigation)}
+            className="flex-1 items-center justify-center rounded-lg border border-border bg-card py-5"
+          >
+            <item.icon size={22} color={colors.foreground} />
+            <Spacer size="xs" />
+            <Txt variant="body">{item.label}</Txt>
+          </Pressable>
+        ))}
+      </View>
+
+      <Spacer size="lg" />
       <View className="px-4">
         <Pressable onPress={() => navigation.navigate('Calendar')}>
           <Card>
@@ -115,7 +142,7 @@ export function MyPageScreen() {
 
       <Spacer size="lg" />
       <View className="border-t border-border">
-        {MENU_ITEMS.map((item) => (
+        {LIST_ITEMS.map((item) => (
           <View key={item.label}>
             <Pressable
               className="flex-row items-center px-4 py-4"

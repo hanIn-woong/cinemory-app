@@ -3,7 +3,8 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useNavigation } from '@react-navigation/native';
 import { useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
-import { KeyboardAvoidingView, Platform, Pressable, View } from 'react-native';
+import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, View } from 'react-native';
+import Svg, { Path } from 'react-native-svg';
 import { z } from 'zod';
 import { ExtrudedText } from '../../components/common';
 import { Button, Screen, Spacer, TextField, Txt } from '../../components/primitives';
@@ -11,6 +12,8 @@ import { useKakaoLogin, useLogin } from '../../hooks/useAuth';
 import type { AuthStackParamList } from '../../navigation/types';
 import { colors } from '../../theme/tokens';
 import { applyServerErrors } from '../../utils/formErrors';
+
+const KAKAO_BUTTON_SIZE = 52;
 
 const schema = z.object({
   email: z.string().min(1, '이메일을 입력해 주세요').email('올바른 이메일 형식이 아닙니다'),
@@ -136,10 +139,37 @@ export function LoginScreen() {
           로그인
         </Button>
 
-        <Spacer size="md" />
-        <Button variant="secondary" onPress={onKakaoPress} loading={kakaoLogin.isPending}>
-          카카오로 시작하기
-        </Button>
+        <Spacer size="lg" />
+        <View className="items-center">
+          <Pressable
+            onPress={onKakaoPress}
+            disabled={kakaoLogin.isPending}
+            accessibilityLabel="카카오로 시작하기"
+            className="items-center justify-center"
+            style={{
+              width: KAKAO_BUTTON_SIZE,
+              height: KAKAO_BUTTON_SIZE,
+              borderRadius: KAKAO_BUTTON_SIZE / 2,
+              backgroundColor: colors.kakaoYellow,
+              opacity: kakaoLogin.isPending ? 0.6 : 1,
+            }}
+          >
+            {kakaoLogin.isPending ? (
+              <ActivityIndicator color={colors.kakaoBubble} />
+            ) : (
+              <Svg width={24} height={22} viewBox="0 0 22 20">
+                <Path
+                  d="M11 0C4.925 0 0 3.94 0 8.8c0 3.084 1.98 5.79 4.976 7.36L3.73 19.6a.5.5 0 00.74.56l4.53-3c.64.1 1.3.15 1.98.15 6.075 0 11-3.94 11-8.8C22 3.94 17.075 0 11 0z"
+                  fill={colors.kakaoBubble}
+                />
+              </Svg>
+            )}
+          </Pressable>
+          <Spacer size="xs" />
+          <Txt variant="caption" color="mutedForeground">
+            카카오로 시작하기
+          </Txt>
+        </View>
         {kakaoError && (
           <>
             <Spacer size="sm" />
