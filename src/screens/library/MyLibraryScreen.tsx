@@ -20,7 +20,7 @@ export function MyLibraryScreen() {
   const userId = useAuthStore((s) => s.user?.id);
 
   if (!isAuthed || userId == null) {
-    return <AuthRequired description="내 서재는 로그인 후 볼 수 있어요" />;
+    return <AuthRequired description="내 영화 화면은 로그인 후 볼 수 있어요" />;
   }
 
   return (
@@ -35,7 +35,7 @@ export function MyLibraryScreen() {
         sceneStyle: { backgroundColor: colors.background },
       }}
     >
-      <Tab.Screen name="records" options={{ title: '내 기록' }}>
+      <Tab.Screen name="records" options={{ title: '시청 목록' }}>
         {() => <RecordsTab userId={userId} />}
       </Tab.Screen>
       <Tab.Screen name="wishes" options={{ title: '찜 목록' }}>

@@ -77,4 +77,7 @@ export const EP = {
   boxOffice: {
     root: '/api/box-office',
   },
+  ott: {
+    platforms: '/api/ott-platforms',
+  },
 } as const;

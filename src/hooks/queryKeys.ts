@@ -16,8 +16,9 @@ export const queryKeys = {
     ofUserMovie: (userId: number, movieId: number) => ['records', 'ofUserMovie', userId, movieId] as const,
     // "N편 관람" 표시용 — size=1 조회. ofUser(무한스크롤)와 캐시 모양이 달라 키를 분리한다.
     count: (userId: number) => ['records', 'count', userId] as const,
-    // 홈 배경용 — size가 화면 격자 크기에 따라 달라져 ofUser(무한스크롤)와 캐시 모양이 다르다.
-    homeBackground: (userId: number, size: number) => ['records', 'homeBackground', userId, size] as const,
+    // 홈 배경 컨베이어용 — 페이지 크기가 화면 한 장 칸 수라 ofUser(무한스크롤)와 캐시 모양이 다르다.
+    homeBackgroundPage: (userId: number, pageSize: number, page: number) =>
+      ['records', 'homeBackground', userId, pageSize, page] as const,
   },
   reviews: {
     me: (movieId: number) => ['reviews', 'me', movieId] as const,
@@ -43,5 +44,8 @@ export const queryKeys = {
     // 돌아갈 때 매번 재요청한다(docs/M2C2-report-spec.md §3.1).
     monthly: (userId: number, year: number, month: number) => ['report', 'monthly', userId, year, month] as const,
     calendar: (userId: number, year: number, month: number) => ['report', 'calendar', userId, year, month] as const,
+  },
+  ott: {
+    platforms: () => ['ott', 'platforms'] as const,
   },
 } as const;

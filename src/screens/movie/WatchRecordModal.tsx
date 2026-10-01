@@ -4,6 +4,7 @@ import DateTimePicker, { DateTimePickerAndroid } from '@react-native-community/d
 import { ActionSheet, type ActionSheetOption } from '../../components/common';
 import { RatingStars } from '../../components/movie/RatingStars';
 import { Button, Screen, Spacer, TextField, Txt } from '../../components/primitives';
+import { useOttPlatforms } from '../../hooks/useOttPlatforms';
 import { useCreateRecord, useUpdateRecord } from '../../hooks/useRecords';
 import type { CreateRecordRequest, UpdateRecordRequest, WatchRecordResponse, WatchType } from '../../types';
 
@@ -43,15 +44,18 @@ function parseLocalDateString(value: string): Date {
 export function WatchRecordModal({ visible, onClose, movieId, editing, minDate }: WatchRecordModalProps) {
   const createRecord = useCreateRecord();
   const updateRecord = useUpdateRecord();
+  const ottPlatforms = useOttPlatforms();
   const minDateObj = minDate ? parseLocalDateString(minDate) : undefined;
 
   const [watchDate, setWatchDate] = useState<Date | null>(null);
   const [showIosPicker, setShowIosPicker] = useState(false);
   const [watchType, setWatchType] = useState<WatchType | null>(null);
+  const [ottPlatformId, setOttPlatformId] = useState<number | null>(null);
   const [placeDetail, setPlaceDetail] = useState('');
   const [rating, setRating] = useState(0); // API 스케일(0~10). 0 = 미평가
   const [note, setNote] = useState('');
   const [typeSheetVisible, setTypeSheetVisible] = useState(false);
+  const [platformSheetVisible, setPlatformSheetVisible] = useState(false);
 
   // 열릴 때마다 수정 대상 값으로 채우거나(수정 모드) 비운다(새 작성).
   useEffect(() => {
@@ -59,6 +63,7 @@ export function WatchRecordModal({ visible, onClose, movieId, editing, minDate }
     setShowIosPicker(false);
     setWatchDate(editing?.watchDate ? parseLocalDateString(editing.watchDate) : null);
     setWatchType(editing?.watchType ?? null);
+    setOttPlatformId(editing?.ottPlatform?.id ?? null);
     setPlaceDetail(editing?.placeDetail ?? '');
     setRating(editing?.rating ?? 0);
     setNote(editing?.privateReview ?? '');
@@ -81,10 +86,10 @@ export function WatchRecordModal({ visible, onClose, movieId, editing, minDate }
   }
 
   function handleSubmit() {
-    // ⚠️ OTT는 ottPlatformId가 필수인데, 목록을 가져올 API가 아직 없다 — 목록 없이 임의 ID를
-    // 보내면 잘못된 값을 지어내는 것이라 여기서 막는다. THEATER·ETC·미선택만 지금 지원한다.
-    if (watchType === 'OTT') {
-      Alert.alert('아직 지원하지 않아요', 'OTT 플랫폼 선택 기능은 준비 중입니다');
+    // 서버 규칙(watchType=OTT ⇔ ottPlatformId 필수)을 클라이언트에서 먼저 막는다 —
+    // 400보다 친절하다(docs/ott-record-spec.md O-4).
+    if (watchType === 'OTT' && ottPlatformId == null) {
+      Alert.alert('OTT 플랫폼을 선택해 주세요');
       return;
     }
 
@@ -99,6 +104,9 @@ export function WatchRecordModal({ visible, onClose, movieId, editing, minDate }
       watchDate: watchDate ? toLocalDateString(watchDate) : undefined,
       watchType: watchType ?? undefined,
       placeDetail: placeDetail.trim() || undefined,
+      // OTT가 아니면 절대 싣지 않는다 — watchType 변경 시 상태를 비우지만(O-3), 전송
+      // 직전에도 한 번 더 보장한다(docs/ott-record-spec.md 2-3 ⑦).
+      ottPlatformId: watchType === 'OTT' ? ottPlatformId ?? undefined : undefined,
       rating: rating > 0 ? rating : undefined,
       privateReview: note.trim() || undefined,
     };
@@ -120,13 +128,53 @@ export function WatchRecordModal({ visible, onClose, movieId, editing, minDate }
     }
   }
 
+  // 목록이 비어 있거나 조회 실패면 플랫폼 시트를 열지 않고 안내한다(O-8) — 운영 초기
+  // ott_platform 이관 누락 같은 상황에서 저장 불가 상태로 갇히지 않게.
+  function openPlatformSheet() {
+    if (ottPlatforms.isError || ottPlatforms.data?.length === 0) {
+      Alert.alert('OTT 플랫폼 목록을 불러올 수 없어요', '잠시 후 다시 시도해 주세요');
+      return;
+    }
+    setPlatformSheetVisible(true);
+  }
+
   const typeOptions: ActionSheetOption[] = [
     ...(Object.keys(WATCH_TYPE_LABEL) as WatchType[]).map((type) => ({
       label: WATCH_TYPE_LABEL[type],
-      onPress: () => setWatchType(type),
+      onPress: () => {
+        if (type === 'OTT') {
+          if (ottPlatforms.isError || ottPlatforms.data?.length === 0) {
+            Alert.alert('OTT 플랫폼 목록을 불러올 수 없어요', '잠시 후 다시 시도해 주세요');
+            return;
+          }
+          setWatchType('OTT');
+          // 시트 두 개가 동시에 전환되면 Android에서 두 번째가 뜨지 않는 경우가 있다 —
+          // 첫 시트(ActionSheet)가 닫힌 뒤에 연다(docs/ott-record-spec.md 2-3 ③).
+          setTimeout(() => setPlatformSheetVisible(true), 0);
+          return;
+        }
+        setWatchType(type);
+        setOttPlatformId(null); // OTT가 아니면 즉시 비운다(O-3) — 안 비우면 저장 규칙 위반(400)
+      },
     })),
-    { label: '선택 안 함', onPress: () => setWatchType(null) },
+    {
+      label: '선택 안 함',
+      onPress: () => {
+        setWatchType(null);
+        setOttPlatformId(null);
+      },
+    },
   ];
+
+  const platformOptions: ActionSheetOption[] = (ottPlatforms.data ?? []).map((platform) => ({
+    label: platform.name + (platform.id === ottPlatformId ? ' (현재)' : ''),
+    onPress: () => setOttPlatformId(platform.id),
+  }));
+
+  // 목록에서 찾은 이름 → (목록에 없으면) 수정 대상 기록의 이름(O-6, 비활성화된 플랫폼) →
+  // 둘 다 없으면 안내 문구.
+  const platformLabel =
+    ottPlatforms.data?.find((p) => p.id === ottPlatformId)?.name ?? editing?.ottPlatform?.name ?? '선택해 주세요';
 
   const isPending = editing ? updateRecord.isPending : createRecord.isPending;
 
@@ -193,10 +241,17 @@ export function WatchRecordModal({ visible, onClose, movieId, editing, minDate }
         </Pressable>
         {watchType === 'OTT' && (
           <>
-            <Spacer size="xs" />
-            <Txt variant="caption" color="destructive">
-              OTT 플랫폼 선택은 아직 준비 중이에요 — 다른 방식을 골라주세요
+            <Spacer size="md" />
+            <Txt variant="caption" color="mutedForeground">
+              OTT 플랫폼
             </Txt>
+            <Spacer size="xs" />
+            <Pressable
+              onPress={openPlatformSheet}
+              className="h-12 justify-center rounded-md bg-input-background px-3"
+            >
+              <Txt variant="body">{platformLabel}</Txt>
+            </Pressable>
           </>
         )}
         <Spacer size="md" />
@@ -231,6 +286,12 @@ export function WatchRecordModal({ visible, onClose, movieId, editing, minDate }
         onClose={() => setTypeSheetVisible(false)}
         title="관람 방식"
         options={typeOptions}
+      />
+      <ActionSheet
+        visible={platformSheetVisible}
+        onClose={() => setPlatformSheetVisible(false)}
+        title="OTT 플랫폼"
+        options={platformOptions}
       />
     </Modal>
   );

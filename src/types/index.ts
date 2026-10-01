@@ -34,6 +34,7 @@ export type NicknameChangeRequest = S['NicknameChangeRequest'];
 export type PrivacyChangeRequest = S['PrivacyChangeRequest'];
 export type PasswordChangeRequest = S['PasswordChangeRequest'];
 export type WatchType = NonNullable<S['WatchRecordCreateRequest']['watchType']>;
+export type OttPlatformResponse = Required<S['OttPlatformResponse']>;
 export type RankType = NonNullable<S['BoxOfficeResponse']['rankType']>;
 export type TargetType = S['CommentCreateRequest']['targetType'];
 export type RoleTier = NonNullable<S['ActorResponse']['roleTier']>;
