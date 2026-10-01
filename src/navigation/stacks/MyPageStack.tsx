@@ -17,7 +17,9 @@ const Stack = createNativeStackNavigator<MyPageStackParamList>();
 export function MyPageStack() {
   return (
     <Stack.Navigator>
-      <Stack.Screen name="MyPage" component={MyPageScreen} options={{ title: '마이페이지' }} />
+      {/* 헤더 없음 — 커버 그라디언트가 상태바 밑까지 올라간다. 뒤로 갈 곳이 없는 탭 루트라 잃는 것이
+          없고, 하위 화면의 뒤로가기 라벨용으로 title은 남긴다. */}
+      <Stack.Screen name="MyPage" component={MyPageScreen} options={{ title: '마이페이지', headerShown: false }} />
       <Stack.Screen name="EditProfile" component={makePlaceholder('프로필 수정')} options={{ title: '프로필 수정' }} />
       <Stack.Screen name="Settings" component={SettingsScreen} options={{ title: '설정' }} />
       <Stack.Screen name="MyLibrary" component={MyLibraryScreen} options={{ title: '내 영화' }} />

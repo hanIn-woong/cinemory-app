@@ -24,11 +24,21 @@ interface CalendarViewProps {
   days: CalendarDayResponse[];
   // 마이페이지 요약 위젯 — §9.8이 이 prop을 전제로 설계돼 있다(docs/M2C2-report-spec.md §5.4).
   compact?: boolean;
+  // compact의 칸 높이를 바꿀 때 — 마이페이지가 화면 높이에 맞춰 카드를 늘리는 데 쓴다.
+  compactCellHeight?: number;
   selectedDate?: string;
   onDayPress?: (day: CalendarDayResponse) => void;
 }
 
-export function CalendarView({ year, month, days, compact = false, selectedDate, onDayPress }: CalendarViewProps) {
+export function CalendarView({
+  year,
+  month,
+  days,
+  compact = false,
+  compactCellHeight,
+  selectedDate,
+  onDayPress,
+}: CalendarViewProps) {
   const byDate = new Map(days.map((d) => [d.date!, d]));
   const firstWeekday = new Date(year, month - 1, 1).getDay();
   const totalDays = new Date(year, month, 0).getDate();
@@ -45,7 +55,7 @@ export function CalendarView({ year, month, days, compact = false, selectedDate,
   // 튀지 않게 하고, onLayout이 실측값으로 바로잡는다(CalendarScreen은 Screen의 기본 좌우 여백 안).
   const { width: windowWidth } = useWindowDimensions();
   const [gridWidth, setGridWidth] = useState(windowWidth - layout.screenPadding * 2);
-  const cellHeight = compact ? CELL.compact.height : (gridWidth / 7) * POSTER_HEIGHT_RATIO;
+  const cellHeight = compact ? (compactCellHeight ?? CELL.compact.height) : (gridWidth / 7) * POSTER_HEIGHT_RATIO;
 
   return (
     <View>

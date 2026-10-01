@@ -11,7 +11,9 @@ import {
   User as UserIcon,
   type LucideIcon,
 } from 'lucide-react-native';
-import { Image, Pressable, View } from 'react-native';
+import { useState } from 'react';
+import { Image, Pressable, View, useWindowDimensions, type LayoutChangeEvent } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AuthRequired, ErrorState, LoadingState } from '../../components/common';
 import { Card, Divider, Screen, Spacer, Txt } from '../../components/primitives';
 import { CalendarView, ReportLinkCard } from '../../components/report';
@@ -20,7 +22,7 @@ import { useMyRecordsCount } from '../../hooks/useRecords';
 import { useCalendar } from '../../hooks/useReport';
 import type { MyPageStackParamList } from '../../navigation/types';
 import { useAuthStore } from '../../store/authStore';
-import { colors } from '../../theme/tokens';
+import { colors, layout } from '../../theme/tokens';
 
 type Nav = NativeStackNavigationProp<MyPageStackParamList, 'MyPage'>;
 
@@ -42,6 +44,7 @@ const GRID_ITEMS: MenuItem[] = [
 
 export function MyPageScreen() {
   const navigation = useNavigation<Nav>();
+  const insets = useSafeAreaInsets();
   // 마이페이지는 화면 전체가 로그인 필요 — AuthRequired로 막는다(§6.7 탭별 게스트 동작).
   const isAuthed = useAuthStore((s) => s.status === 'authenticated');
   const userId = useAuthStore((s) => s.user?.id);
@@ -51,6 +54,7 @@ export function MyPageScreen() {
   // 쿼리 키가 Calendar 상세와 같다(['report','calendar',userId,year,month]) — 탭해서
   // 진입해도 재요청이 없다(docs/M2C2-report-spec.md §5.4).
   const calendar = useCalendar(userId, today.getFullYear(), today.getMonth() + 1);
+  const calendarFit = useCalendarFit(today.getFullYear(), today.getMonth() + 1, calendar.data != null);
 
   if (!isAuthed) {
     return <AuthRequired description="마이페이지는 로그인 후 이용할 수 있어요" />;
@@ -58,7 +62,7 @@ export function MyPageScreen() {
 
   if (me.isLoading) {
     return (
-      <Screen edges={['left', 'right']}>
+      <Screen>
         <LoadingState variant="detail" />
       </Screen>
     );
@@ -66,7 +70,7 @@ export function MyPageScreen() {
 
   if (me.isError || !me.data) {
     return (
-      <Screen edges={['left', 'right']}>
+      <Screen>
         <ErrorState message={me.error?.message} onRetry={() => me.refetch()} />
       </Screen>
     );
@@ -74,12 +78,15 @@ export function MyPageScreen() {
 
   return (
     <Screen scroll padded={false} edges={['left', 'right']}>
-      <View style={{ height: COVER_HEIGHT }}>
+      {/* 헤더가 없어 커버가 상태바 밑까지 올라간다 — 상태바 높이만큼 커버를 늘려 보이는 커버 높이를
+          유지하고, 톱니바퀴도 그만큼 내려 노치·상태바에 가리지 않게 한다. */}
+      <View style={{ height: COVER_HEIGHT + insets.top }}>
         <LinearGradient colors={[colors.primary, colors.brandDeep]} style={{ flex: 1 }} />
         <Pressable
           onPress={() => navigation.navigate('Settings')}
           hitSlop={8}
-          className="absolute right-4 top-4 h-9 w-9 items-center justify-center rounded-full bg-black/15"
+          className="absolute right-4 h-9 w-9 items-center justify-center rounded-full bg-black/15"
+          style={{ top: insets.top + 12 }}
         >
           <SettingsIcon size={20} color={colors.primaryForeground} />
         </Pressable>
@@ -138,7 +145,7 @@ export function MyPageScreen() {
       </View>
 
       <Spacer size="lg" />
-      <View className="px-4">
+      <View className="px-4" onLayout={calendarFit.onLayout}>
         <Pressable onPress={() => navigation.navigate('Calendar')}>
           {/* Card의 border-border를 className으로 덮으면 우선순위가 보장되지 않아 style로 준다. */}
           <Card style={{ borderColor: colors.primary }}>
@@ -159,6 +166,7 @@ export function MyPageScreen() {
                 month={today.getMonth() + 1}
                 days={calendar.data.days ?? []}
                 compact
+                compactCellHeight={calendarFit.cellHeight}
               />
             )}
           </Card>
@@ -178,6 +186,36 @@ export function MyPageScreen() {
       <Spacer size="xl" />
     </Screen>
   );
+}
+
+const CALENDAR_CELL_MIN = 32; // CalendarView compact 기본값
+const CALENDAR_CELL_MAX = 72;
+// 카드 아래 끝을 보이는 영역 끝보다 이만큼 위에 둔다 — 그 아래 Spacer(lg 16)가 있어서 리포트
+// 박스 윗변은 화면 밖 12px에서 시작한다.
+const CALENDAR_BOTTOM_INSET = 4;
+
+// 캘린더 위젯을 화면 아래 끝까지 늘린다 — 시청 분석 리포트 박스는 스크롤해야 보이게(사용자 요청,
+// 2026-10-02). 고정 숫자로 키우면 기기마다 리포트가 보였다 안 보였다 해서 화면 높이로 계산한다.
+// 카드 위치와 높이를 실측하고(onLayout), 칸 높이를 뺀 나머지(제목·요일줄·패딩)는 그대로 둔 채
+// 칸 높이만 조정한다 — 칸 높이를 바꿔도 나머지는 변하지 않아 한 번에 맞는다.
+function useCalendarFit(year: number, month: number, hasGrid: boolean) {
+  const { height: windowHeight } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
+  const [cellHeight, setCellHeight] = useState(CALENDAR_CELL_MIN);
+  // 헤더가 없어 스크롤 영역은 창 맨 위에서 시작하고 탭바 위에서 끝난다(MainTabNavigator의 tabBarStyle).
+  const viewportHeight = windowHeight - (layout.tabBarHeight + insets.bottom);
+  const rows = Math.ceil((new Date(year, month - 1, 1).getDay() + new Date(year, month, 0).getDate()) / 7);
+
+  const onLayout = (e: LayoutChangeEvent) => {
+    if (!hasGrid) return; // 그리드가 그려지기 전 높이는 칸 높이 계산에 쓸 수 없다
+    const { y, height } = e.nativeEvent.layout;
+    const chrome = height - rows * cellHeight;
+    const target = (viewportHeight - CALENDAR_BOTTOM_INSET - y - chrome) / rows;
+    const next = Math.min(CALENDAR_CELL_MAX, Math.max(CALENDAR_CELL_MIN, target));
+    if (Math.abs(next - cellHeight) > 1) setCellHeight(next);
+  };
+
+  return { cellHeight, onLayout };
 }
 
 function ProfileAvatar({ uri }: { uri?: string | null }) {
