@@ -188,6 +188,10 @@ MyLibrary: { initialTab?: 'records' | 'wishes' };
 가고 기본 탭은 `records`. **`initialTab` 파라미터 자체는 남긴다** — 찜 탭으로 바로 여는 경로(3군 소셜
 등)가 생기면 다시 쓴다.
 
+→ **2026-10-02 명칭 변경 — 진입점·헤더는 `내 영화`, 기록 탭은 `시청 목록`.** 마이페이지 개편
+(`M2B-screens-spec.md` §5.6)에서 진입점이 [내 영화 | 내 컬렉션] 카드가 됐다. 라우트 이름 `MyLibrary`와
+탭 키(`records`/`wishes`)는 그대로다 — 표시 문자열만 바뀌었다.
+
 ⚠️ `MyPageStack`의 기존 두 라우트를 지우면 **다른 화면에서 `navigate('MyRecords')`를 부르는
 곳이 깨진다.** 전수 확인 후 일괄 교체할 것.
 
@@ -215,7 +219,7 @@ MyLibrary: { initialTab?: 'records' | 'wishes' };
 
 ```
 ┌──────────────────────┐
-│  내 기록  │  찜 목록   │  ← 고정
+│ 시청 목록 │  찜 목록   │  ← 고정 (2026-10-02: 내 기록 → 시청 목록)
 ├──────────────────────┤
 │ ⇅ 최근순        ▦ ▤  │  ← 접히는 부분
 └──────────────────────┘
@@ -289,6 +293,7 @@ M2-C §5.1에 이미 적어둔 것이 여기서 다시 걸린다.
 
 | 날짜 | 내용 |
 |---|---|
+| 2026-10-02 | **표시 명칭 변경 — `내 서재`/`내 기록` → `내 영화`/`시청 목록`.** 마이페이지 개편으로 진입점이 "내 영화" 카드가 되면서 화면 헤더(`MyPageStack` 타이틀)를 `내 영화`로, 기록 탭 이름을 `시청 목록`으로, 로그인 안내 문구를 "내 영화 화면은…"으로 바꿨다. 라우트(`MyLibrary`)·탭 키·`initialTab`은 그대로라 다른 화면의 `navigate` 호출에는 영향이 없다. 커밋 `2fec148` |
 | 2026-09-26 (이어서 2) | **4단계까지 완료 + 마이페이지 `찜 목록` 메뉴 삭제(§3.3 뒤집음).** Dev Client 재빌드 후 §4.2 검증과 §8.6 뒤로가기 검증표 통과를 확인받았다 — `@react-navigation/native` 7.4.1 상향의 회귀 없음. prebuild 없이 재빌드만으로 pager-view가 링크된다는 3단계의 판단도 확인됐다(이전 항목의 `assembleDebug` 중단으로 미확인이던 부분). 이어서 **§3.3의 "메뉴 두 항목 유지"를 뒤집었다** — 그 근거는 *"합치면 찜 목록으로 바로 갈 방법이 사라진다"* 였는데, 실제로는 **내 서재에서 스와이프 한 번**이라 별도 메뉴가 중복으로 보였다(사용자 판단). `내 기록` 한 항목이 `initialTab` 없이 진입한다. `initialTab`은 3군 소셜 등에서 찜 탭으로 바로 열 경로로 **남겨 뒀다** |
 | 2026-09-26 (이어서) | **3단계 구현 완료 — Dev Client 재빌드·§4.2 검증 전.** §4.1은 실기기에서 3·4·5번 통과 보고를 받고 착수했다. 패키지는 §3.2대로 설치했고 `@react-navigation/native`가 7.4.1로 올라갔다. **설계와 다르게 간 것 둘** — ① **prebuild를 다시 돌리지 않았다.** Expo autolinking이 Gradle 빌드 시점에 모듈을 모으고 pager-view엔 config plugin이 없어, prebuild가 만들어 낼 차이가 없다. 되돌리기 어려운 단계를 필요 없이 밟지 않는 쪽을 택했다(`assembleDebug`는 메모리 부족으로 중단 — 네이티브 빌드 성공은 미확인). ② **탭 전환 시 `reset()`이 아니라 `show()`** — `reset()`은 viewMode 토글처럼 **스크롤이 0으로 가는 경우**를 위한 것이라, 스크롤이 유지되는 탭 전환에 쓰면 `lastScrollY`=0 때문에 다음 스크롤에서 툴바가 즉시 다시 숨는다. 로그인 게이트는 탭마다 두지 않고 `MyLibraryScreen`에서 한 번 한다. 탭 컴포넌트는 `userId` prop을 받아 §3.1의 소셜 재사용 자리를 만들어 뒀다. `npx tsc --noEmit`·`expo export android` 통과 |
 | 2026-09-26 | **1·2단계 구현 완료 — §4.1 실기기 검증 전. §1을 백엔드 docs로 이관하고 포인터만 남겼다.** 백엔드(`cinemory-backend`): `RecordSort`(7)·`WishSort`(5) enum, Controller `@RequestParam(defaultValue = "RECENT")`, Service가 `PageRequest.of(page, size, enum.toSort())`로 자유 `sort`를 버림, 찜 `findByUserIdOrderByIdDesc` → `findByUserId`(메서드명 `OrderBy`는 `Pageable`의 `Sort` **앞에 덧붙어** enum 정렬을 무력화한다). ★ **초안에 없던 `id DESC` 보조키를 추가**했다 — `RATING_DESC`처럼 값이 겹치는 정렬에서 순서가 전순서가 아니면 §0.1 버그가 정렬 옵션 안에서 재발한다. NULL 뒤로는 `Sort.Order.nullsLast()`를 **Hibernate 7이 MySQL에서 에뮬레이션**해 스펙의 `(col IS NULL)` 수기 표현이 필요 없었다. `LibrarySortTest` 4건(옵션별 순서·NULL 위치·25건 3페이지 중복/누락 없음·자유 `sort` 무시) + 전체 129건 통과, 실서버에서 잘못된 값·찜의 `RATING_DESC`가 400인 것도 확인. §1.4의 `watch_record(user_id, is_representative)` 인덱스는 `idx_watch_record_user_representative`로 **존재함**. 프론트: `gen:api` diff는 `sort` 유니온 두 줄뿐, 쿼리 키에 `sort` 포함(§2.1), `SortSheet`/`SortButton` 신설 + `ActionSheetOption.selected?` 추가(§2.2), **`keepPreviousData` + 수동 `scrollToOffset(0)` + `reset()`**(§2.3 — 기본 동작이면 정렬을 바꿀 때마다 화면 전체가 로딩으로 깜빡인다). 부수 효과: **홈 배경(`useHomeBackground`)도 `sort` 없이 부르므로 서버 기본값 `RECENT`를 따라 "오래된 기록 N편" → "최근 기록 N편"으로 바뀐다** — 의도에 더 맞아 그대로 둔다. `npx tsc --noEmit`·`expo export android` 통과 |
