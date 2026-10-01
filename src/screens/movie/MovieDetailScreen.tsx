@@ -111,7 +111,8 @@ export function MovieDetailScreen() {
 
   // ⚠️ PATCH /api/records/{id}는 전체 치환이다(B-15) — rating만 보내면 나머지 필드가
   // null로 지워진다. 대표 기록의 기존 값을 그대로 다시 실어 보낸다(WatchRecordModal의
-  // 수정 흐름과 동일한 이유).
+  // 수정 흐름과 동일한 이유). ottPlatformId도 포함 — 빠지면 OTT 기록에서
+  // INVALID_WATCH_TYPE_OTT_COMBINATION(400)이 난다(docs/ott-record-spec.md 0.2).
   //
   // ⚠️ RatingStars는 "같은 별을 다시 탭하면 0(해제)"을 보낸다 — WatchRecordModal처럼
   // "저장" 전 임시 상태에서는 안전하지만, 여기는 탭마다 바로 저장이라 현재 별점과 같은
@@ -127,6 +128,7 @@ export function MovieDetailScreen() {
           watchDate: representativeRecord.watchDate ?? undefined,
           watchType: representativeRecord.watchType ?? undefined,
           placeDetail: representativeRecord.placeDetail ?? undefined,
+          ottPlatformId: representativeRecord.ottPlatform?.id ?? undefined,
           rating: nextRating,
           privateReview: representativeRecord.privateReview ?? undefined,
         },
@@ -334,6 +336,9 @@ export function MovieDetailScreen() {
                         <Txt variant="body">
                           {record.watchDate ?? '날짜 미기록'}
                           {record.watchType ? ` · ${WATCH_TYPE_LABEL[record.watchType]}` : ''}
+                          {record.watchType === 'OTT' && record.ottPlatform?.name
+                            ? ` · ${record.ottPlatform.name}`
+                            : ''}
                           {record.placeDetail ? ` · ${record.placeDetail}` : ''}
                           {record.representative ? ' · 대표' : ''}
                         </Txt>

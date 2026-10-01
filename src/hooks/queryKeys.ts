@@ -44,4 +44,7 @@ export const queryKeys = {
     monthly: (userId: number, year: number, month: number) => ['report', 'monthly', userId, year, month] as const,
     calendar: (userId: number, year: number, month: number) => ['report', 'calendar', userId, year, month] as const,
   },
+  ott: {
+    platforms: () => ['ott', 'platforms'] as const,
+  },
 } as const;
