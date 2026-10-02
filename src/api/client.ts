@@ -72,13 +72,17 @@ api.interceptors.request.use(async (config: InternalAxiosRequestConfig) => {
 
   const { accessToken, accessTokenExpiresAt } = useAuthStore.getState();
   if (accessToken && accessTokenExpiresAt - Date.now() < 60_000) {
-    // 만료 60초 전 선제 갱신. 실패하면 즉시 로그아웃하고 여기서 멈춘다 —
+    // 만료 60초 전 선제 갱신. 세션 사망이면 즉시 로그아웃하고 여기서 멈춘다 —
     // 토큰 없이 그냥 보내면 401을 한 번 더 받을 뿐이다 (§4.2).
     try {
       await refreshOnce();
     } catch (e) {
-      await useAuthStore.getState().logout();
-      throw e;
+      if (isSessionDead(e)) {
+        await useAuthStore.getState().logout();
+        throw toApiError(e);
+      }
+      // 일시적 실패 — 세션 유지. 현재 토큰으로 그대로 보낸다. 이미 만료됐다면 서버의 401 TOKEN_EXPIRED를
+      // 응답 인터셉터가 받아 한 번 더 재발급을 시도한다(docs/token-refresh-resilience-spec.md R-5).
     }
   }
 
@@ -90,6 +94,10 @@ api.interceptors.request.use(async (config: InternalAxiosRequestConfig) => {
 });
 
 api.interceptors.response.use(undefined, async (error: AxiosError<ErrorResponseBody>) => {
+  // 요청 인터셉터가 던진 ApiError도 여기로 온다(axios는 요청 인터셉터의 거부를 응답 인터셉터로 흘린다).
+  // response가 없어 normalizeError가 NETWORK_ERROR로 덮어쓰므로 그대로 통과시킨다.
+  if (error instanceof ApiError) throw error;
+
   const { response, config } = error;
 
   if (!config || response?.status !== 401 || config._retried) {
@@ -120,10 +128,14 @@ api.interceptors.response.use(undefined, async (error: AxiosError<ErrorResponseB
     const token = await refreshOnce();
     config._retried = true; // 원 요청 재시도는 1회만
     config.headers.Authorization = `Bearer ${token}`;
+    // await 하지 않는다 — 재시도 요청 자체의 실패는 재발급 실패가 아니므로 아래 catch로 들어오면 안 된다.
     return api.request(config);
-  } catch {
-    await useAuthStore.getState().logout();
-    throw normalizeError(error);
+  } catch (e) {
+    if (isSessionDead(e)) {
+      await useAuthStore.getState().logout();
+      throw normalizeError(error); // 세션 사망 — 원래의 401을 그대로
+    }
+    throw toApiError(e); // 일시적 실패 — 원인 에러(네트워크·503…)를 던진다, 세션 유지 (R-4)
   }
 });
 
@@ -133,4 +145,23 @@ function normalizeError(error: AxiosError<ErrorResponseBody>): ApiError {
   }
   const { status, data } = error.response;
   return new ApiError(status, data?.code ?? 'UNKNOWN_ERROR', data?.message ?? error.message, data?.errors ?? []);
+}
+
+// 재발급 실패가 "세션이 죽었다"는 뜻인지. 상태 코드로 판정한다(R-3) — 재발급 경로의 TOKEN_EXPIRED는
+// "리프레시 토큰 만료"(세션 사망)이고, 일반 API의 TOKEN_EXPIRED는 "재발급하라"(정상 흐름)다.
+// 응답 없음(네트워크)·429·5xx는 일시적 실패 — 세션을 유지한다(docs/token-refresh-resilience-spec.md).
+function isSessionDead(e: unknown): boolean {
+  if (e instanceof Error && e.message === 'NO_REFRESH_TOKEN') return true;
+  if (axios.isAxiosError(e) && e.response) {
+    const s = e.response.status;
+    return s === 400 || s === 401;
+  }
+  return false;
+}
+
+// 재발급 실패를 호출부에 던질 ApiError로 — 일시적 실패면 그 원인(네트워크·503 등)이 보이게 한다(R-4).
+function toApiError(e: unknown): ApiError {
+  if (e instanceof ApiError) return e;
+  if (axios.isAxiosError(e)) return normalizeError(e as AxiosError<ErrorResponseBody>);
+  return new ApiError(0, 'UNKNOWN_ERROR', e instanceof Error ? e.message : String(e));
 }
