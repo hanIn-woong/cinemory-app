@@ -229,6 +229,11 @@ export function CollectionEditScreen() {
           action={{ label: '영화 추가', onPress: () => setAddVisible(true) }}
         />
       ) : (
+        // ★ 잡은 행을 ScrollView 밖 오버레이로 옮겨(teleport) 손가락의 화면 좌표로 바로 그린다(2026-10-02 실기기 —
+        // 자동 스크롤로 아래 행이 새로 드러날 때마다 잡은 행이 위아래로 튀었다). 행이 콘텐츠 안에 있으면 Android의
+        // 애니메이션 scrollTo가 콘텐츠와 함께 행을 먼저 옮기고, 스크롤 오프셋 보정은 한두 프레임 늦게 와서 걸음마다
+        // 갔다가 돌아온다. 포털에서는 위치가 touch.absoluteX/Y 기준이라 스크롤과 무관하다.
+        <Sortable.PortalProvider enabled>
         <Animated.ScrollView
           ref={scrollableRef}
           contentContainerStyle={{ paddingVertical: 8 }}
@@ -254,15 +259,28 @@ export function CollectionEditScreen() {
             // ① 확대 1.1은 화면 폭 행이 좌우로 넘친다 → 살짝만 ② 스냅은 핸들 중심을 손가락 아래로 끌어와
             // 잡는 순간 행이 밀린다 → 끔(잡은 자리 그대로) ③ 가로 이탈은 리스트에 의미가 없다 → 세로만.
             activeItemScale={1.03}
+            // ★ 나머지 행을 흐리게 하지 않는다(기본 0.5, 2026-10-02 실기기 — 행을 지나칠 때 프레임 드랍 + 잡는 순간
+            // 포스터 튐). Android는 반투명 뷰(이미지·텍스트·아이콘)를 오프스크린 레이어로 따로 합성해, 흐려진 행 N개가
+            // 드래그 내내 매 프레임 다시 합성됐다. 잡는 순간엔 N개의 페이드 애니메이션이 포털 마운트와 같은 프레임에 겹쳤다.
+            inactiveItemOpacity={1}
             enableActiveItemSnap={false}
             overDrag="vertical"
             // 자동 스크롤(2026-10-02 실기기 — 드래그하며 스크롤될 때 튐):
             // ① Android(새 아키텍처) 기본은 300ms마다 애니메이션 scrollTo 한 번이라 최고 속도(1000px/s)에서
             //    0.3초마다 ~300px 계단이 졌다. ⚠️ 간격을 줄이면 안 된다 — 100ms로 줄였더니 새 scrollTo가 이전
             //    애니메이션을 중간에 끊어 오프셋이 출렁이고 리스트 전체가 떨렸다(라이브러리가 #463에서 피한 것).
-            //    간격은 기본값 그대로 두고 **속도 상한만 낮춰** 한 계단의 높이를 줄인다(~300px → ~150px).
+            //    간격은 기본값 그대로 두고 속도 상한만 조정한다. 500은 느리고 800도 부족해 라이브러리 기본값과 같은
+            //    1000(한 계단 ~300px) — 잡은 행은 위 PortalProvider로 스크롤과 무관해져 계단이 행을 흔들지 않는다.
             // ② 끝에서 50px 더 넘겨 스크롤하는 기본값을 0으로 — 위 overScrollMode와 함께 맨 아래 어긋남의 원인.
-            autoScrollMaxVelocity={500}
+            // ③ 그래도 남은 "끊김"은 프레임 드랍이 아니라 박자였다(2026-10-02): Android 애니메이션 scrollTo는 250ms
+            //    가감속(ReactScrollViewHelper, OverScroller 기본)이라 300ms 간격이면 걸음마다 가속 → 정지 → 50ms 멈춤이
+            //    초당 3번 반복된다. 라이브러리가 Android에서 매 프레임·비애니메이션 스크롤을 피한 이유(#463 "shaky")는
+            //    잡은 행이 콘텐츠 안에서 오프셋 보정을 한 프레임 늦게 받던 것인데, 위 PortalProvider로 잡은 행이 손가락
+            //    화면 좌표만 따르게 되어 그 원인이 사라졌다 → iOS와 같은 매 프레임(0)·비애니메이션으로 일정 속도.
+            //    ⚠️ 이게 떨리면 되돌릴 곳은 100ms(애니메이션 중간 끊김 — 확인된 실패)가 아니라 기본값(300·animated)이다.
+            autoScrollInterval={0}
+            animateScrollTo={false}
+            autoScrollMaxVelocity={1000}
             autoScrollMaxOverscroll={0}
             sortEnabled={!tooManyToSort}
             onDragStart={() => {
@@ -295,6 +313,7 @@ export function CollectionEditScreen() {
           />
           {movies.isFetchingNextPage && <ActivityIndicator color={colors.primary} style={{ marginVertical: 16 }} />}
         </Animated.ScrollView>
+        </Sortable.PortalProvider>
       )}
 
       <CollectionAddMoviesModal

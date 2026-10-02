@@ -1,13 +1,14 @@
 import { CircleMinus, Equal } from 'lucide-react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useRef } from 'react';
-import { Pressable, View } from 'react-native';
+import { Image, Pressable, View } from 'react-native';
 import ReanimatedSwipeable, { type SwipeableMethods } from 'react-native-gesture-handler/ReanimatedSwipeable';
 import Sortable from 'react-native-sortables';
-import { PosterImage } from '../movie/PosterImage';
+import { PosterSize, tmdbImageUrl } from '../../constants/tmdb';
 import { Txt } from '../primitives/Txt';
-import { colors } from '../../theme/tokens';
+import { colors, posterFallbackPalette } from '../../theme/tokens';
 
-// 2026-10-02 사용자 지시로 키움(76 → 100, 썸네일 40×60 → 56×84) — 3배 밀도에서 ~170px라 SHELF(w185) 그대로.
+// 2026-10-02 사용자 지시로 키움(76 → 100, 썸네일 40×60 → 56×84) — 3배 밀도에서 ~170px라 SHELF(w185).
 export const MOVIE_EDIT_ROW_HEIGHT = 100;
 const THUMB_WIDTH = 56;
 const DELETE_ACTION_WIDTH = 88;
@@ -30,6 +31,7 @@ interface CollectionMovieEditRowProps {
 //    눌러야 지워진다(iOS 기본 편집 목록과 같은 2단계). 실제 서버 반영은 화면의 "저장" 때.
 export function CollectionMovieEditRow({ id, title, posterPath, subtitle, sortable, onRemove, onWillOpen }: CollectionMovieEditRowProps) {
   const swipeableRef = useRef<SwipeableMethods>(null);
+  const thumbUri = tmdbImageUrl(posterPath, PosterSize.SHELF);
 
   return (
     <ReanimatedSwipeable
@@ -66,7 +68,25 @@ export function CollectionMovieEditRow({ id, title, posterPath, subtitle, sortab
           <CircleMinus size={24} color={colors.destructive} />
         </Pressable>
         <View className="ml-3">
-          <PosterImage id={id} posterPath={posterPath} width={THUMB_WIDTH} height={THUMB_WIDTH * 1.5} size="SHELF" radius={4} />
+          {/* ⚠️ PosterImage(expo-image)가 아니라 RN Image다(2026-10-02 실기기 — 잡는 순간 포스터가 사라졌다 나타남).
+              sortables의 포털은 잡은 행을 새로 마운트하는데, expo-image는 Android에서 Glide 파이프라인으로 비동기
+              부착이라 페이드를 끄고 미리 디코딩한 ImageRef를 줘도 첫 프레임이 비었다. RN Image(Android=Fresco)는
+              뷰가 붙을 때 디코딩된 비트맵 메모리 캐시를 **동기로** 확인해 첫 프레임에 그린다 — 원본 행이 같은 URL·
+              크기로 이미 캐시에 올려 두었다. fadeDuration 기본 300ms도 끈다. */}
+          {thumbUri ? (
+            <Image
+              source={{ uri: thumbUri }}
+              style={{ width: THUMB_WIDTH, height: THUMB_WIDTH * 1.5, borderRadius: 4, backgroundColor: colors.muted }}
+              resizeMode="cover"
+              fadeDuration={0}
+            />
+          ) : (
+            // 포스터 없음 — PosterImage와 같은 결정론적 폴백
+            <LinearGradient
+              colors={[posterFallbackPalette[Math.abs(id) % posterFallbackPalette.length], colors.muted]}
+              style={{ width: THUMB_WIDTH, height: THUMB_WIDTH * 1.5, borderRadius: 4 }}
+            />
+          )}
         </View>
         <View className="ml-3 flex-1">
           <Txt variant="body" numberOfLines={2}>
@@ -80,6 +100,7 @@ export function CollectionMovieEditRow({ id, title, posterPath, subtitle, sortab
         </View>
         {sortable && (
           <Sortable.Handle>
+            {/* 화면 밖에서 스크롤해 온 직후 바로 잡는 경우의 보험 — 보이는 행은 화면이 이미 미리 받아 둔다 */}
             <View className="py-3 pl-4" accessibilityLabel={`${title} 순서 바꾸기`}>
               <Equal size={26} color={colors.mutedForeground} />
             </View>
