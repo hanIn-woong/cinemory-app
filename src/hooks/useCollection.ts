@@ -225,9 +225,9 @@ interface ReorderCollectionMoviesVars {
   movieIds: number[];
 }
 
-// 컬렉션 편집 모달의 "현재 영화" 탭 저장에서 쓴다(2026-09-28 — 상세 화면의 별도 편집 모드를
-// 모달로 통합). 낙관적 업데이트는 하지 않는다: 저장 직후 모달이 닫히고 아래 무효화로 다시
-// 받으며, 모달이 들고 있는 항목은 상세 목록 응답의 필드(개봉연도·감독)를 다 갖고 있지 않다.
+// 컬렉션 영화 편집 화면(CollectionEditScreen)의 저장에서 쓴다(2026-10-02 — 9/28 모달 탭에서 이동).
+// 낙관적 업데이트는 하지 않는다: 저장 직후 화면을 나가고 아래 무효화로 다시 받으며, 편집 화면이
+// 들고 있는 항목은 상세 목록 응답의 필드(개봉연도·감독)를 다 갖고 있지 않다.
 export function useReorderCollectionMovies(): UseMutationResult<void, ApiError, ReorderCollectionMoviesVars> {
   const queryClient = useQueryClient();
   const userId = useAuthStore((s) => s.user?.id);

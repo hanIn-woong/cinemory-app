@@ -63,6 +63,8 @@ export type MyPageStackParamList = {
   // ⚠️ description도 함께 넘긴다 — CollectionUpdateRequest가 전체 치환이라 description을
   // 모르면 수정 폼을 열 때마다 설명이 지워진다(단건 조회 API 부재, docs/M2C-screens-spec.md §5.3).
   CollectionDetail: { collectionId: number; title: string; description?: string }; // ⚠️ 단건 조회 API 부재 → title 동반 전달
+  // 컬렉션 상세 ⋮ → 영화 편집(추가·삭제·순서). 진입 시 전량을 다시 받으므로 ID만 넘긴다.
+  CollectionEdit: { collectionId: number };
   Report: undefined;
   Calendar: undefined;
   MonthlyReport: { year: number; month: number };

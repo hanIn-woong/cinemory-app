@@ -8,7 +8,7 @@ interface ReorderHeaderActionsProps {
   onSave: () => void;
 }
 
-// 순서 편집 모드의 헤더 오른쪽 — 컬렉션 목록·상세가 같이 쓴다.
+// 순서 편집 모드의 헤더 오른쪽 — 컬렉션 목록의 순서 편집에서 쓴다.
 export function ReorderHeaderActions({ saving, onCancel, onSave }: ReorderHeaderActionsProps) {
   return (
     <View className="flex-row items-center">

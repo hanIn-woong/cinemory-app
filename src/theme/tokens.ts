@@ -43,15 +43,17 @@ export const posterFallbackPalette = [
   '#4A90E2', '#7B68EE', '#FF69B4', '#FFD700', '#FF6347', '#32CD32', '#9370DB', '#FF8C00',
 ] as const;
 
-// CollectionShelfCard 전용 — 선반 색은 반드시 여기를 참조한다(docs/M2C-screens-spec.md §5.2).
-// A(나무 선반) ↔ B(뉴트럴 렛지, 현재 채택) 전환을 hex 6개 교체로 끝내기 위한 것 —
+// ShelfRow(컬렉션 카드·상세 공용) 전용 — 선반 색은 반드시 여기를 참조한다(docs/M2C-screens-spec.md §5.2·§5.3).
+// A(나무 선반) ↔ B(뉴트럴 렛지) 전환을 hex 6개 교체로 끝내기 위한 것 —
 // 컴포넌트에 색을 박으면 카드·빈 상태·스켈레톤을 전부 찾아다녀야 한다.
 export const shelf = {
-  boardTop: '#FFFFFF',
-  boardMid: '#E4E6EB',
-  boardBottom: '#D3D6DD',
-  edgeTop: '#C2C6CE',
-  edgeBottom: '#AFB4BE',
+  // 선반 판 = 목재(2026-10-02 사용자 결정 — 뉴트럴 렛지의 흰·회색 판이 청록 벽 위에서 떠 보였다).
+  // 위 밝고 아래 어둡게 해 두께가 읽히는 구조는 그대로, 색만 갈색 계열로 바꿨다. 벽은 그대로 청록.
+  boardTop: '#C9996B',
+  boardMid: '#A8764B',
+  boardBottom: '#8A5D38',
+  edgeTop: '#74492B',
+  edgeBottom: '#5E3B22',
   groundShadow: 'rgba(0,0,0,0.34)',
   // 포스터 뒤 "벽" — 카드 흰 바탕과 달라야 선반 위에 물건이 놓인 깊이가 읽힌다(2026-09-27).
   // 브랜드 딥(#37BEB0) — 테두리(primary #14D9D9)보다 한 단계 깊은 같은 계열이라 벽이 뒤로

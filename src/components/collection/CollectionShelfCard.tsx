@@ -1,18 +1,10 @@
-import { LinearGradient } from 'expo-linear-gradient';
-import { useState } from 'react';
 import { Pressable, useWindowDimensions, View } from 'react-native';
-import { PosterImage } from '../movie/PosterImage';
 import { Txt } from '../primitives/Txt';
 import { shelf } from '../../theme/tokens';
+import { SHELF_PADDING_X, ShelfRow } from './ShelfRow';
 
-// 포스터 5장이 선반 폭을 좌우 끝까지 채운다(2026-09-27 — 고정 46×69는 카드 오른쪽이 비었다).
-// 폭은 선반 안쪽 폭에서 간격을 뺀 5등분, 높이는 2:3.
-const SLOTS = 5;
-const POSTER_GAP = 7;
-const SHELF_PADDING_X = 14;
-const POSTER_RADIUS = 3;
 // 첫 레이아웃 전 추정용 — CollectionListScreen의 contentContainerStyle padding(16)과 같다.
-// 추정이 틀려도 onLayout이 곧바로 실측값으로 바로잡는다(첫 프레임 크기 튐 방지용일 뿐).
+// 추정이 틀려도 ShelfRow의 onLayout이 곧바로 실측값으로 바로잡는다.
 const LIST_PADDING_X = 16;
 
 interface CollectionShelfCardProps {
@@ -26,16 +18,10 @@ interface CollectionShelfCardProps {
   onPress: () => void;
 }
 
-// 목록 카드 = "선반 위 포스터 진열"(뉴트럴 렛지, 2026-09-09 확정). 새 라이브러리 없이
-// 전부 expo-linear-gradient로 만든다(홈 배경에서 이미 사용 중). shadowColor/elevation은
-// 플랫폼별 결과가 달라 쓰지 않고, 접지 그림자는 LinearGradient 한 겹으로 대신한다.
+// 목록 카드 = "선반 위 포스터 진열" 한 줄(ShelfRow) + 이름·편수·설명. 선반 그림은 컬렉션 상세와
+// 공유한다(2026-10-02).
 export function CollectionShelfCard({ id, name, movieCount, description, posters = [], onPress }: CollectionShelfCardProps) {
-  // ⚠️ 부족분을 빈 회색 슬롯으로 채우지 않는다 — 선반 위에서는 로딩 실패처럼 보인다.
-  const visiblePosters = posters.slice(0, SLOTS);
   const { width: windowWidth } = useWindowDimensions();
-  const [shelfWidth, setShelfWidth] = useState(windowWidth - LIST_PADDING_X * 2 - SHELF_PADDING_X * 2);
-  const posterWidth = (shelfWidth - POSTER_GAP * (SLOTS - 1)) / SLOTS;
-  const posterHeight = posterWidth * 1.5;
 
   return (
     <Pressable
@@ -51,51 +37,10 @@ export function CollectionShelfCard({ id, name, movieCount, description, posters
     >
       {/* ♿ 선반·포스터는 장식이다 — 카드는 위 accessibilityLabel 하나로만 읽혀야 한다 */}
       <View importantForAccessibility="no-hide-descendants" accessibilityElementsHidden>
-        {/* 벽 — 포스터 뒤만 채도 낮춘 브랜드 컬러로 칠한다. 선반 판(아래 그라디언트)에서 끝나고 그 아래
-            제목 영역은 카드 흰 바탕이라, 벽 → 선반 → 바닥의 층이 읽힌다 */}
-        <View style={{ paddingHorizontal: SHELF_PADDING_X, paddingTop: 12, backgroundColor: shelf.wall }}>
-          <View
-            onLayout={(e) => setShelfWidth(e.nativeEvent.layout.width)}
-            style={{ flexDirection: 'row', alignItems: 'flex-end', gap: POSTER_GAP, height: posterHeight }}
-          >
-            {visiblePosters.map((posterPath, index) => (
-              <View key={index} style={{ width: posterWidth, height: posterHeight }}>
-                {/* 접지 그림자 — 포스터 뒤에 깐 그라디언트 한 겹 */}
-                <LinearGradient
-                  colors={[shelf.groundShadow, 'transparent']}
-                  style={{ position: 'absolute', left: -2, right: -2, bottom: -6, height: 12, zIndex: -1 }}
-                />
-                <PosterImage
-                  id={id * 31 + index}
-                  posterPath={posterPath}
-                  width={posterWidth}
-                  height={posterHeight}
-                  size="SHELF"
-                  radius={POSTER_RADIUS}
-                />
-                {/* 광택 — 대각선, 값싼 장식이라 성능 이슈 시 가장 먼저 뺀다 */}
-                <LinearGradient
-                  colors={['rgba(255,255,255,0.3)', 'transparent']}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
-                  style={{
-                    position: 'absolute',
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    bottom: 0,
-                    borderRadius: POSTER_RADIUS,
-                  }}
-                />
-              </View>
-            ))}
-          </View>
-        </View>
-
-        {/* 선반 — 위 밝고 아래 어둡게(두께로 읽힌다) */}
-        <LinearGradient colors={[shelf.boardTop, shelf.boardMid, shelf.boardBottom]} style={{ height: 6 }} />
-        <View style={{ height: 3, backgroundColor: shelf.edgeBottom }} />
-        <LinearGradient colors={[shelf.groundShadow, 'transparent']} style={{ height: 10, opacity: 0.2 }} />
+        <ShelfRow
+          posters={posters.map((posterPath, index) => ({ key: index, id: id * 31 + index, posterPath }))}
+          estimatedWidth={windowWidth - LIST_PADDING_X * 2 - SHELF_PADDING_X * 2}
+        />
       </View>
 
       <View className="px-3.5 py-2">
