@@ -7,10 +7,19 @@ import { shelf } from '../../theme/tokens';
 
 // 포스터 N장이 선반 폭을 좌우 끝까지 채운다(2026-09-27 — 고정 46×69는 카드 오른쪽이 비었다).
 // 폭은 선반 안쪽 폭에서 간격을 뺀 N등분, 높이는 2:3. 칸이 덜 차도 폭은 N등분 그대로라
-// 컬렉션 상세에서 줄마다 높이가 같다. 목록 카드는 5칸, 상세는 4칸(2026-10-02).
+// 컬렉션 상세에서 줄마다 높이가 같다. 목록 카드·상세 모두 5칸(상세는 10-02에 4칸 → 10-03 페이지 넘김과 함께 5칸).
 export const SHELF_SLOTS = 5;
 export const SHELF_PADDING_X = 14;
-const POSTER_GAP = 7;
+export const SHELF_POSTER_GAP = 7;
+const POSTER_GAP = SHELF_POSTER_GAP;
+export const SHELF_WALL_PADDING_TOP = 12;
+const WALL_PADDING_TOP = SHELF_WALL_PADDING_TOP;
+const BOARD_HEIGHT = 6;
+const EDGE_HEIGHT = 3;
+const GROUND_SHADOW_HEIGHT = 10;
+// 한 줄 높이 = 포스터 높이 + 이 값(벽 위 여백 + 선반 판 + 모서리 + 접지 그림자). 상세 페이지가 4줄을 화면 높이에
+// 맞출 때 쓴다(2026-10-03).
+export const SHELF_ROW_CHROME = WALL_PADDING_TOP + BOARD_HEIGHT + EDGE_HEIGHT + GROUND_SHADOW_HEIGHT;
 const POSTER_RADIUS = 3;
 
 export interface ShelfPoster {
@@ -32,6 +41,11 @@ interface ShelfRowProps {
   slots?: number;
   // 칸이 커지면 원본도 키운다 — 5칸(~62dp)은 SHELF(w185), 4칸(~85dp)은 3배 밀도에서 ~255px라 LIST(w342).
   posterSize?: keyof typeof PosterSize;
+  // 있으면 실측 대신 이 폭으로 그리고 포스터 묶음을 가운데에 둔다 — 상세 페이지가 화면 높이에 맞춰 줄인 경우
+  // 선반 폭보다 좁아진다(2026-10-03). 없으면 선반 폭을 N등분(목록 카드).
+  posterWidth?: number;
+  // 포스터 위 벽 여백 — 기본 12. 상세 페이지가 4줄을 쌓고 남는 높이를 줄마다 나눠 더한다(2026-10-03).
+  wallPaddingTop?: number;
 }
 
 // "선반 위 포스터 진열" 한 줄 — 벽 → 포스터 → 선반 판 → 접지 그림자(뉴트럴 렛지, 2026-09-09 확정).
@@ -40,19 +54,29 @@ interface ShelfRowProps {
 // 이미 사용 중). shadowColor/elevation은 플랫폼별 결과가 달라 쓰지 않고, 접지 그림자는
 // LinearGradient 한 겹으로 대신한다.
 // ⚠️ 부족분을 빈 회색 슬롯으로 채우지 않는다 — 선반 위에서는 로딩 실패처럼 보인다.
-export function ShelfRow({ posters, estimatedWidth, slots = SHELF_SLOTS, posterSize = 'SHELF' }: ShelfRowProps) {
+export function ShelfRow({
+  posters,
+  estimatedWidth,
+  slots = SHELF_SLOTS,
+  posterSize = 'SHELF',
+  posterWidth: fixedPosterWidth,
+  wallPaddingTop = WALL_PADDING_TOP,
+}: ShelfRowProps) {
   const [shelfWidth, setShelfWidth] = useState(estimatedWidth);
-  const posterWidth = (shelfWidth - POSTER_GAP * (slots - 1)) / slots;
+  const posterWidth = fixedPosterWidth ?? (shelfWidth - POSTER_GAP * (slots - 1)) / slots;
   const posterHeight = posterWidth * 1.5;
 
   return (
     <View>
       {/* 벽 — 포스터 뒤만 채도 낮춘 브랜드 컬러로 칠한다. 선반 판(아래 그라디언트)에서 끝나고 그 아래는
           바탕이라, 벽 → 선반 → 바닥의 층이 읽힌다 */}
-      <View style={{ paddingHorizontal: SHELF_PADDING_X, paddingTop: 12, backgroundColor: shelf.wall }}>
+      <View style={{ paddingHorizontal: SHELF_PADDING_X, paddingTop: wallPaddingTop, backgroundColor: shelf.wall }}>
         <View
-          onLayout={(e) => setShelfWidth(e.nativeEvent.layout.width)}
-          style={{ flexDirection: 'row', alignItems: 'flex-end', gap: POSTER_GAP, height: posterHeight }}
+          onLayout={fixedPosterWidth == null ? (e) => setShelfWidth(e.nativeEvent.layout.width) : undefined}
+          style={[
+            { flexDirection: 'row', alignItems: 'flex-end', gap: POSTER_GAP, height: posterHeight },
+            fixedPosterWidth != null && { width: slots * posterWidth + POSTER_GAP * (slots - 1), alignSelf: 'center' },
+          ]}
         >
           {posters.slice(0, slots).map((p) => {
             const content = (
@@ -100,9 +124,9 @@ export function ShelfRow({ posters, estimatedWidth, slots = SHELF_SLOTS, posterS
       </View>
 
       {/* 선반 — 위 밝고 아래 어둡게(두께로 읽힌다) */}
-      <LinearGradient colors={[shelf.boardTop, shelf.boardMid, shelf.boardBottom]} style={{ height: 6 }} />
-      <View style={{ height: 3, backgroundColor: shelf.edgeBottom }} />
-      <LinearGradient colors={[shelf.groundShadow, 'transparent']} style={{ height: 10, opacity: 0.2 }} />
+      <LinearGradient colors={[shelf.boardTop, shelf.boardMid, shelf.boardBottom]} style={{ height: BOARD_HEIGHT }} />
+      <View style={{ height: EDGE_HEIGHT, backgroundColor: shelf.edgeBottom }} />
+      <LinearGradient colors={[shelf.groundShadow, 'transparent']} style={{ height: GROUND_SHADOW_HEIGHT, opacity: 0.2 }} />
     </View>
   );
 }

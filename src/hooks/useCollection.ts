@@ -39,6 +39,10 @@ export function useMyCollections(
   });
 }
 
+// 컬렉션 상세의 한 페이지(5열 × 4행) = 서버 한 페이지(2026-10-03). 서버 기본값(20)에 기대지 않고 명시한다 —
+// 바뀌면 상세의 화면 페이지와 서버 페이지가 어긋난다.
+export const COLLECTION_MOVIES_PAGE_SIZE = 20;
+
 export function useCollectionMovies(
   collectionId: number,
 ): UseInfiniteQueryResult<InfiniteData<PageResponse<CollectionMovieListItemResponse>>, ApiError> {
@@ -47,7 +51,7 @@ export function useCollectionMovies(
   const isAuthed = useAuthStore((s) => s.status === 'authenticated');
   return useInfiniteQuery({
     queryKey: queryKeys.collections.movies(collectionId),
-    queryFn: ({ pageParam }) => collectionApi.movies(collectionId, pageParam),
+    queryFn: ({ pageParam }) => collectionApi.movies(collectionId, pageParam, COLLECTION_MOVIES_PAGE_SIZE),
     initialPageParam: 0,
     getNextPageParam: (lastPage, allPages) => (lastPage.last ? undefined : allPages.length),
     enabled: isAuthed,

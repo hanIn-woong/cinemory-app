@@ -1,46 +1,60 @@
 import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { LinearGradient } from 'expo-linear-gradient';
 import { MoreVertical } from 'lucide-react-native';
-import { useLayoutEffect, useMemo, useState } from 'react';
-import { Alert, Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
-import Animated, { interpolate, useAnimatedScrollHandler, useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
-import { ActionSheet, EmptyState, ErrorState, InfiniteScrollFooter, LoadingState, type ActionSheetOption } from '../../components/common';
+import { useLayoutEffect, useState } from 'react';
+import {
+  ActivityIndicator,
+  Alert,
+  FlatList,
+  Pressable,
+  StyleSheet,
+  View,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
+} from 'react-native';
+import { ActionSheet, EmptyState, ErrorState, LoadingState, type ActionSheetOption } from '../../components/common';
 import { CollectionFormModal } from '../../components/collection/CollectionFormModal';
-import { SHELF_PADDING_X, ShelfRow, type ShelfPoster } from '../../components/collection/ShelfRow';
-import { Screen } from '../../components/primitives';
-import { useCollectionMovies, useDeleteCollection } from '../../hooks/useCollection';
+import {
+  SHELF_PADDING_X,
+  SHELF_POSTER_GAP,
+  SHELF_ROW_CHROME,
+  SHELF_WALL_PADDING_TOP,
+  ShelfRow,
+  type ShelfPoster,
+} from '../../components/collection/ShelfRow';
+import { Screen, Txt } from '../../components/primitives';
+import { COLLECTION_MOVIES_PAGE_SIZE, useCollectionMovies, useDeleteCollection } from '../../hooks/useCollection';
 import type { MyPageStackParamList } from '../../navigation/types';
+import type { CollectionMovieListItemResponse } from '../../types';
 import { colors, shelf } from '../../theme/tokens';
 
 type Rt = RouteProp<MyPageStackParamList, 'CollectionDetail'>;
 type Nav = NativeStackNavigationProp<MyPageStackParamList, 'CollectionDetail'>;
-// 목록 카드(5칸)보다 한 칸 적게 — 상세는 포스터를 눌러 들어가는 화면이라 크게 본다(2026-10-02).
-const SLOTS = 4;
-// 상단 페이드 — 스크롤하면 포스터가 헤더 아래 선에서 잘려 경계처럼 보였다(2026-10-02). 헤더·벽이 같은 색이라
-// 벽 색 → 투명 그라디언트를 위에 깔면 포스터가 헤더 속으로 녹아들어 경계가 사라진다.
-const FADE_HEIGHT = 20;
-// ⚠️ 'transparent'(투명 검정)로 끝내면 Android 그라디언트 중간이 거무스름해진다 — 벽 색의 알파 0으로 끝낸다.
-const WALL_TRANSPARENT = `${shelf.wall}00`;
+
+// 한 화면 페이지 = 5열 × 4행 = 서버 한 페이지(COLLECTION_MOVIES_PAGE_SIZE)(2026-10-03). 화면 N쪽이 곧 서버 N페이지라
+// 다시 묶을 필요가 없다 — 열·행을 바꾸면 페이지 크기도 같이 바꿔야 한다.
+const COLUMNS = 5;
+const ROWS = 4;
+// 페이지 번호(`2 / 5`) 자리. 1쪽뿐이어도 비워 두어 페이지 수가 바뀔 때 포스터 크기가 튀지 않게 한다.
+const INDICATOR_HEIGHT = 36;
+
+// 화면 페이지 하나. movies가 null이면 아직 안 받은 다음 페이지 자리(넘겨 오면 스피너).
+interface PagerItem {
+  key: string;
+  movies: CollectionMovieListItemResponse[] | null;
+}
 
 export function CollectionDetailScreen() {
   const navigation = useNavigation<Nav>();
   const { collectionId, title, description } = useRoute<Rt>().params;
-  const { width: windowWidth } = useWindowDimensions();
   const [menuVisible, setMenuVisible] = useState(false);
   const [editVisible, setEditVisible] = useState(false);
+  // 페이지 영역의 실측 크기 — 이것으로 4줄이 높이에 들어가는 포스터 크기를 정한다.
+  const [pagerSize, setPagerSize] = useState<{ width: number; height: number } | null>(null);
+  const [pageIndex, setPageIndex] = useState(0);
 
   const movies = useCollectionMovies(collectionId);
 
-  // 맨 위에서는 페이드를 숨긴다 — 첫 줄 포스터 윗부분을 가리지 않게. 스크롤한 만큼(0 → FADE_HEIGHT) 나타난다.
-  // UI 스레드에서 처리해 스크롤마다 리렌더하지 않는다.
-  const scrollY = useSharedValue(0);
-  const onScroll = useAnimatedScrollHandler((e) => {
-    scrollY.value = e.contentOffset.y;
-  });
-  const fadeStyle = useAnimatedStyle(() => ({
-    opacity: interpolate(scrollY.value, [0, FADE_HEIGHT], [0, 1], 'clamp'),
-  }));
   const deleteCollection = useDeleteCollection();
 
   // ⚠️ 헤더 제목은 라우트 파라미터다 — 수정 성공 후 캐시를 무효화해도 이 값은 저절로 안 바뀐다.
@@ -60,24 +74,26 @@ export function CollectionDetailScreen() {
     });
   }, [navigation, title]);
 
-  // 선반 한 줄 = 4편. 마지막 줄은 덜 차도 빈 칸을 채우지 않는다.
-  const rows = useMemo(() => {
-    const items = movies.data?.pages.flatMap((p) => p.content) ?? [];
-    const result: ShelfPoster[][] = [];
-    for (let i = 0; i < items.length; i += SLOTS) {
-      result.push(
-        items.slice(i, i + SLOTS).map((item) => ({
-          key: item.movieId!,
-          id: item.movieId!,
-          posterPath: item.posterPath,
-          // 제목을 그리지 않으므로(2026-10-02) 스크린리더용 이름만 붙인다.
-          accessibilityLabel: item.title,
-          onPress: () => navigation.navigate('MovieDetail', { movieId: item.movieId! }),
-        })),
-      );
-    }
-    return result;
-  }, [movies.data, navigation]);
+  function toPosters(items: CollectionMovieListItemResponse[]): ShelfPoster[] {
+    return items.map((item) => ({
+      key: item.movieId!,
+      id: item.movieId!,
+      posterPath: item.posterPath,
+      // 제목을 그리지 않으므로(2026-10-02) 스크린리더용 이름만 붙인다.
+      accessibilityLabel: item.title,
+      onPress: () => navigation.navigate('MovieDetail', { movieId: item.movieId! }),
+    }));
+  }
+
+  // 넘긴 뒤 멈춘 쪽을 현재 페이지로 — 받아 둔 마지막 페이지에 닿으면 다음 페이지를 미리 받아, 넘겼을 때
+  // 대부분 이미 차 있게 한다.
+  function handlePageSettled(e: NativeSyntheticEvent<NativeScrollEvent>) {
+    if (!pagerSize) return;
+    const index = Math.round(e.nativeEvent.contentOffset.x / pagerSize.width);
+    setPageIndex(index);
+    const loaded = movies.data?.pages.length ?? 0;
+    if (index >= loaded - 1 && movies.hasNextPage && !movies.isFetchingNextPage) movies.fetchNextPage();
+  }
 
   if (movies.isLoading) {
     return (
@@ -121,35 +137,95 @@ export function CollectionDetailScreen() {
     },
   ];
 
+  const pages = movies.data.pages;
+  // 가장 최근에 받은 페이지의 총 개수 — 편집 후 재조회로 바뀔 수 있다.
+  const totalElements = pages[pages.length - 1]?.totalElements ?? 0;
+  const totalPages = Math.max(1, Math.ceil(totalElements / COLLECTION_MOVIES_PAGE_SIZE));
+  const pagerItems: PagerItem[] = [
+    ...pages.map((p, i) => ({ key: String(i), movies: p.content })),
+    ...(movies.hasNextPage ? [{ key: 'next', movies: null }] : []),
+  ];
+
+  // ★ 4줄이 페이지 높이에 들어가도록 포스터 크기를 정한다(2026-10-03) — 폭 기준(5등분)과 높이 기준(4등분 − 선반
+  // 장식) 중 작은 쪽. 지금 실기기는 폭 기준으로 들어가고, 키가 작은 기기에서만 높이 기준으로 줄어든다.
+  // 폭 기준으로 정해지면 4줄 아래에 높이가 남는다 — 남는 높이를 줄마다 나눠 포스터 위 벽에 더해 페이지를 꽉
+  // 채운다(2026-10-03 실기기, 5칸이 되며 아래가 비었다). 포스터를 세로로 늘리면 2:3이 깨져 그림이 잘리므로
+  // 늘리는 것은 선반 칸 높이다.
+  let posterWidth = 0;
+  let wallPaddingTop = SHELF_WALL_PADDING_TOP;
+  if (pagerSize) {
+    const byWidth = (pagerSize.width - SHELF_PADDING_X * 2 - SHELF_POSTER_GAP * (COLUMNS - 1)) / COLUMNS;
+    const byHeight = (pagerSize.height / ROWS - SHELF_ROW_CHROME) / 1.5;
+    posterWidth = Math.floor(Math.min(byWidth, byHeight));
+    const spare = pagerSize.height - ROWS * (posterWidth * 1.5 + SHELF_ROW_CHROME);
+    wallPaddingTop += Math.max(0, Math.floor(spare / ROWS));
+  }
+
   return (
     <Screen padded={false} edges={['left', 'right']}>
-      {rows.length === 0 ? (
+      {totalElements === 0 ? (
         <EmptyState title="담긴 영화가 없어요" description="오른쪽 위 메뉴의 '영화 편집'에서 추가해보세요" />
       ) : (
-        <View style={{ flex: 1 }}>
-          <Animated.FlatList
-            data={rows}
-            keyExtractor={(row) => String(row[0].key)}
-            renderItem={({ item: row }) => (
-              <ShelfRow posters={row} slots={SLOTS} posterSize="LIST" estimatedWidth={windowWidth - SHELF_PADDING_X * 2} />
-            )}
-            // 선반 사이 그림자가 벽 위에 떨어지도록 콘텐츠 영역 전체를 벽으로 칠한다 — 줄이 쌓여 책장으로
-            // 읽힌다. 콘텐츠 아래 남는 공간은 화면 바탕 그대로(영화가 적어도 화면이 벽으로 덮이지 않게).
-            contentContainerStyle={{ backgroundColor: shelf.wall }}
-            onEndReached={() => {
-              if (movies.hasNextPage && !movies.isFetchingNextPage) movies.fetchNextPage();
+        <>
+          <View
+            style={{ flex: 1, backgroundColor: shelf.wall }}
+            onLayout={(e) => {
+              const { width, height } = e.nativeEvent.layout;
+              setPagerSize((prev) => (prev?.width === width && prev.height === height ? prev : { width, height }));
             }}
-            onScroll={onScroll}
-            scrollEventThrottle={16}
-            onEndReachedThreshold={0.5}
-            ListFooterComponent={
-              <InfiniteScrollFooter visible={movies.hasNextPage ?? false} loading={movies.isFetchingNextPage} />
-            }
-          />
-          <Animated.View pointerEvents="none" style={[styles.fade, fadeStyle]}>
-            <LinearGradient colors={[shelf.wall, WALL_TRANSPARENT]} style={StyleSheet.absoluteFill} />
-          </Animated.View>
-        </View>
+          >
+            {pagerSize && (
+              <FlatList
+                data={pagerItems}
+                keyExtractor={(item) => item.key}
+                horizontal
+                pagingEnabled
+                showsHorizontalScrollIndicator={false}
+                getItemLayout={(_, index) => ({ length: pagerSize.width, offset: pagerSize.width * index, index })}
+                // 한 페이지에 포스터 20장 + 그라디언트 — 양옆 한 쪽씩만 미리 그린다.
+                initialNumToRender={1}
+                maxToRenderPerBatch={1}
+                windowSize={3}
+                onMomentumScrollEnd={handlePageSettled}
+                renderItem={({ item }) => (
+                  <View style={{ width: pagerSize.width, height: pagerSize.height }}>
+                    {/* 4줄 자리를 언제나 그린다 — 덜 찬 페이지는 빈 줄이 선반과 벽만 남는다(2026-10-03 사용자 결정).
+                        포스터 칸은 채우지 않는다(§5.2 원칙). 줄 묶음을 벽으로 칠해 선반 사이 그림자가 벽 위에
+                        떨어진다. 남는 높이는 줄마다 벽에 나눠 넣고, 반올림으로 남는 몇 px도 페이지 영역 바탕(벽 색)이라 티가 안 난다. */}
+                    <View style={{ backgroundColor: shelf.wall }}>
+                      {Array.from({ length: ROWS }, (_, row) => (
+                        <ShelfRow
+                          key={row}
+                          posters={toPosters(item.movies?.slice(row * COLUMNS, (row + 1) * COLUMNS) ?? [])}
+                          slots={COLUMNS}
+                          posterWidth={posterWidth}
+                          wallPaddingTop={wallPaddingTop}
+                          estimatedWidth={pagerSize.width - SHELF_PADDING_X * 2}
+                        />
+                      ))}
+                    </View>
+                    {item.movies === null && (
+                      <View style={StyleSheet.absoluteFill} className="items-center justify-center">
+                        <ActivityIndicator color={colors.primary} />
+                      </View>
+                    )}
+                  </View>
+                )}
+              />
+            )}
+          </View>
+          {/* 벽 색으로 칠해 헤더 → 선반 → 페이지 번호까지 한 면으로 잇는다(2026-10-03). 글자는 헤더와 같은 흰색. */}
+          <View
+            style={{ height: INDICATOR_HEIGHT, backgroundColor: shelf.wall }}
+            className="items-center justify-center"
+          >
+            {totalPages > 1 && (
+              <Txt variant="caption" color="primaryForeground">
+                {`${Math.min(pageIndex, totalPages - 1) + 1} / ${totalPages}`}
+              </Txt>
+            )}
+          </View>
+        </>
       )}
 
       <ActionSheet visible={menuVisible} onClose={() => setMenuVisible(false)} options={menuOptions} />
@@ -165,7 +241,3 @@ export function CollectionDetailScreen() {
     </Screen>
   );
 }
-
-const styles = StyleSheet.create({
-  fade: { position: 'absolute', top: 0, left: 0, right: 0, height: FADE_HEIGHT },
-});

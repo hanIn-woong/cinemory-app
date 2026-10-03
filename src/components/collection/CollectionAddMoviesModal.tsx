@@ -9,13 +9,19 @@ import { useAuthStore } from '../../store/authStore';
 import { colors } from '../../theme/tokens';
 
 type Tab = 'search' | 'records';
+
+// 편집 행 둘째 줄용 — 고르기 응답(검색·내 기록)에는 개봉일만 있고 감독이 없어 연도만 채운다. 저장 후 다시 받으면
+// 서버 목록 응답(releaseYear · directorNames)으로 바뀐다(docs/M2C-screens-spec.md 2026-10-03 (이어서 3)).
+function releaseYear(releaseDate?: string): string | undefined {
+  return releaseDate?.slice(0, 4) || undefined;
+}
 const TAB_LABEL: Record<Tab, string> = { search: '검색해서 추가', records: '내 기록에서 추가' };
 
 export interface PickedMovie {
   movieId: number;
   title: string;
   posterPath?: string | null;
-  // 편집 리스트의 둘째 줄(개봉연도 · 감독). 검색·내 기록에서 고른 것은 없을 수 있다.
+  // 편집 리스트의 둘째 줄(개봉연도 · 감독). 검색·내 기록에서 고른 것은 연도만 있다(감독은 응답에 없음).
   subtitle?: string;
 }
 
@@ -50,9 +56,15 @@ export function CollectionAddMoviesModal({ visible, onClose, existingIds, onPick
     setSubmittedQuery('');
   }, [visible]);
 
-  function pickFromSearch(item: { kind: 'registered' | 'suggestion'; id: number; title: string; posterPath?: string | null }) {
+  function pickFromSearch(item: {
+    kind: 'registered' | 'suggestion';
+    id: number;
+    title: string;
+    posterPath?: string | null;
+    releaseDate?: string;
+  }) {
     if (item.kind === 'registered') {
-      onPick({ movieId: item.id, title: item.title, posterPath: item.posterPath });
+      onPick({ movieId: item.id, title: item.title, posterPath: item.posterPath, subtitle: releaseYear(item.releaseDate) });
       return;
     }
     // suggestion은 아직 우리 DB에 없다 — sync로 등록해 movieId를 받아야 담을 수 있다.
@@ -64,7 +76,7 @@ export function CollectionAddMoviesModal({ visible, onClose, existingIds, onPick
       {
         onSuccess: ({ movieId }) => {
           setSyncingTmdbId(null);
-          onPick({ movieId, title: item.title, posterPath: item.posterPath });
+          onPick({ movieId, title: item.title, posterPath: item.posterPath, subtitle: releaseYear(item.releaseDate) });
         },
         onError: (error) => {
           setSyncingTmdbId(null);
@@ -131,8 +143,8 @@ export function CollectionAddMoviesModal({ visible, onClose, existingIds, onPick
                   return (
                     <FlatList
                       data={[
-                        ...registered.map((m) => ({ kind: 'registered' as const, id: m.id!, title: m.title!, posterPath: m.posterPath })),
-                        ...suggestions.map((m) => ({ kind: 'suggestion' as const, id: m.tmdbId!, title: m.title!, posterPath: m.posterPath })),
+                        ...registered.map((m) => ({ kind: 'registered' as const, id: m.id!, title: m.title!, posterPath: m.posterPath, releaseDate: m.releaseDate })),
+                        ...suggestions.map((m) => ({ kind: 'suggestion' as const, id: m.tmdbId!, title: m.title!, posterPath: m.posterPath, releaseDate: m.releaseDate })),
                       ]}
                       keyExtractor={(item) => `${item.kind}-${item.id}`}
                       contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 24 }}
@@ -184,7 +196,14 @@ export function CollectionAddMoviesModal({ visible, onClose, existingIds, onPick
                         id={item.movieId!}
                         already={existingIds.has(item.movieId!)}
                         pending={false}
-                        onAdd={() => onPick({ movieId: item.movieId!, title: item.title!, posterPath: item.posterPath })}
+                        onAdd={() =>
+                          onPick({
+                            movieId: item.movieId!,
+                            title: item.title!,
+                            posterPath: item.posterPath,
+                            subtitle: releaseYear(item.releaseDate),
+                          })
+                        }
                       />
                     )}
                     onEndReached={() => {

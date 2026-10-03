@@ -1,7 +1,7 @@
 import { useNavigation, usePreventRemove, useRoute, type RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Plus } from 'lucide-react-native';
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, View, type NativeScrollEvent, type NativeSyntheticEvent } from 'react-native';
 import type { SwipeableMethods } from 'react-native-gesture-handler/ReanimatedSwipeable';
 import Animated, { useAnimatedRef } from 'react-native-reanimated';
@@ -20,9 +20,35 @@ import {
 } from '../../hooks/useCollection';
 import type { MyPageStackParamList } from '../../navigation/types';
 import { colors } from '../../theme/tokens';
+import type { CollectionMovieListItemResponse, PageResponse } from '../../types';
 
 type Rt = RouteProp<MyPageStackParamList, 'CollectionEdit'>;
 type Nav = NativeStackNavigationProp<MyPageStackParamList, 'CollectionEdit'>;
+
+// 전환 전에 그리는 행 수 — 100dp 행이라 대부분 기기에서 첫 화면을 채운다. 나머지는 전환이 끝난 뒤 붙인다.
+const INITIAL_ROWS = 10;
+// 전환 후 프레임마다 붙이는 행 수 — 한 번에 다 붙이면 그 커밋 동안 스크롤이 멈춘다(2026-10-03 실기기).
+const ROWS_PER_FRAME = 10;
+// transitionEnd가 오지 않는 경우의 안전망(ReportScreen과 같은 값).
+const ROWS_READY_FALLBACK_MS = 600;
+
+// 받은 페이지 중 seen에 없는 영화를 서버 순서대로 꺼내고 seen에 기록한다. 첫 렌더 초기화와 페이지 이어 붙이기가 같이 쓴다.
+function takeFresh(pages: PageResponse<CollectionMovieListItemResponse>[] | undefined, seen: Set<number>): PickedMovie[] {
+  const fresh: PickedMovie[] = [];
+  pages?.forEach((p) =>
+    p.content.forEach((m) => {
+      if (seen.has(m.movieId!)) return;
+      seen.add(m.movieId!);
+      fresh.push({
+        movieId: m.movieId!,
+        title: m.title!,
+        posterPath: m.posterPath,
+        subtitle: [m.releaseYear, m.directorNames].filter(Boolean).join(' · ') || undefined,
+      });
+    }),
+  );
+  return fresh;
+}
 
 // 컬렉션 상세 ⋮ → "영화 편집"(2026-10-02, docs/M2C-screens-spec.md §5.3-A). 9/10~9/28의 통합 편집 모달에서
 // "현재 영화" 탭을 스택 화면으로 옮긴 것 — 모달 안에서는 GestureHandlerRootView를 한 번 더 감싸야 드래그가
@@ -44,11 +70,19 @@ export function CollectionEditScreen() {
   const removeMovie = useRemoveMovieFromCollection();
   const reorderMovies = useReorderCollectionMovies();
 
+  // ★ 첫 렌더부터 상세가 받아 둔 캐시로 채운다(2026-10-03 — 진입이 느림). 예전에는 빈 배열로 시작해 effect에서
+  // 채웠는데, 그러면 전환 애니메이션 중에 빈 프레임(20편 이하면 "담긴 영화가 없어요")을 한 번 그린 뒤 무거운 행
+  // 전체를 다시 마운트했다. 이후 도착하는 페이지는 아래 effect가 이어 붙인다.
+  const [initial] = useState(() => {
+    const seen = new Set<number>();
+    const fresh = takeFresh(movies.data?.pages, seen);
+    return { seen, ids: fresh.map((m) => m.movieId), catalog: new Map(fresh.map((m) => [m.movieId, m])) };
+  });
   // order가 "지금 화면에 보이는 순서"의 단일 출처이고, catalog는 id → 표시 정보.
   // serverIds는 지금까지 받은 페이지의 서버 순서(= 서버 전체 순서의 앞부분).
-  const [serverIds, setServerIds] = useState<number[]>([]);
-  const [catalog, setCatalog] = useState<Map<number, PickedMovie>>(new Map());
-  const [order, setOrder] = useState<number[]>([]);
+  const [serverIds, setServerIds] = useState<number[]>(initial.ids);
+  const [catalog, setCatalog] = useState<Map<number, PickedMovie>>(initial.catalog);
+  const [order, setOrder] = useState<number[]>(initial.ids);
   const [pendingAdd, setPendingAdd] = useState<Map<number, PickedMovie>>(new Map());
   const [pendingRemove, setPendingRemove] = useState<Set<number>>(new Set());
   const [addVisible, setAddVisible] = useState(false);
@@ -61,7 +95,33 @@ export function CollectionEditScreen() {
   // 잡은 행이 튄다(2026-10-02 실기기).
   const draggingRef = useRef(false);
   // 한 번 붙인 id — 무한스크롤 캐시가 다시 받아져도(staleTime·무효화) 중복으로 붙이지 않는다.
-  const seenRef = useRef<Set<number>>(new Set());
+  const seenRef = useRef<Set<number>>(initial.seen);
+
+  // ★ 전환 전에는 앞 INITIAL_ROWS개만 그린다(2026-10-03 — 탭 후 화면이 밀려 들어오기 전에 멈춤). 행이 첫 렌더에
+  // 들어가 navigate 커밋이 행 N개의 마운트를 끝내야 전환이 시작됐다. order·serverIds는 처음부터 전량이라 저장
+  // 계산은 그대로이고, 그리는 범위만 자른다. 잘린 동안은 드래그를 끈다 — onDragEnd의 data가 잘린 배열이라
+  // setOrder하면 뒷부분이 사라진다(전환 중이라 실제로 잡을 수는 없지만 막아 둔다).
+  // ★ 전환 뒤에도 한 번에 붙이지 않고 프레임마다 ROWS_PER_FRAME개씩 늘린다(2026-10-03 — 전환 직후 스크롤하면
+  // 나머지 행 마운트 동안 멈췄다가 리스트가 나왔다). 스크롤로 다음 페이지가 도착해도 같은 경로로 나눠 붙는다.
+  const [transitioned, setTransitioned] = useState(false);
+  const [visibleCount, setVisibleCount] = useState(INITIAL_ROWS);
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('transitionEnd', (e) => {
+      if (!e.data.closing) setTransitioned(true);
+    });
+    const fallback = setTimeout(() => setTransitioned(true), ROWS_READY_FALLBACK_MS);
+    return () => {
+      unsubscribe();
+      clearTimeout(fallback);
+    };
+  }, [navigation]);
+  const allShown = visibleCount >= order.length;
+  useEffect(() => {
+    if (!transitioned || allShown) return;
+    const frame = requestAnimationFrame(() => setVisibleCount((c) => c + ROWS_PER_FRAME));
+    return () => cancelAnimationFrame(frame);
+  }, [transitioned, allShown, visibleCount]);
+  const visibleOrder = allShown ? order : order.slice(0, visibleCount);
 
   const scrollableRef = useAnimatedRef<Animated.ScrollView>();
   const openRowRef = useRef<SwipeableMethods | null>(null);
@@ -73,22 +133,14 @@ export function CollectionEditScreen() {
   // 받은 페이지 중 아직 안 붙인 영화를 끝에 붙인다. 새로 받은 것은 서버 순서상 이미 받은 것들 뒤다.
   useEffect(() => {
     if (!pages || draggingRef.current) return;
-    const fresh = pages.flatMap((p) => p.content).filter((m) => !seenRef.current.has(m.movieId!));
+    const fresh = takeFresh(pages, seenRef.current);
     if (fresh.length === 0) return;
-    fresh.forEach((m) => seenRef.current.add(m.movieId!));
-    const ids = fresh.map((m) => m.movieId!);
+    const ids = fresh.map((m) => m.movieId);
     setServerIds((prev) => [...prev, ...ids]);
     setOrder((prev) => [...prev, ...ids]);
     setCatalog((prev) => {
       const next = new Map(prev);
-      fresh.forEach((m) =>
-        next.set(m.movieId!, {
-          movieId: m.movieId!,
-          title: m.title!,
-          posterPath: m.posterPath,
-          subtitle: [m.releaseYear, m.directorNames].filter(Boolean).join(' · ') || undefined,
-        }),
-      );
+      fresh.forEach((m) => next.set(m.movieId, m));
       return next;
     });
   }, [pages, order]);
@@ -96,7 +148,8 @@ export function CollectionEditScreen() {
   function loadMoreIfNearEnd(e: NativeSyntheticEvent<NativeScrollEvent>) {
     const { layoutMeasurement, contentOffset, contentSize } = e.nativeEvent;
     const nearEnd = layoutMeasurement.height + contentOffset.y >= contentSize.height - layoutMeasurement.height * 0.5;
-    if (nearEnd && !draggingRef.current && movies.hasNextPage && !movies.isFetchingNextPage) movies.fetchNextPage();
+    // 잘린 동안은 콘텐츠가 짧아 "끝 근처"로 오판한다 — 전량을 그린 뒤에만 다음 페이지를 받는다.
+    if (nearEnd && allShown && !draggingRef.current && movies.hasNextPage && !movies.isFetchingNextPage) movies.fetchNextPage();
   }
 
   // 서버가 저장 후 스스로 만들 순서 — 새로 담은 것 맨 위(나중에 고른 것이 위) + 남은 기존 순서.
@@ -153,6 +206,35 @@ export function CollectionEditScreen() {
     }
     setPendingRemove((prev) => new Set(prev).add(movieId));
   }
+
+  // ★ renderItem을 고정한다(2026-10-03 — 진입이 느림). sortables는 renderItem identity가 바뀌면 모든 행을 다시
+  // 렌더하는데(ItemsProvider store), 인라인이면 삭제·드래그 종료·페이지 추가 등 화면 상태가 바뀔 때마다 전체 행이
+  // 다시 그려졌다. stageRemove는 대기 상태를 읽어 렌더마다 바뀌므로 최신본을 ref로 가리켜 콜백을 고정하고,
+  // catalog가 바뀌어(페이지 추가·담기) renderItem이 새로 만들어져도 행은 memo라 props가 같으면 건너뛴다.
+  const stageRemoveRef = useRef(stageRemove);
+  stageRemoveRef.current = stageRemove;
+  const handleRemove = useCallback((movieId: number) => stageRemoveRef.current(movieId), []);
+  const handleWillOpen = useCallback((methods: SwipeableMethods) => {
+    if (openRowRef.current && openRowRef.current !== methods) openRowRef.current.close();
+    openRowRef.current = methods;
+  }, []);
+  const renderItem = useCallback(
+    ({ item: movieId }: { item: number }) => {
+      const movie = catalog.get(movieId);
+      return (
+        <CollectionMovieEditRow
+          id={movieId}
+          title={movie?.title ?? ''}
+          posterPath={movie?.posterPath}
+          subtitle={movie?.subtitle}
+          sortable={!tooManyToSort}
+          onRemove={handleRemove}
+          onWillOpen={handleWillOpen}
+        />
+      );
+    },
+    [catalog, tooManyToSort, handleRemove, handleWillOpen],
+  );
 
   async function handleSave() {
     if (!dirty) {
@@ -250,7 +332,7 @@ export function CollectionEditScreen() {
           </Txt>
           <Sortable.Grid
             columns={1}
-            data={order}
+            data={visibleOrder}
             keyExtractor={String}
             // ≡ 핸들로만 끈다 — 잡는 즉시 끌리도록 활성화 지연을 없앤다(기본은 길게 누르기용 지연).
             customHandle
@@ -282,7 +364,7 @@ export function CollectionEditScreen() {
             animateScrollTo={false}
             autoScrollMaxVelocity={1000}
             autoScrollMaxOverscroll={0}
-            sortEnabled={!tooManyToSort}
+            sortEnabled={!tooManyToSort && allShown}
             onDragStart={() => {
               draggingRef.current = true;
               openRowRef.current?.close();
@@ -293,25 +375,10 @@ export function CollectionEditScreen() {
               setOrder(data);
             }}
             scrollableRef={scrollableRef}
-            renderItem={({ item: movieId }) => {
-              const movie = catalog.get(movieId);
-              return (
-                <CollectionMovieEditRow
-                  id={movieId}
-                  title={movie?.title ?? ''}
-                  posterPath={movie?.posterPath}
-                  subtitle={movie?.subtitle}
-                  sortable={!tooManyToSort}
-                  onRemove={() => stageRemove(movieId)}
-                  onWillOpen={(methods) => {
-                    if (openRowRef.current && openRowRef.current !== methods) openRowRef.current.close();
-                    openRowRef.current = methods;
-                  }}
-                />
-              );
-            }}
+            renderItem={renderItem}
           />
-          {movies.isFetchingNextPage && <ActivityIndicator color={colors.primary} style={{ marginVertical: 16 }} />}
+          {/* 받는 중이거나, 받은 행을 아직 나눠 붙이는 중 — 빠르게 끝까지 내려가면 덜 붙은 구간이 보인다 */}
+          {(movies.isFetchingNextPage || !allShown) && <ActivityIndicator color={colors.primary} style={{ marginVertical: 16 }} />}
         </Animated.ScrollView>
         </Sortable.PortalProvider>
       )}
