@@ -263,7 +263,8 @@ export function WatchRecordModal({ visible, onClose, movieId, editing, minDate }
           별점 (선택)
         </Txt>
         <Spacer size="xs" />
-        <RatingStars rating={rating} onChange={setRating} />
+        {/* 기본 24는 손가락으로 반 별을 고르기에 작았다(2026-10-03) — 상세 상단(40)보다는 작게 */}
+        <RatingStars rating={rating} onChange={setRating} size={32} />
         <Spacer size="md" />
 
         <TextField label="메모 (선택)" value={note} onChangeText={setNote} multiline numberOfLines={3} />

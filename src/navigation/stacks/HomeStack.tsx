@@ -1,6 +1,7 @@
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { HomeScreen } from '../../screens/home/HomeScreen';
 import { MovieDetailScreen } from '../../screens/movie/MovieDetailScreen';
+import { WatchLogScreen } from '../../screens/movie/WatchLogScreen';
 import { SearchResultScreen } from '../../screens/search/SearchResultScreen';
 import { MOVIE_DETAIL_OPTIONS } from '../movieDetailScreenOptions';
 import type { HomeStackParamList } from '../types';
@@ -13,6 +14,7 @@ export function HomeStack() {
       <Stack.Screen name="Home" component={HomeScreen} options={{ headerShown: false }} />
       <Stack.Screen name="SearchResult" component={SearchResultScreen} options={{ title: '검색 결과' }} />
       <Stack.Screen name="MovieDetail" component={MovieDetailScreen} options={MOVIE_DETAIL_OPTIONS} />
+      <Stack.Screen name="WatchLog" component={WatchLogScreen} options={{ title: '시청 기록' }} />
     </Stack.Navigator>
   );
 }

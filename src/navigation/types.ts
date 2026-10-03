@@ -26,6 +26,8 @@ export type HomeStackParamList = {
   Home: undefined;
   SearchResult: { query: string };
   MovieDetail: { movieId: number }; // ★ 객체가 아니라 ID
+  // 영화 상세 → 시청 기록 더보기(5개 초과). MovieDetail이 실제 화면인 스택마다 함께 둔다(2026-10-03).
+  WatchLog: { movieId: number };
 };
 
 export type RecommendStackParamList = {
@@ -69,4 +71,5 @@ export type MyPageStackParamList = {
   Calendar: undefined;
   MonthlyReport: { year: number; month: number };
   MovieDetail: { movieId: number };
+  WatchLog: { movieId: number };
 };
