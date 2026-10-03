@@ -5,6 +5,7 @@ import { CollectionEditScreen } from '../../screens/collection/CollectionEditScr
 import { CollectionListScreen } from '../../screens/collection/CollectionListScreen';
 import { MyLibraryScreen } from '../../screens/library/MyLibraryScreen';
 import { MovieDetailScreen } from '../../screens/movie/MovieDetailScreen';
+import { WatchLogScreen } from '../../screens/movie/WatchLogScreen';
 import { MyPageScreen } from '../../screens/mypage/MyPageScreen';
 import { SettingsScreen } from '../../screens/mypage/SettingsScreen';
 import { CalendarScreen } from '../../screens/report/CalendarScreen';
@@ -31,6 +32,7 @@ export function MyPageStack() {
       <Stack.Screen name="Calendar" component={CalendarScreen} options={{ title: '캘린더' }} />
       <Stack.Screen name="MonthlyReport" component={MonthlyReportScreen} options={{ title: '이달의 리포트' }} />
       <Stack.Screen name="MovieDetail" component={MovieDetailScreen} options={MOVIE_DETAIL_OPTIONS} />
+      <Stack.Screen name="WatchLog" component={WatchLogScreen} options={{ title: '시청 기록' }} />
     </Stack.Navigator>
   );
 }

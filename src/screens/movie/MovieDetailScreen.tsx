@@ -1,34 +1,34 @@
-import { useRoute, type RouteProp } from '@react-navigation/native';
+import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
-import { Bookmark, Maximize2, User as UserIcon, X } from 'lucide-react-native';
+import { Bookmark, ChevronRight, LibraryBig, Maximize2, User as UserIcon, X, type LucideIcon } from 'lucide-react-native';
 import { useState } from 'react';
 import { Alert, Image, Modal, Pressable, ScrollView, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ActionSheet, EmptyState, ErrorState, LoadingState, type ActionSheetOption } from '../../components/common';
+import { EmptyState, ErrorState, LoadingState } from '../../components/common';
 import { CollectionPickerSheet } from '../../components/collection/CollectionPickerSheet';
 import { RatingStars } from '../../components/movie/RatingStars';
 import { Button, Card, Divider, Screen, Spacer, Txt } from '../../components/primitives';
 import { PosterSize, ProfileSize, tmdbImageUrl } from '../../constants/tmdb';
 import { useMovieDetail } from '../../hooks/useMovies';
-import { useDeleteRecord, useSetRepresentative, useUpdateRecord, useWatchLog } from '../../hooks/useRecords';
+import { useUpdateRecord, useWatchLog } from '../../hooks/useRecords';
 import { useRequireAuth } from '../../hooks/useRequireAuth';
 import { useMovieReviews, useMyReview } from '../../hooks/useReview';
 import { useIsWished, useWishToggle } from '../../hooks/useWishlist';
 import type { HomeStackParamList } from '../../navigation/types';
 import { useAuthStore } from '../../store/authStore';
 import { colors, layout } from '../../theme/tokens';
-import type { WatchRecordResponse, WatchType } from '../../types';
 import { ReviewModal } from './ReviewModal';
+import { WatchRecordList } from './WatchRecordList';
 import { WatchRecordModal } from './WatchRecordModal';
 
 type Rt = RouteProp<HomeStackParamList, 'MovieDetail'>;
+// 홈·마이페이지 스택 모두 WatchLog를 MovieDetail 옆에 둔다 — 타입은 홈 기준으로 잡는다(Rt와 같은 이유).
+type Nav = NativeStackNavigationProp<HomeStackParamList, 'MovieDetail'>;
 
-const WATCH_TYPE_LABEL: Record<WatchType, string> = {
-  THEATER: '극장',
-  OTT: 'OTT',
-  ETC: '기타',
-};
+// 상세에 바로 보이는 시청 기록 수 — 넘으면 "시청 기록 더보기"로 전체 화면(WatchLog)에 넘긴다(2026-10-03).
+const RECORD_PREVIEW_COUNT = 5;
 
 // ⚠️ 이음매 문제와 텍스트 배치 문제가 같은 문제였다(2026-09-10 재설계, 상위 §9.3) —
 // 제목을 포스터 위에 얹으려면 흰 글씨→어두운 스크림→흰 배경으로 이어질 때 값이
@@ -42,6 +42,7 @@ const HERO_ASPECT_RATIO = 4 / 5; // width:height
 const HERO_FADE_RATIO = 0.38; // 하단 페이드 밴드 높이 비율
 
 export function MovieDetailScreen() {
+  const navigation = useNavigation<Nav>();
   const { movieId } = useRoute<Rt>().params;
   const { width: windowWidth } = useWindowDimensions();
   const insets = useSafeAreaInsets();
@@ -56,23 +57,13 @@ export function MovieDetailScreen() {
   const publicReviews = useMovieReviews(movieId);
 
   const wishToggle = useWishToggle();
-  const deleteRecord = useDeleteRecord();
-  const setRepresentative = useSetRepresentative();
   const updateRecord = useUpdateRecord();
 
+  // 새 기록 추가 전용 — 회차 수정은 WatchRecordList 안의 모달이 맡는다.
   const [recordModalVisible, setRecordModalVisible] = useState(false);
-  const [editingRecord, setEditingRecord] = useState<WatchRecordResponse | null>(null);
-  const [editingMinDate, setEditingMinDate] = useState<string | null>(null);
   const [reviewModalVisible, setReviewModalVisible] = useState(false);
-  const [recordSheet, setRecordSheet] = useState<WatchRecordResponse | null>(null);
   const [collectionSheetVisible, setCollectionSheetVisible] = useState(false);
   const [posterModalVisible, setPosterModalVisible] = useState(false);
-
-  function closeRecordModal() {
-    setRecordModalVisible(false);
-    setEditingRecord(null);
-    setEditingMinDate(null);
-  }
 
   // ⚠️ 로딩·에러·완료 3상태가 전부 같은 Screen 껍데기(edges/scroll/padded)를 쓴다 —
   // 예전엔 로딩·에러가 <Screen>(View), 완료가 <Screen scroll>(ScrollView)로 갈라져
@@ -135,42 +126,6 @@ export function MovieDetailScreen() {
       },
       { onError: (error) => Alert.alert('저장 실패', error.message) },
     );
-  }
-
-  function recordSheetOptions(record: WatchRecordResponse): ActionSheetOption[] {
-    const options: ActionSheetOption[] = [
-      {
-        label: '수정',
-        onPress: () => {
-          // 이전 회차들(먼저 본 회차) 중 날짜가 있는 가장 가까운 것보다 앞선 날짜로는
-          // 못 고치게 막는다. 목록은 id DESC(최신 생성 순)라 "이전"은 배열상 뒤쪽이고,
-          // 그 구간에서 날짜 없는 회차는 건너뛰고 날짜 있는 첫 회차를 찾는다.
-          const records = watchLog.data ?? [];
-          const index = records.findIndex((r) => r.id === record.id);
-          const previousWithDate =
-            index >= 0 ? records.slice(index + 1).find((r) => r.watchDate != null) : undefined;
-          setEditingRecord(record);
-          setEditingMinDate(previousWithDate?.watchDate ?? null);
-          setRecordModalVisible(true);
-        },
-      },
-    ];
-    if (!record.representative) {
-      options.push({
-        label: '대표 기록으로 지정',
-        onPress: () =>
-          setRepresentative.mutate(
-            { recordId: record.id!, userId: myId!, movieId },
-            { onError: (error) => Alert.alert('실패', error.message) },
-          ),
-      });
-    }
-    options.push({
-      label: '삭제',
-      destructive: true,
-      onPress: () => deleteRecord.mutate(record.id!, { onError: (error) => Alert.alert('실패', error.message) }),
-    });
-    return options;
   }
 
   return (
@@ -284,26 +239,24 @@ export function MovieDetailScreen() {
         <Card>
           {/* 찜 버튼은 게스트에게도 항상 보인다 — 탭 시 requireAuth가 모달을 띄운다.
               그 외(컬렉션·기록·리뷰)는 게스트에게 카드 자리에 로그인 유도만 보여준다(§5.4). */}
-          <View className="flex-row items-center justify-between">
-            <Txt variant="h4">내 기록</Txt>
-            <Pressable
-              hitSlop={8}
+          <Txt variant="h4">내 기록</Txt>
+          {/* 찜·컬렉션을 같은 모양(아이콘 + 설명)으로 좌우 반반에 둔다(2026-10-03 — 찜은 아이콘, 컬렉션은 넓은 버튼이라
+              어긋나 보였다). 둘 다 게스트에게도 보이고 탭 시 requireAuth가 모달을 띄운다(G-1). */}
+          <Spacer size="sm" />
+          <View className="flex-row">
+            <IconAction
+              icon={Bookmark}
+              label="찜하기"
+              active={isAuthed && isWished.data?.wished === true}
               onPress={() => requireAuth(() => wishToggle.mutate(movieId))}
               disabled={wishToggle.isPending}
-            >
-              <Bookmark
-                size={24}
-                color={colors.primary}
-                fill={isAuthed && isWished.data?.wished ? colors.primary : 'transparent'}
-              />
-            </Pressable>
+            />
+            <IconAction
+              icon={LibraryBig}
+              label="컬렉션에 추가"
+              onPress={() => requireAuth(() => setCollectionSheetVisible(true))}
+            />
           </View>
-
-          {/* 찜과 마찬가지로 게스트에게도 항상 보인다 — 탭 시 requireAuth가 모달을 띄운다(G-1). */}
-          <Spacer size="sm" />
-          <Button variant="secondary" onPress={() => requireAuth(() => setCollectionSheetVisible(true))}>
-            컬렉션에 추가
-          </Button>
 
           {!isAuthed ? (
             <>
@@ -330,35 +283,26 @@ export function MovieDetailScreen() {
                 <ErrorState message={watchLog.error.message} onRetry={() => watchLog.refetch()} />
               ) : (
                 <>
-                  {(watchLog.data ?? []).map((record) => (
-                    <Pressable key={record.id} onPress={() => setRecordSheet(record)} className="py-2">
-                      <View className="flex-row items-center justify-between">
-                        <Txt variant="body">
-                          {record.watchDate ?? '날짜 미기록'}
-                          {record.watchType ? ` · ${WATCH_TYPE_LABEL[record.watchType]}` : ''}
-                          {record.watchType === 'OTT' && record.ottPlatform?.name
-                            ? ` · ${record.ottPlatform.name}`
-                            : ''}
-                          {record.placeDetail ? ` · ${record.placeDetail}` : ''}
-                          {record.representative ? ' · 대표' : ''}
-                        </Txt>
-                      </View>
-                      {record.privateReview && (
-                        <>
-                          <Spacer size="xs" />
-                          <Txt variant="caption" color="mutedForeground">
-                            {record.privateReview}
-                          </Txt>
-                        </>
-                      )}
-                      {record.rating != null && (
-                        <>
-                          <Spacer size="xs" />
-                          <RatingStars rating={record.rating} size={16} />
-                        </>
-                      )}
+                  {/* 대표 기록을 맨 위에 두고 최근 순으로 5개만 — 회차가 쌓이면 카드가 끝없이 길어졌다(2026-10-03).
+                      나머지는 전체 화면에서 본다. */}
+                  <WatchRecordList
+                    movieId={movieId}
+                    records={watchLog.data ?? []}
+                    limit={RECORD_PREVIEW_COUNT}
+                    pinRepresentative
+                  />
+                  {(watchLog.data ?? []).length > RECORD_PREVIEW_COUNT && (
+                    <Pressable
+                      onPress={() => navigation.navigate('WatchLog', { movieId })}
+                      accessibilityRole="button"
+                      className="flex-row items-center justify-center py-2"
+                    >
+                      <Txt variant="body" color="primary">
+                        {`시청 기록 더보기 (${(watchLog.data ?? []).length})`}
+                      </Txt>
+                      <ChevronRight size={18} color={colors.primary} />
                     </Pressable>
-                  ))}
+                  )}
                   {(watchLog.data ?? []).length === 0 && (
                     <Txt variant="caption" color="mutedForeground">
                       아직 시청 기록이 없어요
@@ -422,21 +366,16 @@ export function MovieDetailScreen() {
 
       <WatchRecordModal
         visible={recordModalVisible}
-        onClose={closeRecordModal}
+        onClose={() => setRecordModalVisible(false)}
         movieId={movieId}
-        editing={editingRecord}
-        minDate={editingMinDate}
+        editing={null}
+        minDate={null}
       />
       <ReviewModal
         visible={reviewModalVisible}
         onClose={() => setReviewModalVisible(false)}
         movieId={movieId}
         initial={myReview.data ?? null}
-      />
-      <ActionSheet
-        visible={recordSheet != null}
-        onClose={() => setRecordSheet(null)}
-        options={recordSheet ? recordSheetOptions(recordSheet) : []}
       />
       <CollectionPickerSheet
         visible={collectionSheetVisible}
@@ -478,6 +417,39 @@ export function MovieDetailScreen() {
         </View>
       </Modal>
     </Screen>
+  );
+}
+
+// 아이콘 + 설명 한 칸 — 부모 행을 반씩 나눠 가진다. active면 아이콘을 채운다(찜 상태).
+function IconAction({
+  icon: Icon,
+  label,
+  active = false,
+  onPress,
+  disabled,
+}: {
+  icon: LucideIcon;
+  label: string;
+  active?: boolean;
+  onPress: () => void;
+  disabled?: boolean;
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      disabled={disabled}
+      hitSlop={4}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      accessibilityState={{ selected: active, disabled }}
+      className="flex-1 items-center py-2"
+    >
+      <Icon size={24} color={colors.primary} fill={active ? colors.primary : 'transparent'} />
+      <Spacer size="xs" />
+      <Txt variant="caption" color="foreground">
+        {label}
+      </Txt>
+    </Pressable>
   );
 }
 
