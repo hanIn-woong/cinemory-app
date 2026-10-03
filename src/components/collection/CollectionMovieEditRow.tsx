@@ -1,6 +1,6 @@
 import { CircleMinus, Equal } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useRef } from 'react';
+import { memo, useRef } from 'react';
 import { Image, Pressable, View } from 'react-native';
 import ReanimatedSwipeable, { type SwipeableMethods } from 'react-native-gesture-handler/ReanimatedSwipeable';
 import Sortable from 'react-native-sortables';
@@ -19,7 +19,8 @@ interface CollectionMovieEditRowProps {
   posterPath?: string | null;
   subtitle?: string;
   sortable: boolean;
-  onRemove: () => void;
+  // id를 받는다 — 부모가 행마다 클로저를 만들지 않고 고정된 콜백 하나를 넘겨야 memo가 먹는다.
+  onRemove: (id: number) => void;
   // 열린 삭제 버튼은 한 번에 하나만 — 열리기 직전에 부모가 이전 행을 닫는다.
   onWillOpen: (methods: SwipeableMethods) => void;
 }
@@ -29,7 +30,16 @@ interface CollectionMovieEditRowProps {
 //    "스크롤하려다 드래그가 걸리는" 일이 없고, 길게 누르기를 기다리지 않는다.
 // ② 삭제: 왼쪽 ⊖를 탭하거나 행을 왼쪽으로 밀면 오른쪽에 "삭제"가 열린다. 어느 쪽이든 삭제를 한 번 더
 //    눌러야 지워진다(iOS 기본 편집 목록과 같은 2단계). 실제 서버 반영은 화면의 "저장" 때.
-export function CollectionMovieEditRow({ id, title, posterPath, subtitle, sortable, onRemove, onWillOpen }: CollectionMovieEditRowProps) {
+// memo — 행마다 스와이프·sortables 래퍼·SVG가 붙어 무겁다. props가 모두 원시값·고정 콜백이라 바뀐 행만 다시 그린다.
+export const CollectionMovieEditRow = memo(function CollectionMovieEditRow({
+  id,
+  title,
+  posterPath,
+  subtitle,
+  sortable,
+  onRemove,
+  onWillOpen,
+}: CollectionMovieEditRowProps) {
   const swipeableRef = useRef<SwipeableMethods>(null);
   const thumbUri = tmdbImageUrl(posterPath, PosterSize.SHELF);
 
@@ -45,7 +55,7 @@ export function CollectionMovieEditRow({ id, title, posterPath, subtitle, sortab
       }}
       renderRightActions={() => (
         <Pressable
-          onPress={onRemove}
+          onPress={() => onRemove(id)}
           accessibilityRole="button"
           accessibilityLabel={`${title} 삭제`}
           className="items-center justify-center bg-destructive"
@@ -109,4 +119,4 @@ export function CollectionMovieEditRow({ id, title, posterPath, subtitle, sortab
       </View>
     </ReanimatedSwipeable>
   );
-}
+});
