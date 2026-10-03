@@ -75,6 +75,9 @@ export function useCreateRecord(): UseMutationResult<void, ApiError, CreateRecor
       queryClient.invalidateQueries({ queryKey: ['records'] });
       queryClient.invalidateQueries({ queryKey: queryKeys.movies.detail(variables.movieId) });
       queryClient.invalidateQueries({ queryKey: ['report'] });
+      // 서버가 같은 영화의 찜을 함께 지운다(2026-10-03, 백엔드 service-layer-spec 4-3) — 찜 목록과 영화 상세의
+      // 찜 아이콘(wishes.me)이 옛 상태로 남지 않게 한다. 사용자에게 따로 알리지 않는다(조용히 빠짐).
+      queryClient.invalidateQueries({ queryKey: ['wishes'] });
     },
   });
 }
