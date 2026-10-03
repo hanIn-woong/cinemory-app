@@ -26,7 +26,7 @@ M2-A 기반 ✅ ──► M2-B 1군 화면 ✅ ──► M2-C 2군 화면 🔨 �
 |---|---|---|---|---|
 | **M2-A**<br>기반 | 디자인 토큰 · 프리미티브 · API 클라이언트(단일 비행 인터셉터) · `authStore` · 부팅 시퀀스 · 네비게이션 골격 · 생성 타입 | ✅ **완료**<br>(실기기 검증 통과 2026-08-30) | 없음 | **`M2A-foundation-spec.md`** |
 | **M2-B**<br>1군 화면 (9월) | `Login` · `SignUp` · `Home` · `SearchResult` · `MovieDetail` · `MyRecords` · `MyPage`/`Settings` | ✅ **완료**<br>(실기기 검증 통과 2026-09-06 — §7.1·§7.2·§7.3 전부) | ⚠️ **B-4**(상세 평점 필드)는 여전히 미해소 — 평점 블록만 자리를 비워 두고 진행했다 | **`M2B-screens-spec.md`**<br>요구사항은 §9.1~9.5 · §6 |
-| **M2-C**<br>2군 화면 (10월) | `Wishlist` · `CollectionList`/`Detail` · `MovieDetail` 컬렉션 연결 | 🔨 **구현 완료 — 실기기 검증 전**<br>(`npx tsc --noEmit`·`expo export android` 통과 2026-09-09) | ✅ **API 완비 — 막는 것 없음**<br>B-6·B-7·B-18은 품질 개선(차단 아님) | **`M2C-screens-spec.md`**<br>요구사항은 §9.6~9.7 |
+| **M2-C**<br>2군 화면 (10월) | `Wishlist` · `CollectionList`/`Detail` · `MovieDetail` 컬렉션 연결 | ✅ **완료**<br>(실기기 검증 완료 확인 2026-10-03 — 사용자 확인) | ✅ **API 완비 — 막는 것 없음**<br>B-6·B-7·B-18은 품질 개선(차단 아님) | **`M2C-screens-spec.md`**<br>요구사항은 §9.6~9.7 |
 | **M2-C2**<br>리포트 | `Report`(통계) · `Calendar` · `MonthlyReport` + 마이페이지 캘린더 요약 | 🔨 **구현 완료 — 실기기 검증 전**<br>(`npx tsc --noEmit` 통과 2026-09-23) | ~~B-8~~ ✅ **해소** — 백엔드 M3-a 완료 | `M2C2-report-spec.md` · §9.8 |
 | **M2-D**<br>3군 화면 (여유 시) | `Social` · `CineMap` · `Recommend` | 🔒 **차단** | **B-9**(`theater` 테이블 비어 있음)<br>**B-10**(활동 피드 API 없음)<br>**B-11**(M3-b 설계 백지) | §9.9~9.11 · §13 |
 
@@ -985,13 +985,14 @@ RootNavigator (NativeStack, headerShown: false)
     └── Login · SignUp · PasswordResetRequest · PasswordResetConfirm
 
 MainTabNavigator
-    ├── HomeStack       Home → SearchResult → MovieDetail
+    ├── HomeStack       Home → SearchResult → MovieDetail → WatchLog
     ├── RecommendStack  Recommendation(3군, 플레이스홀더) → MovieDetail
     ├── CineMapStack    CineMap(3군, 플레이스홀더)
     ├── SocialStack     Social(3군, 플레이스홀더) → MovieDetail · CollectionDetail
-    └── MyPageStack     MyPage → MyLibrary[records | wishes 스와이프 탭] → MovieDetail
+    └── MyPageStack     MyPage → MyLibrary[records | wishes 스와이프 탭] → MovieDetail → WatchLog
                              → CollectionList → CollectionDetail → MovieDetail
-                             → Report(2군) · EditProfile · Settings
+                                                               → CollectionEdit
+                             → Report · Calendar · MonthlyReport(2군) · EditProfile · Settings
 ```
 
 **`RootStackParamList`도 함께 바뀐다.**
@@ -1037,6 +1038,7 @@ export type HomeStackParamList = {
   Home: undefined;
   SearchResult: { query: string };
   MovieDetail: { movieId: number };            // ★ 객체가 아니라 ID
+  WatchLog: { movieId: number };               // 2026-10-03 시청 기록 더보기(M2B §5.4)
 };
 
 export type MyPageStackParamList = {
@@ -1045,11 +1047,16 @@ export type MyPageStackParamList = {
   Settings: undefined;
   MyLibrary: { initialTab?: 'records' | 'wishes' } | undefined;  // 2026-09-26 MyRecords·Wishlist 통합
   CollectionList: undefined;
-  CollectionDetail: { collectionId: number; title: string };  // ⚠️ 단건 조회 API 부재 → title 동반 전달
+  CollectionDetail: { collectionId: number; title: string; description?: string };  // ⚠️ 단건 조회 API 부재 → 동반 전달
+  CollectionEdit: { collectionId: number };     // 2026-10-02 영화 편집(M2C §5.3-A)
   Report: undefined;                            // 2군
+  Calendar: undefined;                          // 2군(M2C2)
+  MonthlyReport: { year: number; month: number };
   MovieDetail: { movieId: number };
+  WatchLog: { movieId: number };                // 2026-10-03
 };
-// RecommendStack · CineMapStack · SocialStack도 동일 패턴
+// RecommendStack · CineMapStack · SocialStack도 동일 패턴 — ⚠️ MovieDetail이 실제 화면이 되면 WatchLog도 함께 둔다
+// (지금은 placeholder라 없다). 실제 정의는 src/navigation/types.ts가 기준이다.
 ```
 
 > ⚠️ **`CollectionDetail`만 예외적으로 `title`을 함께 받는다.** 컬렉션 단건 조회 API가
@@ -1932,6 +1939,8 @@ export { CineMapWebView as CineMapView } from './CineMapWebView';
 
 | 날짜                 | 내용 |
 |--------------------|---|
+| 2026-10-03 (이어서) | **진행 표 — M2-C를 완료로.** 9/9 구현 이후 실기기 확인을 거듭해 왔고, 사용자가 M2-C 검증 완료를 확인했다(문서 점검 중 상태가 9/9 기준 "실기기 검증 전"으로 남아 있던 것을 발견) |
+| 2026-10-03 | **§8 네비게이션 트리·`ParamList` 예시를 현재 코드에 맞춤.** 문서 점검 중 발견 — `WatchLog`(오늘, M2B §5.4)뿐 아니라 `CollectionEdit`(10/2, M2C §5.3-A)·`Calendar`·`MonthlyReport`(9월, M2C2)와 `CollectionDetail.description`이 빠져 있었다. 화면 스펙 문서에만 추가하고 상위 문서의 트리를 갱신하지 않은 것이 원인. 예시 아래에 **실제 정의는 `src/navigation/types.ts`가 기준**이라는 주석과, 추천·소셜의 `MovieDetail`이 실제 화면이 될 때 `WatchLog`도 함께 둬야 한다는 경고를 달았다 |
 | 2026-10-02 | **§6.3에 재발급 실패 판정 규칙 추가 — `docs/token-refresh-resilience-spec.md` 신설.** 재발급이 *어떤 이유로든* 실패하면 로그아웃하던 동작이 실서버에서 **CI 배포 재시작(Nginx 502)마다 접속 중인 전원을 로그아웃**시키는 문제로 드러났다(백엔드 deploy-spec 2-6 요청 제한 검토 중 발견). 재발급 응답의 **상태 코드 400·401만 세션 사망**으로 판정하고 네트워크·429·5xx는 세션을 유지한다. 실서버 Phase 5 E2E 전 작업 |
 | 2026-10-02 (이어서 3) | **문서 정합 — 10/1~10/2 UI 작업 중 문서 기록이 빠진 부분 보충.** 홈 배경 외 작업을 코드만 바꾸고 문서에 남기지 않았던 것을 사용자 확인으로 발견해 일괄 반영했다. ① **§11 B-13** — "프론트 미연결" → 코드 완료(`6d40657`), 실기기 검증만 남음. ② **§9.1 ② 로고** — 시작 로딩 화면은 흰 배경이지만 키라인을 `brandLight`로 홈과 통일(사용자 판단: 로딩 → 홈 전환에서 로고 색이 바뀌어 보이는 것이 더 나쁘다), 위치도 홈과 픽셀 단위로 맞춘 근거(탭바 여백·검색창 높이 복제본)를 예외로 기록 — 9/11의 "흰 배경 = `shadowDeep`" 원칙에서 로딩 화면만 뺀다. ③ **§6.6 Login** — 카카오 버튼을 원형 로고 버튼으로(기능·에러 처리는 그대로, 디자인만), 브랜드 색 토큰 `kakaoYellow`·`kakaoBubble` 추가. ④ **§7 찜 액션** — 아이콘 `Heart` → `Bookmark`(브랜드 색). 마이페이지·캘린더·내 영화 명칭 변경은 각각 `M2B-screens-spec.md` §5.6, `M2C2-report-spec.md` §5.4, `library-sort-spec.md`에 기록 |
 | 2026-10-02 (이어서 2) | **§9.1 홈 배경 — 소스 전환 게이트 추가. 실기기 검증 전.** 실기기 보고: *로그인 상태 → 로그아웃 후 홈 진입 시 포스터 일부가 안 뜬다.* 원인: 랜덤 영화 **목록**은 부팅 때 병렬로 받아 두지만(§7.5) 그 **이미지**는 기록 사용자에겐 프리페치하지 않는다 — 로그아웃으로 소스가 랜덤으로 바뀌는 순간 이미지를 처음 받기 시작해 팝인했다. 부팅만 로딩 화면으로 막고 이 흐름은 열려 있었다. 검토: 로딩 화면을 다시 띄우는 안은 9/12 결정(로그인할 때마다 쫓아내지 않는다)과 충돌해 기각, **배경 안에서 기다리는 안 채택**(사용자 결정) — `PosterBackdrop`이 `shown`/`latest`를 나눠, 정체(`sourceSignature`)가 바뀌면 새 소스의 첫 화면 + 1행을 `prefetchLeading`으로 받을 때까지 이전 배경을 유지하고 끝나면 교체(상한 8초 — 네트워크가 막혀도 갇히지 않게). 로그인 방향(랜덤 → 기록)과 5분 뒤 랜덤 갱신도 같은 경로로 해결된다. 부팅 게이트와 판정 기준을 맞추려고 `useLeadingPosters`·`prefetchLeading`을 `useHomeBackground.ts`로 추출해 둘이 공유한다. ⚠️ **함께 막은 것** — 로그아웃은 `queryClient.clear()`라, 유지 중인 이전 사용자 컨베이어가 다음 페이지를 요청하면 비로그인으로 그 사용자의 기록을 부른다(→ 401 → 재발급 경로). `useConveyorBatches`는 소스의 `userId`가 지금 로그인한 사용자일 때만 요청한다. 이미 채운 묶음은 얼려 둬서 대기 중에도 보인다. 트레이드오프: 홈에 있는 채로 로그인·로그아웃하면 이전 배경이 1~3초 더 남는다. `npx tsc --noEmit` 통과 |
