@@ -108,6 +108,9 @@ export type CollectionMovieOrderRequest = S['CollectionMovieOrderRequest'];
 export type ReportStatisticsResponse = S['ReportStatisticsResponse'];
 export type ReportMonthlyResponse = S['ReportMonthlyResponse'];
 export type ReportCalendarResponse = S['ReportCalendarResponse'];
+// 연간 — §9.3. fiveStarMovies는 목록형이라 ratingDistribution의 10점 막대와 수가 다를 수 있다(버그 아님).
+export type ReportYearlyResponse = S['ReportYearlyResponse'];
+export type FiveStarMovieResponse = S['FiveStarMovieResponse'];
 export type RatingBucketResponse = S['RatingBucketResponse'];
 export type PreferenceItemResponse = S['PreferenceItemResponse'];
 export type MonthlyTrendItemResponse = S['MonthlyTrendItemResponse'];

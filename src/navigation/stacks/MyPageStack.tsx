@@ -9,7 +9,7 @@ import { WatchLogScreen } from '../../screens/movie/WatchLogScreen';
 import { MyPageScreen } from '../../screens/mypage/MyPageScreen';
 import { SettingsScreen } from '../../screens/mypage/SettingsScreen';
 import { CalendarScreen } from '../../screens/report/CalendarScreen';
-import { MonthlyReportScreen } from '../../screens/report/MonthlyReportScreen';
+import { PeriodReportScreen } from '../../screens/report/PeriodReportScreen';
 import { ReportScreen } from '../../screens/report/ReportScreen';
 import { MOVIE_DETAIL_OPTIONS } from '../movieDetailScreenOptions';
 import type { MyPageStackParamList } from '../types';
@@ -30,7 +30,7 @@ export function MyPageStack() {
       <Stack.Screen name="CollectionEdit" component={CollectionEditScreen} options={{ title: '영화 편집' }} />
       <Stack.Screen name="Report" component={ReportScreen} options={{ title: '시청 분석 리포트' }} />
       <Stack.Screen name="Calendar" component={CalendarScreen} options={{ title: '캘린더' }} />
-      <Stack.Screen name="MonthlyReport" component={MonthlyReportScreen} options={{ title: '이달의 리포트' }} />
+      <Stack.Screen name="PeriodReport" component={PeriodReportScreen} options={{ title: '리포트' }} />
       <Stack.Screen name="MovieDetail" component={MovieDetailScreen} options={MOVIE_DETAIL_OPTIONS} />
       <Stack.Screen name="WatchLog" component={WatchLogScreen} options={{ title: '시청 기록' }} />
     </Stack.Navigator>

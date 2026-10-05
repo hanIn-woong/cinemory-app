@@ -116,7 +116,7 @@ export function CalendarScreen() {
         icon={PieChart}
         title="이달의 리포트"
         description={`${year}년 ${month}월의 시청 기록을 한눈에 정리해 드려요`}
-        onPress={() => navigation.navigate('MonthlyReport', { year, month })}
+        onPress={() => navigation.navigate('PeriodReport', { year, month })}
       />
       <Spacer size="lg" />
 

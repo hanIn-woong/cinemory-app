@@ -44,6 +44,8 @@ export const queryKeys = {
     // 돌아갈 때 매번 재요청한다(docs/M2C2-report-spec.md §3.1).
     monthly: (userId: number, year: number, month: number) => ['report', 'monthly', userId, year, month] as const,
     calendar: (userId: number, year: number, month: number) => ['report', 'calendar', userId, year, month] as const,
+    // 연간 탭을 처음 누를 때만 요청한다(enabled). 무효화는 ['report'] 프리픽스가 덮는다(§9.3).
+    yearly: (userId: number, year: number) => ['report', 'yearly', userId, year] as const,
   },
   ott: {
     platforms: () => ['ott', 'platforms'] as const,
