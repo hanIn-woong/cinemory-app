@@ -6,6 +6,26 @@ narrative로 남긴다.
 
 ---
 
+## 2026-10-06 — 연간 리포트 (`M2C2-report-spec.md` §9, PR #17)
+
+- 사용자가 고친 스펙(M2 · M2C2 §9)을 백엔드 문서(M3a 10절 · controller 5-8-F · `ReportYearlyResponse` DTO)와 대조 —
+  필드·고정 길이 배열(10/12/7)·nullable·`year` 필수·미래 연도 빈 200까지 어긋남 없음.
+- 그러나 백엔드가 DTO만 있고 Controller·Service가 없어 `gen:api` 불가(`api.d.ts` 수기 금지). **생성 타입이 필요 없는 것만 먼저** —
+  `MonthlyReport` → `PeriodReport` 개명(`initialTab?`), 경로·쿼리 키, `MovieGridItem.showTitle`/`posterSize`(기본값이라 서재 불변),
+  `FiveStarGrid`(ScrollView 안이라 `FlatList` 대신 `flexWrap`, `onLayout` 폭, `SHELF`, 12편 + 제자리 더보기).
+- 이어서: 백엔드 완료 알림 → 로컬 `bootRun` → `gen:api`(연간 추가분 + 재정렬뿐, `viewerId` 누수 없음) → 기동 종료.
+  API·훅·별칭, 세그먼트 탭, 연간 7섹션(`YearlyReportBody`).
+- **설계에서 바꾼 것** — §9.3 예시의 `enabled = tab === 'yearly'`는 탭 왕복 때 false → true로 다시 켜지면서 stale(30초)이면
+  재요청이 나 §9.7을 깬다. *"한 번이라도 연간을 열었나"* 로 걸고, 쿼리는 언마운트되는 탭 본문이 아니라 화면이 소유.
+  지난 연도에는 *"올해"* 대신 *"2025년에"*. 월별 추이 라벨은 숫자만(12칸에서 *"12월"* 이 겹친다).
+- 정리: `utils/reportFormat`(`formatMinutes`·`formatStars`), `WatchTypeChart`(누적·월간·연간 공용).
+- 비로그인 `curl`로 응답 형태만 확인 — 기록 있는 사용자가 전부 비공개라 403. 실값은 실기기에서.
+- `tsc` 통과, 커밋 `6463393` → PR #17. ⚠️ 백엔드 `feature/yearly-report` 머지·배포가 선행.
+- **다음**: 실기기 §9.7 검증 — 월간만 보고 나가면 연간 요청 없음 / 연간 왕복 재요청 없음 / 같은 해 5 → 3점 재관람 /
+  미래 연도 EmptyState / 서재 그리드 제목 없음.
+
+---
+
 ## 2026-09-27 (이어서 7) — 선반 색 재조정
 
 - 조합이 어색하다는 피드백 → 테두리 `primary`, 벽 #4DA0A0(primary 채도 83%→35%, 색상·명도 유지). 토큰 값만 교체. `tsc` 통과.
