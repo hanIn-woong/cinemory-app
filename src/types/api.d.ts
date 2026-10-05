@@ -600,6 +600,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/users/{userId}/report/yearly": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 연간 리포트 조회
+         * @description year는 필수이며 서버 기본값이 없다. 미래 연도는 빈 결과 200으로 응답한다. 진행 중인 연도인지는 응답에 담지 않으며 클라이언트가 기기 날짜로 판정한다. fiveStarMovies(그해 5점 회차가 하나라도 있는 작품) 수와 ratingDistribution의 10점 막대(영화당 그해 마지막 별점)는 다를 수 있다 — 버그가 아니다.
+         */
+        get: operations["getYearlyReport"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/users/{userId}/report/statistics": {
         parameters: {
             query?: never;
@@ -1248,10 +1268,13 @@ export interface components {
             /** Format: date-time */
             addedAt?: string;
         };
-        DecadeCountResponse: {
-            decade?: string;
+        FiveStarMovieResponse: {
             /** Format: int64 */
-            count?: number;
+            movieId?: number;
+            title?: string;
+            posterPath?: string;
+            /** Format: date */
+            fiveStarDate?: string;
         };
         MonthlyTrendItemResponse: {
             /** Format: int32 */
@@ -1264,6 +1287,56 @@ export interface components {
             movieCount?: number;
             /** Format: int64 */
             watchedMinutes?: number;
+        };
+        PreferenceItemResponse: {
+            /** Format: int64 */
+            id?: number;
+            name?: string;
+            score?: number;
+            /** Format: int64 */
+            count?: number;
+        };
+        RatingBucketResponse: {
+            /** Format: int32 */
+            rating?: number;
+            /** Format: int64 */
+            count?: number;
+        };
+        ReportYearlyResponse: {
+            /** Format: int32 */
+            year?: number;
+            /** Format: int64 */
+            movieCount?: number;
+            /** Format: int64 */
+            watchCount?: number;
+            /** Format: int64 */
+            totalWatchedMinutes?: number;
+            averageRating?: number;
+            ratingDistribution?: components["schemas"]["RatingBucketResponse"][];
+            watchTypeDistribution?: components["schemas"]["WatchTypeCountResponse"][];
+            mostWatchedDirector?: components["schemas"]["PreferenceItemResponse"];
+            mostWatchedActor?: components["schemas"]["PreferenceItemResponse"];
+            mostWatchedGenres?: components["schemas"]["PreferenceItemResponse"][];
+            mostWatchedCountries?: components["schemas"]["PreferenceItemResponse"][];
+            monthlyTrend?: components["schemas"]["MonthlyTrendItemResponse"][];
+            weekdayDistribution?: components["schemas"]["WeekdayCountResponse"][];
+            fiveStarMovies?: components["schemas"]["FiveStarMovieResponse"][];
+        };
+        WatchTypeCountResponse: {
+            watchType?: string;
+            /** Format: int64 */
+            count?: number;
+        };
+        WeekdayCountResponse: {
+            /** Format: int32 */
+            weekday?: number;
+            /** Format: int64 */
+            count?: number;
+        };
+        DecadeCountResponse: {
+            decade?: string;
+            /** Format: int64 */
+            count?: number;
         };
         MovieRatingGapResponse: {
             /** Format: int64 */
@@ -1285,20 +1358,6 @@ export interface components {
             /** Format: int64 */
             id?: number;
             name?: string;
-            /** Format: int64 */
-            count?: number;
-        };
-        PreferenceItemResponse: {
-            /** Format: int64 */
-            id?: number;
-            name?: string;
-            score?: number;
-            /** Format: int64 */
-            count?: number;
-        };
-        RatingBucketResponse: {
-            /** Format: int32 */
-            rating?: number;
             /** Format: int64 */
             count?: number;
         };
@@ -1343,17 +1402,6 @@ export interface components {
             posterPath?: string;
             /** Format: int64 */
             watchCount?: number;
-        };
-        WatchTypeCountResponse: {
-            watchType?: string;
-            /** Format: int64 */
-            count?: number;
-        };
-        WeekdayCountResponse: {
-            /** Format: int32 */
-            weekday?: number;
-            /** Format: int64 */
-            count?: number;
         };
         ReportMonthlyResponse: {
             /** Format: int32 */
@@ -2623,6 +2671,30 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["PageResponseWishListItemResponse"];
+                };
+            };
+        };
+    };
+    getYearlyReport: {
+        parameters: {
+            query: {
+                year: number;
+            };
+            header?: never;
+            path: {
+                userId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ReportYearlyResponse"];
                 };
             };
         };

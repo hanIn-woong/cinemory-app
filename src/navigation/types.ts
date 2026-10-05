@@ -69,7 +69,8 @@ export type MyPageStackParamList = {
   CollectionEdit: { collectionId: number };
   Report: undefined;
   Calendar: undefined;
-  MonthlyReport: { year: number; month: number };
+  // 월간 | 연간 탭 리포트 — 2026-10-05 MonthlyReport에서 개명(docs/M2C2-report-spec.md §9.2). 기본 탭은 월간.
+  PeriodReport: { year: number; month: number; initialTab?: 'monthly' | 'yearly' };
   MovieDetail: { movieId: number };
   WatchLog: { movieId: number };
 };

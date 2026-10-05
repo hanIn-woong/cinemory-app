@@ -70,6 +70,7 @@ export const EP = {
     statistics: (userId: number) => `/api/users/${userId}/report/statistics`,
     monthly: (userId: number) => `/api/users/${userId}/report/monthly`,
     calendar: (userId: number) => `/api/users/${userId}/report/calendar`,
+    yearly: (userId: number) => `/api/users/${userId}/report/yearly`, // 2026-10-05 (docs/M2C2-report-spec.md §9)
   },
   theaters: {
     nearby: '/api/theaters/nearby',

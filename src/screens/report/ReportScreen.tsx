@@ -5,31 +5,17 @@ import { View } from 'react-native';
 import { AuthRequired, ErrorState, LoadingState } from '../../components/common';
 import { PosterImage } from '../../components/movie/PosterImage';
 import { Screen, Spacer, Txt } from '../../components/primitives';
-import { RankRow, ReportBarChart, ReportPieChart, SectionCard, StatTile } from '../../components/report';
-import { WATCH_TYPE_REPORT_COLOR, WATCH_TYPE_REPORT_LABEL, UNSPECIFIED_WATCH_TYPE } from '../../constants/watchType';
+import { RankRow, ReportBarChart, SectionCard, StatTile, WatchTypeChart } from '../../components/report';
 import { WEEKDAY_LABELS } from '../../constants/weekday';
 import { useReportStatistics } from '../../hooks/useReport';
 import type { MyPageStackParamList } from '../../navigation/types';
 import { useAuthStore } from '../../store/authStore';
-import { colors } from '../../theme/tokens';
+import { formatMinutes, formatStars } from '../../utils/reportFormat';
 
 type Nav = NativeStackNavigationProp<MyPageStackParamList, 'Report'>;
 
 // 전환 이벤트가 오지 않을 때 차트를 그리기 시작하는 시점 — native-stack 기본 전환(~350ms)보다 넉넉하게.
 const CHART_READY_FALLBACK_MS = 600;
-
-function formatMinutes(totalMinutes: number): string {
-  const hours = Math.floor(totalMinutes / 60);
-  const minutes = totalMinutes % 60;
-  if (hours === 0) return `${minutes}분`;
-  if (minutes === 0) return `${hours}시간`;
-  return `${hours}시간 ${minutes}분`;
-}
-
-// averageRating은 0.0~10.0 스케일 — 화면은 ÷2로 5점 만점 표기(§7.3 계약).
-function formatStars(rating: number): string {
-  return (rating / 2).toFixed(1);
-}
 
 export function ReportScreen() {
   const navigation = useNavigation<Nav>();
@@ -92,10 +78,6 @@ export function ReportScreen() {
   const ratingBuckets = data.ratingDistribution ?? [];
   const monthlyTrend = data.monthlyTrend ?? [];
   const recentMonthlyTrend = monthlyTrend.slice(-12);
-  const watchTypes = data.watchTypeDistribution ?? [];
-  const watchTypeTotal = watchTypes.reduce((sum, w) => sum + (w.count ?? 0), 0);
-  const unspecifiedCount = watchTypes.find((w) => w.watchType === UNSPECIFIED_WATCH_TYPE)?.count ?? 0;
-  const unspecifiedIsMajority = watchTypeTotal > 0 && unspecifiedCount / watchTypeTotal > 0.5;
   const ottPlatforms = data.ottPlatformDistribution ?? [];
   const decades = data.releaseDecadeDistribution ?? [];
   const weekdays = data.weekdayDistribution ?? [];
@@ -165,21 +147,7 @@ export function ReportScreen() {
 
       {/* 5. 관람 방식 */}
       <SectionCard title="관람 방식">
-        {unspecifiedIsMajority ? (
-          <Txt variant="caption" color="mutedForeground">
-            관람 방식을 기록하면 분포를 볼 수 있어요
-          </Txt>
-        ) : (
-          watchTypes.length > 0 && (
-            <ReportPieChart
-              data={watchTypes.map((w) => ({
-                label: WATCH_TYPE_REPORT_LABEL[w.watchType ?? ''] ?? w.watchType ?? '',
-                value: w.count ?? 0,
-                color: WATCH_TYPE_REPORT_COLOR[w.watchType ?? ''] ?? colors.mutedForeground,
-              }))}
-            />
-          )
-        )}
+        <WatchTypeChart distribution={data.watchTypeDistribution} />
         {ottPlatforms.length > 0 && (
           <>
             <Spacer size="md" />

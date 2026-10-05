@@ -34,10 +34,12 @@
 |---|---|---|
 | `Report` (시청 분석) | **마이페이지 메뉴** | `GET /report/statistics` |
 | `Calendar` | **마이페이지 요약 위젯 탭** | `GET /report/calendar?year=&month=` |
-| `MonthlyReport` (월말) | **캘린더 화면에서 진입** | `GET /report/monthly?year=&month=` |
+| `PeriodReport` (월간 \| 연간 탭) — 2026-10-05 `MonthlyReport`에서 개명 | **캘린더 화면에서 진입** | `GET /report/monthly?year=&month=` · `GET /report/yearly?year=` |
 | `CalendarSummary` 위젯 | 마이페이지에 상주 | 위와 같은 캘린더 쿼리 재사용 |
 
-⚠️ **연말 리포트는 만들지 않는다 (2026-09-22 확정, A안).**
+> ✅ **2026-10-05 정정 — 연간 리포트를 넣는다(§9).** 아래는 9월 당시의 판단 기록이다.
+
+~~⚠️ **연말 리포트는 만들지 않는다 (2026-09-22 확정, A안).**~~
 백엔드에 `/report/yearly`가 없고, `M3a-report-spec.md` 8절이 *"연말 결산은 이 단계에서 하지 않는다 —
 월말이 돌면 기간만 넓히면 된다"* 로 이미 확정해 뒀다. `monthlyTrend`로 프론트에서 연 단위 집계를
 흉내내는 안(C)도 검토했으나 **얻는 것이 `watchCount`·`movieCount`·`watchedMinutes` 셋뿐**이라
@@ -75,6 +77,7 @@ report: {
   statistics: (userId: number) => `/api/users/${userId}/report/statistics`,
   monthly:    (userId: number) => `/api/users/${userId}/report/monthly`,
   calendar:   (userId: number) => `/api/users/${userId}/report/calendar`,
+  yearly:     (userId: number) => `/api/users/${userId}/report/yearly`,   // 2026-10-05 (§9)
 },
 ```
 
@@ -131,6 +134,7 @@ report: {
     ['report', 'monthly', userId, year, month] as const,
   calendar: (userId: number, year: number, month: number) =>
     ['report', 'calendar', userId, year, month] as const,
+  yearly: (userId: number, year: number) => ['report', 'yearly', userId, year] as const,  // 2026-10-05 (§9)
 },
 ```
 
@@ -322,6 +326,8 @@ JS 번들만으로 동작해야 정상이다.** 재빌드가 필요해지면 그
 
 ### 5.3 `MonthlyReport` — 월말
 
+> **2026-10-05 — `PeriodReport`의 월간 탭이 됐다**(§9.2). 아래 규칙은 월간 탭에 그대로 적용된다.
+
 - **진입 시점의 월로 고정**한다. 월 이동은 캘린더가 담당한다(뒤로 가서 월을 바꾸고 다시 진입).
   두 화면에 같은 월 이동 UI를 두면 상태가 갈린다.
 - 표시 지표는 누적의 부분집합 + 월 한정 둘 —
@@ -359,7 +365,7 @@ JS 번들만으로 동작해야 정상이다.** 재빌드가 필요해지면 그
 MyPage
  ├─ 시청 분석 리포트 박스   → Report        (2026-10-02 메뉴 항목 → 그라디언트 박스)
  └─ 캘린더 요약 위젯 (탭)   → Calendar
-                              └─ "이달의 리포트" → MonthlyReport
+                              └─ "이달의 리포트" → PeriodReport  [월간 | 연간]   (2026-10-05, §9)
 ```
 
 **캘린더를 메뉴 항목이 아니라 요약 위젯으로 두는 이유** — §9.8이 `compact`를 전제로 설계돼 있고,
@@ -400,9 +406,10 @@ reviewRate = movieCount == 0 ? 0.0 : (double) 리뷰수 / movieCount;
 비율은 어차피 분모의 의미를 설명해야 하고, 두 숫자면 설명이 필요 없다.
 `reviewRate`에서 리뷰 편수를 역산한다(`Math.round(reviewRate * movieCount)`).
 
-### 6.4 연말 리포트 — 만들지 않는다
+### 6.4 연간 리포트 — ~~만들지 않는다~~ → **2026-10-05 정정, 넣는다**
 
-§0.3 참고.
+§9 참고. 9월 당시 *"반쪽 화면을 만드는 대신 열지 않는다"* 고 판단한 근거(`monthlyTrend`로 흉내내면 편수·회차·시간
+셋뿐)는 **백엔드 엔드포인트를 새로 두는 것으로** 해소됐다.
 
 ---
 
@@ -441,7 +448,8 @@ reviewRate = movieCount == 0 ? 0.0 : (double) 리뷰수 / movieCount;
 
 ## 8. 하지 않을 것
 
-- **연말 결산** (§0.3 · §6.4)
+- ~~**연말 결산** (§0.3 · §6.4)~~ → 2026-10-05 정정, §9로 넣었다
+- **연도 이동 UI** — 연간은 진입한 캘린더의 연도로 고정한다(§9.1)
 - **섹션 탭 분할 · 지연 로딩** — 한 화면 스크롤로 간다. 로딩이 실제 문제가 되면 그때 논의한다
 - **리포트 공유 · 이미지 내보내기** — `M3a-report-spec.md` 8절에서 범위 밖으로 확정
 - **추천(M3-b)** — R-2·R-4 미결
@@ -449,10 +457,158 @@ reviewRate = movieCount == 0 ? 0.0 : (double) 리뷰수 / movieCount;
 
 ---
 
+## 9. 연간 리포트 (2026-10-05 추가)
+
+> §0.3 · §6.4에서 *"만들지 않는다"* 로 확정했던 것을 **정정**한다.
+> 백엔드 계약은 `cinemory-backend/docs/M3a-report-spec.md` **10절** · `controller-layer-spec.md` **5-8-F** ·
+> `service-layer-spec.md` **4-8-H**. 이 절은 화면이 그것을 어떻게 쓰는지만 정한다.
+
+### 9.1 확정 사항
+
+| 항목 | 결정 |
+|---|---|
+| 진입 | **월간과 같다** — 캘린더 → 리포트 화면 |
+| 전환 | 한 화면 안의 **월간 \| 연간 세그먼트 탭**. ⚠️ **스와이프 없음**(Pager를 쓰지 않는다) |
+| 연도 | 진입한 캘린더의 `year`로 **고정**. 연도 이동 UI 없음 — 월간이 월을 고정하는 것과 같은 이유(§5.3) |
+| 지표 | 월간 전부 + 5점작 · 많이 본 장르·국가(**편수**) · 많이 본 배우 · 월별 추이 12개 · 요일 분포 |
+| 현재 연도 | **"올해" 표시만**. 판정은 **클라이언트가 기기 날짜로**(`year === new Date().getFullYear()`) — 서버는 판단하지 않는다(RA-2) |
+| 5점작 | 포스터 + 제목 **4열**, **5점을 준 날짜순**, 12편 초과 시 **제자리 더보기** |
+
+### 9.2 ★ 화면 개명 — `MonthlyReport` → `PeriodReport`
+
+월간·연간을 탭으로 담는 화면이 `MonthlyReport`라는 이름이면 연간 코드가 *"월간 화면 안의 연간"* 이 되어
+읽는 사람이 의도를 의심한다. 백엔드가 `Monthly` → `Period`로 개명한 것과 맞춘다(4-8-H).
+
+| 대상 | 변경 |
+|---|---|
+| `navigation/types.ts` | `MonthlyReport: { year; month }` → **`PeriodReport: { year: number; month: number; initialTab?: 'monthly' \| 'yearly' }`** |
+| 화면 파일 | `MonthlyReportScreen.tsx` → **`PeriodReportScreen.tsx`** |
+| 캘린더의 진입 버튼 | `navigate('PeriodReport', { year, month })` — 기본 탭은 **월간** |
+
+### 9.3 API · 훅 · 캐시
+
+```ts
+// endpoints.ts
+yearly: (userId: number) => `/api/users/${userId}/report/yearly`,
+
+// api/report.ts — ⚠️ year 필수, 서버 기본값 없음(월간과 같다)
+yearly: (userId: number, year: number) =>
+  api.get<ReportYearlyResponse>(EP.report.yearly(userId), { params: { year } }).then((r) => r.data),
+
+// queryKeys
+yearly: (userId: number, year: number) => ['report', 'yearly', userId, year] as const,
+
+// useReport.ts — ⚠️ enabled로 지연 로딩
+export const useYearlyReport = (userId: number | undefined, year: number, enabled: boolean) =>
+  useQuery({ queryKey: queryKeys.report.yearly(userId!, year),
+             queryFn: () => reportApi.yearly(userId!, year),
+             enabled: enabled && userId != null });
+```
+
+- **연간 탭을 처음 누를 때만 요청한다**(`enabled = tab === 'yearly'`). 연간 집계는 쿼리 11개라 월간만 보고
+  나가는 사용자에게 매번 돌릴 이유가 없다. 한 번 받은 뒤에는 캐시가 살아 있어 탭을 왕복해도 재요청이 없다.
+- **무효화 추가 작업 없음** — §3.3의 `['report']` 프리픽스 무효화가 `['report','yearly',…]`를 이미 덮는다.
+- 타입 별칭 — `ReportYearlyResponse`, `FiveStarMovieResponse`(`gen:api` 스키마명 그대로, §2.3 원칙).
+
+### 9.4 `PeriodReport` 화면
+
+- 상단 세그먼트 `[월간 | 연간]`, 탭 상태는 화면 로컬(`useState`), 초기값은 `initialTab ?? 'monthly'`.
+- 헤더 — 월간 *"2026년 9월"*, 연간 *"2026년"* + **현재 연도면 "올해" 뱃지**.
+- **하나의 `ScrollView`, 탭 전환 시 맨 위로 스크롤**한다. 두 탭의 길이가 달라 위치를 유지하면 엉뚱한 섹션 중간에 떨어진다.
+- 월간 탭은 §5.3 그대로다. ⚠️ 다만 **백엔드 집계 기준이 바뀌어**(10-5) 재관람이 있는 사용자는 같은 달 숫자가
+  이전과 달라질 수 있다 — 의도된 정정이며 프론트 수정은 없다.
+
+**연간 탭 섹션 순서** (순서 변경 비용이 낮으므로 실기기에서 조정한다)
+
+```
+1  요약 타일          movieCount · watchCount · totalWatchedMinutes · averageRating(÷2)
+2  올해 5점을 준 작품   fiveStarMovies — 4열 그리드 (§9.5)
+3  별점 분포          ratingDistribution — 10버킷
+4  월별 추이          monthlyTrend — 12개 고정 BarChart
+5  관람 방식          watchTypeDistribution — 미지정 과반이면 유도 문구(§5.1 규칙 그대로)
+6  올해 많이 본        감독 · 배우 · 장르 TOP 5 · 국가 TOP 5
+7  요일              weekdayDistribution — BarChart, WEEKDAY_LABELS(§6.2)
+```
+
+**섹션별 ⚠️**
+
+- **2와 3의 숫자가 다를 수 있다.** 5점작은 *"한 번이라도 5점을 준 작품"*, 분포는 *"영화당 그해 마지막 별점"* 이다
+  (백엔드 10-2). 같은 해 5점 → 3점으로 다시 본 영화는 2에 있고 3의 5점 막대에는 없다. **섹션 제목을
+  "올해 5점을 준 작품"으로 고정**하고, 분포와 비교하게 만드는 문구(*"5점 N편"* 같은 캡션)를 붙이지 않는다.
+- **6은 편수를 보여줘도 된다.** §5.1이 선호 카드에 편수를 금지한 이유는 *score로 정렬돼 있어서*였다.
+  여기는 **편수로 정렬**되므로 *"12편"* 이 순서와 맞는다. 제목은 반드시 *"많이 본"* — *"선호"* 를 쓰지 않는다.
+  `mostWatchedDirector` · `mostWatchedActor`는 nullable.
+- **7은 차트로 그린다.** 월간에서 요일 차트를 금지한 이유(한 달 표본은 요일당 1~2편)가 1년 표본에는 해당하지 않는다.
+- **4는 12개가 항상 온다**(공백 달 0). 가로 스크롤 없이 한 화면에 그린다. 막대 최댓값 달을 강조하면
+  *"가장 많이 본 달"* 이 따로 필요 없다.
+- 기록 0건인 연도(미래 연도 포함) → 빈 값 200 → `EmptyState`.
+
+### 9.5 ★ 5점작 그리드
+
+리포트는 이미 포스터를 쓰고 있다(`PosterImage` — 다시 본 영화 · 나와 대중 · 캘린더). 새로 필요한 것은 셋이다.
+
+**① 제목 표시 — `MovieGridItem`에 `showTitle?: boolean` 추가**
+
+현재 `title`은 **접근성 라벨로만** 쓰인다(화면에 그리지 않는다). `showTitle`이면 포스터 아래에
+`numberOfLines={2}`로 표시한다. ⚠️ **기본값 `false`** — 서재 그리드(`RecordsTab`·`WishesTab`)는 바뀌지 않는다.
+
+**② 4열 — `FlatList`가 아니라 `flexWrap` View**
+
+⚠️ 서재 그리드는 `FlatList numColumns`인데, 리포트는 **한 화면 `ScrollView`** 라 그 안에 `FlatList`를 넣으면
+중첩 VirtualizedList 경고가 난다. `flexDirection: 'row', flexWrap: 'wrap'` + `gap`으로 4열을 만든다.
+
+- **셀 폭은 `SectionCard` 내부 폭 기준** — 화면 폭이 아니다(카드 padding). `onLayout`으로 측정해
+  `(innerWidth - GAP * 3) / 4`. 측정 전(0)에는 그리지 않는다.
+- 360px 폰에서 셀이 대략 75px라 **`PosterSize.SHELF`(w185)** 를 쓴다. `LIST`(w342)는 이 크기에서 낭비다.
+
+**③ 더보기 — 제자리 펼치기**
+
+- 처음 **12편**, 넘으면 하단에 *"더보기 (N)"* → 탭하면 전부 펼치고 *"접기"* 로 바뀐다.
+- **재요청 없음** — 서버가 전량을 내려준다(10-4). 자르기는 클라이언트 몫이다.
+- 영화 상세의 *"시청 기록 더보기"* 는 별도 화면(`WatchLog`)으로 넘기지만, 여기는 **리포트 스크롤 안의
+  한 섹션**이고 목록이 그해 본 영화 수로 상한이 있어 제자리가 맞다. 실기기에서 버벅이면 그때 별도 화면으로 옮긴다.
+
+**나머지**
+
+- 정렬은 **서버 순서 그대로**(`fiveStarDate` 오름차순 — 그해 처음 5점을 준 날). 클라이언트에서 다시 정렬하지 않는다.
+- 포스터 탭 → 영화 상세. 다른 리포트 포스터와 같은 이동 방식을 쓴다.
+- 비어 있으면 **섹션째 숨긴다**(다시 본 영화와 같은 규칙, §5.1).
+
+### 9.6 실행 순서
+
+| # | 작업 | 검증 지점 |
+|---|---|---|
+| 1 | 백엔드 4-8-H 구현 완료 확인 → `npm run gen:api` | `ReportYearlyResponse` 생성 |
+| 2 | `MonthlyReport` → `PeriodReport` 개명 (§9.2) | `npx tsc --noEmit` |
+| 3 | API · 키 · 훅 (§9.3) | |
+| 4 | 세그먼트 탭 + 지연 로딩 (§9.4) | **연간 탭을 안 누르면 요청이 없다** |
+| 5 | `MovieGridItem.showTitle` + 5점작 그리드 (§9.5) | 서재 그리드가 그대로다 |
+| 6 | 연간 나머지 섹션 | |
+| 7 | 검증 (§9.7) | |
+
+### 9.7 검증
+
+| 케이스 | 기대 |
+|---|---|
+| 월간만 보고 나감 | `/report/yearly` **요청 없음** |
+| 연간 → 월간 → 연간 | 두 번째 연간에서 **재요청 없음** |
+| 올해 / 작년 진입 | 올해만 *"올해"* 뱃지 |
+| 5점작 13편 이상 | 12편 + *"더보기 (1)"*, 펼쳐도 요청 없음 |
+| 같은 해 5점 → 3점 재관람 | 5점작에 **있음**, 분포 5점 막대에는 **없음** |
+| 작년에 5점 준 영화를 올해 재관람(대표가 바뀜) | **작년 연간이 그대로** |
+| 올해 기록 추가 · 리뷰 작성 | 연간도 갱신(`['report']` 프리픽스) |
+| 캘린더에서 미래 월 → 리포트 → 연간 | 빈 값 → `EmptyState`. 400이 아니다 |
+| 서재 그리드 | 제목이 **나오지 않는다**(`showTitle` 기본 false) |
+
+---
+
 ## 변경 이력
 
 | 날짜 | 내용 |
 |---|---|
+| 2026-10-06 (이어서) | **§9 구현 완료 — §9.6 ①·③·④·⑥ 마무리, 실기기 검증(§9.7) 전.** 백엔드 4-8-H 완료 후 로컬 기동 → `gen:api`(차이는 연간 추가분 + 스키마 재정렬뿐, `viewerId` 누수 없음). `ReportYearlyResponse`·`FiveStarMovieResponse` 별칭, `reportApi.yearly`, `useYearlyReport(userId, year, enabled)`. 비로그인 `curl`로 응답 형태 확인 — 빈 연도는 `movieCount 0`·`averageRating null`·`monthlyTrend` 12개·`ratingDistribution` 10개로 온다(실데이터 사용자는 전부 비공개라 403, 값 확인은 실기기에서). **설계와 달라진 점 넷** — ① **`enabled`를 탭 상태가 아니라 *"한 번이라도 연간을 열었나"* 로** 건다. §9.3 예시의 `enabled = tab === 'yearly'`면 월간 → 연간 왕복에서 `enabled`가 false → true로 다시 켜지는데, 그때 캐시가 stale(`staleTime` 30초)이면 **재요청이 난다** — §9.7 *"두 번째 연간에서 재요청 없음"* 을 깬다. 같은 이유로 **쿼리는 화면(`PeriodReportScreen`)이 소유**하고 탭 본문(`YearlyReportBody`)에는 결과만 넘긴다(본문은 탭 전환 때 언마운트되므로 본문에서 구독하면 재마운트 시 stale 재요청). ② **섹션 제목의 *"올해"* 는 진행 중 연도에만** — 지난 연도에서 *"올해 5점을 준 작품"* 은 틀린 말이라 *"2025년에 5점을 준 작품"* · *"2025년에 많이 본"* 으로 쓴다. *"준"* 으로 회차 사건임을 드러낸다는 §9.4의 의도는 그대로다. ③ **헤더·세그먼트는 고정, 아래 `ScrollView`만 스크롤** — 탭 전환 시 맨 위로(`scrollTo`). 기록 0건·로딩·에러는 **탭 본문 안에서** 그려 세그먼트가 사라지지 않는다(월간도 `EmptyState`로 통일). ④ 월별 추이 x축 라벨은 **숫자만**(`1`~`12`) — 12칸 비스크롤에서 *"12월"* 은 라벨이 겹친다. 최댓값 달은 `primary`, 나머지는 `brandLight`. 많이 본 감독·배우는 순위 없이 한 줄(단일 항목), 장르·국가는 `RankRow` + *"N편"*. **정리** — `formatMinutes`·`formatStars`를 `utils/reportFormat.ts`로, 관람 방식 파이 + 미지정 과반 문구를 `components/report/WatchTypeChart`로 모아 누적·월간·연간이 함께 쓴다(누적 `ReportScreen`의 동작은 불변). `npx tsc --noEmit` 통과 |
+| 2026-10-06 | **§9 구현 1단계 — 생성 타입이 필요 없는 부분만 먼저(브랜치 `feature/yearly-report`).** 스펙 점검 결과 프론트 §9 ↔ 백엔드 M3a 10절·5-8-F·`ReportYearlyResponse` DTO 사이에 어긋남이 없었다. 다만 백엔드가 **DTO만 있고 Controller·Service가 아직 없어** `gen:api`로 `ReportYearlyResponse`를 만들 수 없다(`api.d.ts` 수기 작성 금지). 그래서 §9.6 순서 중 **②·⑤와 ③의 경로·키만** 했다 — ② `MonthlyReport` → `PeriodReport` 개명(라우트 파라미터에 `initialTab?` 추가, 헤더 제목 *"이달의 리포트"* → *"리포트"*), ③ `EP.report.yearly`·`queryKeys.report.yearly`, ⑤ `MovieGridItem`에 `showTitle`(기본 false)·`posterSize` 추가 + `components/report/FiveStarGrid`(4열 `flexWrap`, `onLayout` 폭, `SHELF`, 12편 + 제자리 *"더보기 (남은 편수)"* — §9.7의 *"13편 → 더보기 (1)"* 기준). 그리드의 항목 타입은 생성 타입을 그대로 받을 수 있게 구조적으로 뒀다. **남은 것** — ① 백엔드 4-8-H 완료 후 `gen:api` → ③ `reportApi.yearly`·`useYearlyReport`·타입 별칭 → ④ 세그먼트 탭·지연 로딩 → ⑥ 나머지 섹션 → ⑦ 검증. ④에서 **월간 탭이 비어도 세그먼트는 남겨야 한다**(현재 월간 화면은 기록 0건이면 화면 전체를 빈 문구로 바꾼다 — 탭 본문 단위로 옮긴다) |
+| 2026-10-05 | **§9 신설 — 연간 리포트. 9월의 *"연말 리포트는 만들지 않는다"*(§0.3·§6.4·§8)를 정정했다.** 진입은 월간과 같고(캘린더 → 리포트), 한 화면의 **월간 \| 연간 세그먼트 탭**으로 전환한다(스와이프 없음). 연도는 진입한 캘린더의 연도로 고정. ★ **`MonthlyReport` → `PeriodReport` 개명** — 두 기간을 담는 화면이 `Monthly`라는 이름이면 연간 코드가 의도를 의심받는다(백엔드도 `Monthly` → `Period`로 맞췄다). ★ **연간은 탭을 처음 누를 때만 요청**한다(`enabled`) — 쿼리 11개를 월간만 보는 사용자에게 매번 돌리지 않는다. 무효화는 `['report']` 프리픽스가 이미 덮어 추가 작업이 없다. ★ **5점작 그리드** — 포스터는 리포트에 이미 있으므로 새로 필요한 것은 셋: `MovieGridItem.showTitle`(기본 false라 서재 불변) · **`ScrollView` 안이라 `FlatList`가 아니라 `flexWrap`**(중첩 VirtualizedList 경고) · 셀 폭은 **`SectionCard` 내부 폭**을 `onLayout`으로 · `PosterSize.SHELF`. 더보기는 **제자리 펼치기**(서버가 전량을 주고 목록에 상한이 있다). ⚠️ **5점작 수와 별점 분포 5점 막대가 다를 수 있다** — 목록형(한 번이라도) vs 집계형(그해 마지막 별점)이라 제목을 *"올해 5점을 준 작품"* 으로 고정하고 비교를 유도하는 캡션을 달지 않는다. **많이 본 장르·국가·감독·배우는 편수를 보여줘도 된다** — §5.1의 금지는 score 정렬 때문이었고 여기는 편수 정렬이다. **요일은 연간에서 차트로 그린다**(1년 표본은 충분). 현재 연도 *"올해"* 판정은 클라이언트(RA-2) |
 | 2026-10-02 | **§5.4 위젯 확장 + 캘린더 스와이프 + 리포트 진입 박스 — 실기기 검증 전.** ① 마이페이지 캘린더 위젯을 화면 아래 끝까지 늘려 시청 분석 리포트 박스가 스크롤해야 보이게 했다(사용자 요청) — 고정 값이 아니라 위젯 실측으로 칸 높이만 계산(`CalendarView`에 `compactCellHeight` 추가). 제목 가운데 정렬·브랜드 테두리. ② `Calendar` 상세에 좌우 스와이프 달 이동 + 미끄러지는 전환(화살표 버튼 포함). 처음에는 즉시 전환이었다가 사용자 요청으로 애니메이션을 넣고, 다시 "더 빠르게" 요청으로 220 → 140ms·활성화 20 → 12px·넘김 60 → 40px·튕김 500 → 300px/s로 조정했다(세로 포기 기준 20px은 유지 — 세로 스크롤 보호). 처음 여는 달은 데이터 대기 중 로딩 표시가 먼저 들어온다(이웃 달 선요청은 미적용). ③ 리포트 진입을 `ReportLinkCard`(브랜드 그라디언트 박스)로 공용화 — 마이페이지 시청 분석(기본 크기), 캘린더 이달의 리포트(`compact`). 시청 분석 설명 문구는 **누적 리포트**라 "이번 달" 표현을 쓰지 않는다. 커밋 `5a8a7b6`·`99c406f` |
 | 2026-09-28 (이어서 8) | **별점 팔레트 4차(확정 후보) — 5.0점 = primary, 낮을수록 어둡게.** 3차(primary 명도, 낮을수록 밝게)도 아니라는 피드백 후 사용자 제안 *"5점 primary, 0.5점 deep, 사이를 섞기"* 를 **먼저 계측**했다 — `brandDeep`(#37BEB0)↔primary는 끝점 ΔE가 **8.1**뿐이라 10단계 인접 ≈0.9(`shadowDeep`으로도 3.1)로 **분간이 더 나빠진다.** 두 색 사이를 섞으면 끝점 거리만큼만 벌어진다. 대안 셋(① primary에서 낮을수록 어둡게 ② 현행 + 조각에 점수 직접 표기 ③ 제안 그대로) 중 **①을 사용자가 선택.** primary의 색상·채도 고정, OKLab 등-ΔE 배치로 **2.5~5.0점 인접 ΔE 10.0**, 0.5~2.0점은 어두운 끝(HSL 5→10%)에 압축. 방향이 바뀌어 **이제 밝을수록 높은 점수**다 |
 | 2026-09-28 (이어서 7) | **별점 팔레트 3차 — primary 한 색의 명도만 조절(사용자 제안).** 2차(청록→심청 색상 이동)도 가시성이 아쉽다는 피드백. **primary(#14D9D9)의 HSL 색상 180°·채도 83%를 고정하고 명도만** 바꿨다 — 3.0점이 사실상 primary(#14D8D8), 높을수록 어둡게. 명도 값은 HSL 등간격이 아니라 **OKLab 인접 ΔE가 같도록** 골랐다(채도 높은 밝은 틴트는 지각상 압축돼 등간격이면 밝은 쪽끼리 붙는다). 2.5~5.0점 인접 **ΔE≈11.6**(2차 ≈10). 처음 계산은 밝은 끝이 거의 흰색(흰 카드 대비 1.14:1)이라 흰 간격과 함께 사라져서, 가장 밝은 사용 단계(2.5점)를 HSL 74%로 끌어내렸다. 0.5~2.0점은 밝은 끝(86→80%)에 압축 — 단계끼리 거의 같지만 드물고 범례 라벨로 구분 |

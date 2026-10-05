@@ -27,7 +27,7 @@ M2-A 기반 ✅ ──► M2-B 1군 화면 ✅ ──► M2-C 2군 화면 🔨 �
 | **M2-A**<br>기반 | 디자인 토큰 · 프리미티브 · API 클라이언트(단일 비행 인터셉터) · `authStore` · 부팅 시퀀스 · 네비게이션 골격 · 생성 타입 | ✅ **완료**<br>(실기기 검증 통과 2026-08-30) | 없음 | **`M2A-foundation-spec.md`** |
 | **M2-B**<br>1군 화면 (9월) | `Login` · `SignUp` · `Home` · `SearchResult` · `MovieDetail` · `MyRecords` · `MyPage`/`Settings` | ✅ **완료**<br>(실기기 검증 통과 2026-09-06 — §7.1·§7.2·§7.3 전부) | ⚠️ **B-4**(상세 평점 필드)는 여전히 미해소 — 평점 블록만 자리를 비워 두고 진행했다 | **`M2B-screens-spec.md`**<br>요구사항은 §9.1~9.5 · §6 |
 | **M2-C**<br>2군 화면 (10월) | `Wishlist` · `CollectionList`/`Detail` · `MovieDetail` 컬렉션 연결 | ✅ **완료**<br>(실기기 검증 완료 확인 2026-10-03 — 사용자 확인) | ✅ **API 완비 — 막는 것 없음**<br>B-6·B-7·B-18은 품질 개선(차단 아님) | **`M2C-screens-spec.md`**<br>요구사항은 §9.6~9.7 |
-| **M2-C2**<br>리포트 | `Report`(통계) · `Calendar` · `MonthlyReport` + 마이페이지 캘린더 요약 | 🔨 **구현 완료 — 실기기 검증 전**<br>(`npx tsc --noEmit` 통과 2026-09-23) | ~~B-8~~ ✅ **해소** — 백엔드 M3-a 완료 | `M2C2-report-spec.md` · §9.8 |
+| **M2-C2**<br>리포트 | `Report`(통계) · `Calendar` · `PeriodReport`(월간 \| 연간) + 마이페이지 캘린더 요약 | 🔨 **연간 리포트 구현 완료 — 실기기 검증 전**<br>(`npx tsc --noEmit` 통과 2026-10-06, 월간 이하는 9월 구현) | ~~B-8~~ ✅ **해소** — 백엔드 M3-a 완료 | `M2C2-report-spec.md` · §9.8 |
 | **M2-D**<br>3군 화면 (여유 시) | `Social` · `CineMap` · `Recommend` | 🔒 **차단** | **B-9**(`theater` 테이블 비어 있음)<br>**B-10**(활동 피드 API 없음)<br>**B-11**(M3-b 설계 백지) | §9.9~9.11 · §13 |
 
 ### M2-A 완료 근거
@@ -992,7 +992,7 @@ MainTabNavigator
     └── MyPageStack     MyPage → MyLibrary[records | wishes 스와이프 탭] → MovieDetail → WatchLog
                              → CollectionList → CollectionDetail → MovieDetail
                                                                → CollectionEdit
-                             → Report · Calendar · MonthlyReport(2군) · EditProfile · Settings
+                             → Report · Calendar → PeriodReport[월간 | 연간](2군) · EditProfile · Settings
 ```
 
 **`RootStackParamList`도 함께 바뀐다.**
@@ -1051,7 +1051,7 @@ export type MyPageStackParamList = {
   CollectionEdit: { collectionId: number };     // 2026-10-02 영화 편집(M2C §5.3-A)
   Report: undefined;                            // 2군
   Calendar: undefined;                          // 2군(M2C2)
-  MonthlyReport: { year: number; month: number };
+  PeriodReport: { year: number; month: number; initialTab?: 'monthly' | 'yearly' };  // 2026-10-05 MonthlyReport에서 개명(M2C2 §9.2)
   MovieDetail: { movieId: number };
   WatchLog: { movieId: number };                // 2026-10-03
 };
@@ -1548,7 +1548,8 @@ SectionList
   `MonthlyReport`(캘린더에서 진입) · 마이페이지 캘린더 요약(`CalendarView`의 `compact`)
 - **한 화면 스크롤.** 섹션 탭 분할은 로딩이 실제 문제가 될 때 논의한다
 - 차트는 `react-native-gifted-charts`(`BarChart` 별점·월별·요일·연대 / `PieChart` 관람 방식)
-- ⚠️ **연말 리포트는 만들지 않는다** — 백엔드에 해당 엔드포인트가 없고 범위 밖으로 확정됐다
+- ~~⚠️ **연말 리포트는 만들지 않는다**~~ → **2026-10-05 정정 — 연간 리포트를 넣는다.** 캘린더에서 진입하는
+  리포트 화면이 `PeriodReport`(**월간 \| 연간 탭**)로 바뀐다. 상세는 `M2C2-report-spec.md` §9
 - ⚠️ 와이어프레임의 `new Date(2026, 4, 1)` 하드코딩은 오늘 날짜로, `useCalendarData`의
   **날짜당 한 편 가정은 배열로** 고친다(실제 데이터 모델과 맞지 않는다)
 
@@ -1939,6 +1940,8 @@ export { CineMapWebView as CineMapView } from './CineMapWebView';
 
 | 날짜                 | 내용 |
 |--------------------|---|
+| 2026-10-06 | **연간 리포트 구현 — 진행 표·§8 트리·`ParamList` 예시를 `PeriodReport`로 갱신.** 10-03 점검에서 *"화면 스펙에만 추가하고 상위 트리를 갱신하지 않은 것"* 이 원인이었던 누락을 반복하지 않도록 개명과 함께 고쳤다. 구현 상세는 `M2C2-report-spec.md` 변경 이력(2026-10-06 이어서). 실기기 검증 전 |
+| 2026-10-05 | **§9.8 — 연간 리포트 추가(9월의 *"만들지 않는다"* 정정).** 캘린더에서 진입하는 화면을 `MonthlyReport` → **`PeriodReport`**(월간 \| 연간 세그먼트 탭, 스와이프 없음)로 바꾼다. 연간은 탭을 누를 때만 요청하고, 5점작을 포스터 4열 그리드로 보여준다. 설계 확정본은 `M2C2-report-spec.md` §9, 백엔드 계약은 `M3a-report-spec.md` 10절 · `controller-layer-spec.md` 5-8-F · `service-layer-spec.md` 4-8-H. ⚠️ **백엔드가 기간 리포트의 집계 기준을 바꿔**(대표 플래그 미사용) 재관람이 있는 사용자는 **월간 숫자도 이전과 달라질 수 있다** — 의도된 정정이다 |
 | 2026-10-03 (이어서) | **진행 표 — M2-C를 완료로.** 9/9 구현 이후 실기기 확인을 거듭해 왔고, 사용자가 M2-C 검증 완료를 확인했다(문서 점검 중 상태가 9/9 기준 "실기기 검증 전"으로 남아 있던 것을 발견) |
 | 2026-10-03 | **§8 네비게이션 트리·`ParamList` 예시를 현재 코드에 맞춤.** 문서 점검 중 발견 — `WatchLog`(오늘, M2B §5.4)뿐 아니라 `CollectionEdit`(10/2, M2C §5.3-A)·`Calendar`·`MonthlyReport`(9월, M2C2)와 `CollectionDetail.description`이 빠져 있었다. 화면 스펙 문서에만 추가하고 상위 문서의 트리를 갱신하지 않은 것이 원인. 예시 아래에 **실제 정의는 `src/navigation/types.ts`가 기준**이라는 주석과, 추천·소셜의 `MovieDetail`이 실제 화면이 될 때 `WatchLog`도 함께 둬야 한다는 경고를 달았다 |
 | 2026-10-02 | **§6.3에 재발급 실패 판정 규칙 추가 — `docs/token-refresh-resilience-spec.md` 신설.** 재발급이 *어떤 이유로든* 실패하면 로그아웃하던 동작이 실서버에서 **CI 배포 재시작(Nginx 502)마다 접속 중인 전원을 로그아웃**시키는 문제로 드러났다(백엔드 deploy-spec 2-6 요청 제한 검토 중 발견). 재발급 응답의 **상태 코드 400·401만 세션 사망**으로 판정하고 네트워크·429·5xx는 세션을 유지한다. 실서버 Phase 5 E2E 전 작업 |
