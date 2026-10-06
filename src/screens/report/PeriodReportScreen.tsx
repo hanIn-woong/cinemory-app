@@ -5,7 +5,8 @@ import { Pressable, ScrollView, View } from 'react-native';
 import type { ApiError } from '../../api/client';
 import { AuthRequired, EmptyState, ErrorState, LoadingState } from '../../components/common';
 import { Screen, Spacer, Txt } from '../../components/primitives';
-import { ReportPieChart, SectionCard, StatTile, WatchTypeChart } from '../../components/report';
+import { PersonAvatar } from '../../components/movie/PersonAvatar';
+import { ReportPieChart, SectionCard, StatTile, WatchTypeChart, type PersonRankItem } from '../../components/report';
 import { WEEKDAY_LABELS } from '../../constants/weekday';
 import { useMonthlyReport, useYearlyReport } from '../../hooks/useReport';
 import type { MyPageStackParamList } from '../../navigation/types';
@@ -162,11 +163,7 @@ function MonthlyReportBody({
 
       <SectionCard title="이달의 기록">
         {/* mostWatchedDirector는 편수(count) 기준 — 누적의 topDirectors(score 기준)와 문구를 섞지 않는다(§5.3) */}
-        {data.mostWatchedDirector && (
-          <Txt variant="caption" color="mutedForeground">
-            가장 많이 본 감독 — {data.mostWatchedDirector.name}
-          </Txt>
-        )}
+        {data.mostWatchedDirector && <MonthlyDirectorRow person={data.mostWatchedDirector} />}
         {/* mostWatchedWeekday는 nullable Integer — 한 줄 문구로만, 차트는 그리지 않는다(§5.3) */}
         {data.mostWatchedWeekday != null && (
           <Txt variant="caption" color="mutedForeground" className="mt-1">
@@ -175,5 +172,23 @@ function MonthlyReportBody({
         )}
       </SectionCard>
     </>
+  );
+}
+
+// 사진(32) · 라벨 · 이름 한 행(docs/M2C2-report-spec.md §10.4). 인물을 구조 타입으로 받아 gen:api 전
+// (profilePath 없음 → 폴백 아이콘)과 후(PersonRankItemResponse)에 모두 그대로 동작한다.
+function MonthlyDirectorRow({ person }: { person: PersonRankItem }) {
+  return (
+    <View className="flex-row items-center">
+      <PersonAvatar profilePath={person.profilePath ?? null} size={32} />
+      <View className="ml-3 flex-1">
+        <Txt variant="caption" color="mutedForeground">
+          가장 많이 본 감독
+        </Txt>
+        <Txt variant="body" numberOfLines={1}>
+          {person.name}
+        </Txt>
+      </View>
+    </View>
   );
 }

@@ -2,16 +2,17 @@ import { useNavigation, useRoute, type RouteProp } from '@react-navigation/nativ
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
-import { Bookmark, ChevronRight, LibraryBig, Maximize2, User as UserIcon, X, type LucideIcon } from 'lucide-react-native';
+import { Bookmark, ChevronRight, LibraryBig, Maximize2, X, type LucideIcon } from 'lucide-react-native';
 import { useState } from 'react';
 import { Alert, Image, Modal, Pressable, ScrollView, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { EmptyState, ErrorState, LoadingState } from '../../components/common';
 import { CollectionPickerSheet } from '../../components/collection/CollectionPickerSheet';
 import { MovieRatings } from '../../components/movie/MovieRatings';
+import { PersonAvatar } from '../../components/movie/PersonAvatar';
 import { RatingStars } from '../../components/movie/RatingStars';
 import { Button, Card, Divider, Screen, Spacer, Txt } from '../../components/primitives';
-import { PosterSize, ProfileSize, tmdbImageUrl } from '../../constants/tmdb';
+import { PosterSize, tmdbImageUrl } from '../../constants/tmdb';
 import { useMovieDetail } from '../../hooks/useMovies';
 import { useUpdateRecord, useWatchLog } from '../../hooks/useRecords';
 import { useRequireAuth } from '../../hooks/useRequireAuth';
@@ -221,7 +222,7 @@ export function MovieDetailScreen() {
                     나온다(백엔드 tmdb-sync 6-7). 같은 사람이 두 번 보이는 것은 의도된 동작이다. */}
                 {directors.map((director) => (
                   <View key={`d-${director.id}`} className="mr-4 w-16 items-center">
-                    <ActorAvatar profilePath={director.profilePath} />
+                    <PersonAvatar profilePath={director.profilePath} />
                     <Spacer size="xs" />
                     <Txt variant="caption" numberOfLines={2} className="text-center">
                       {director.name}
@@ -236,7 +237,7 @@ export function MovieDetailScreen() {
                 )}
                 {actors.map((actor) => (
                   <View key={`a-${actor.id}`} className="mr-4 w-16 items-center">
-                    <ActorAvatar profilePath={actor.profilePath} />
+                    <PersonAvatar profilePath={actor.profilePath} />
                     <Spacer size="xs" />
                     <Txt variant="caption" numberOfLines={2} className="text-center">
                       {actor.name}
@@ -492,16 +493,4 @@ function InfoRow({ label, value }: { label: string; value?: string }) {
       </Txt>
     </View>
   );
-}
-
-function ActorAvatar({ profilePath }: { profilePath?: string | null }) {
-  const uri = tmdbImageUrl(profilePath, ProfileSize.LIST);
-  if (!uri) {
-    return (
-      <View className="h-16 w-16 items-center justify-center rounded-full bg-muted">
-        <UserIcon size={24} color={colors.mutedForeground} />
-      </View>
-    );
-  }
-  return <Image source={{ uri }} style={{ width: 64, height: 64, borderRadius: 32 }} />;
 }
