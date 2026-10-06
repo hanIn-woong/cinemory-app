@@ -1,5 +1,6 @@
 import { Pressable, View } from 'react-native';
 import { colors } from '../../theme/tokens';
+import { PersonAvatar } from '../movie/PersonAvatar';
 import { PosterImage } from '../movie/PosterImage';
 import { Txt } from '../primitives/Txt';
 
@@ -11,11 +12,14 @@ interface RankRowProps {
   meta?: string;
   posterPath?: string | null;
   movieId?: number;
+  // 인물 사진 슬롯(28) — undefined면 슬롯 없음, null이면 사진 없는 인물(폴백 아이콘). 영화 포스터 슬롯
+  // (movieId/posterPath)과 동시에 쓰지 않는다(docs/M2C2-report-spec.md §10.3).
+  avatarPath?: string | null;
   onPress?: () => void;
 }
 
 // 순위 뱃지 + 이름 + 부가정보 — 선호 TOP·재관람 공용(docs/M2C2-report-spec.md §4.2).
-export function RankRow({ rank, label, meta, posterPath, movieId, onPress }: RankRowProps) {
+export function RankRow({ rank, label, meta, posterPath, movieId, avatarPath, onPress }: RankRowProps) {
   const content = (
     <View className="flex-row items-center py-2">
       <View className="h-6 w-6 items-center justify-center rounded-full bg-muted">
@@ -26,6 +30,11 @@ export function RankRow({ rank, label, meta, posterPath, movieId, onPress }: Ran
       {movieId != null && (
         <View className="ml-2">
           <PosterImage id={movieId} posterPath={posterPath} width={32} height={45} />
+        </View>
+      )}
+      {avatarPath !== undefined && (
+        <View className="ml-2">
+          <PersonAvatar profilePath={avatarPath} size={28} />
         </View>
       )}
       <Txt variant="body" className="ml-3 flex-1" numberOfLines={1}>

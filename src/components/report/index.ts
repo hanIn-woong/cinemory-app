@@ -1,6 +1,7 @@
 export { SectionCard } from './SectionCard';
 export { StatTile } from './StatTile';
 export { RankRow } from './RankRow';
+export { PersonRankGroup, type PersonRankItem } from './PersonRankGroup';
 export { ReportBarChart } from './ReportBarChart';
 export { ReportPieChart, type ReportPieDatum } from './ReportPieChart';
 export { CalendarView } from './CalendarView';

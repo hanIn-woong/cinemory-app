@@ -116,6 +116,8 @@ export type ReportYearlyResponse = S['ReportYearlyResponse'];
 export type FiveStarMovieResponse = S['FiveStarMovieResponse'];
 export type RatingBucketResponse = S['RatingBucketResponse'];
 export type PreferenceItemResponse = S['PreferenceItemResponse'];
+// 리포트 인물(감독·배우) — PreferenceItemResponse + profilePath (docs/M2C2-report-spec.md §10.1, 백엔드 4-8-I).
+export type PersonRankItemResponse = S['PersonRankItemResponse'];
 export type MonthlyTrendItemResponse = S['MonthlyTrendItemResponse'];
 export type WatchTypeCountResponse = S['WatchTypeCountResponse'];
 export type OttPlatformCountResponse = S['OttPlatformCountResponse'];

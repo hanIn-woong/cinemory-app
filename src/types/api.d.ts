@@ -1288,6 +1288,15 @@ export interface components {
             /** Format: int64 */
             watchedMinutes?: number;
         };
+        PersonRankItemResponse: {
+            /** Format: int64 */
+            id?: number;
+            name?: string;
+            profilePath?: string;
+            score?: number;
+            /** Format: int64 */
+            count?: number;
+        };
         PreferenceItemResponse: {
             /** Format: int64 */
             id?: number;
@@ -1314,8 +1323,8 @@ export interface components {
             averageRating?: number;
             ratingDistribution?: components["schemas"]["RatingBucketResponse"][];
             watchTypeDistribution?: components["schemas"]["WatchTypeCountResponse"][];
-            mostWatchedDirector?: components["schemas"]["PreferenceItemResponse"];
-            mostWatchedActor?: components["schemas"]["PreferenceItemResponse"];
+            mostWatchedDirector?: components["schemas"]["PersonRankItemResponse"];
+            mostWatchedActor?: components["schemas"]["PersonRankItemResponse"];
             mostWatchedGenres?: components["schemas"]["PreferenceItemResponse"][];
             mostWatchedCountries?: components["schemas"]["PreferenceItemResponse"][];
             monthlyTrend?: components["schemas"]["MonthlyTrendItemResponse"][];
@@ -1374,8 +1383,8 @@ export interface components {
             ratingDistribution?: components["schemas"]["RatingBucketResponse"][];
             topGenres?: components["schemas"]["PreferenceItemResponse"][];
             topCountries?: components["schemas"]["PreferenceItemResponse"][];
-            topActors?: components["schemas"]["PreferenceItemResponse"][];
-            topDirectors?: components["schemas"]["PreferenceItemResponse"][];
+            topActors?: components["schemas"]["PersonRankItemResponse"][];
+            topDirectors?: components["schemas"]["PersonRankItemResponse"][];
             monthlyTrend?: components["schemas"]["MonthlyTrendItemResponse"][];
             watchTypeDistribution?: components["schemas"]["WatchTypeCountResponse"][];
             ottPlatformDistribution?: components["schemas"]["OttPlatformCountResponse"][];
@@ -1417,7 +1426,7 @@ export interface components {
             averageRating?: number;
             ratingDistribution?: components["schemas"]["RatingBucketResponse"][];
             watchTypeDistribution?: components["schemas"]["WatchTypeCountResponse"][];
-            mostWatchedDirector?: components["schemas"]["PreferenceItemResponse"];
+            mostWatchedDirector?: components["schemas"]["PersonRankItemResponse"];
             /** Format: int32 */
             mostWatchedWeekday?: number;
         };

@@ -5,7 +5,16 @@ import { View } from 'react-native';
 import type { ApiError } from '../../api/client';
 import { EmptyState, ErrorState, LoadingState } from '../../components/common';
 import { Spacer, Txt } from '../../components/primitives';
-import { FiveStarGrid, RankRow, ReportBarChart, SectionCard, StatTile, WatchTypeChart } from '../../components/report';
+import { PersonAvatar } from '../../components/movie/PersonAvatar';
+import {
+  FiveStarGrid,
+  RankRow,
+  ReportBarChart,
+  SectionCard,
+  StatTile,
+  WatchTypeChart,
+  type PersonRankItem,
+} from '../../components/report';
 import { WEEKDAY_LABELS } from '../../constants/weekday';
 import type { MyPageStackParamList } from '../../navigation/types';
 import { colors } from '../../theme/tokens';
@@ -147,14 +156,16 @@ function formatCount(count?: number): string | undefined {
   return count != null ? `${count}편` : undefined;
 }
 
-function SingleItemRow({ title, item }: { title: string; item?: PreferenceItemResponse }) {
+// 라벨 · 사진(40) · 이름 · 편수 — 한 명만 보여 주는 자리라 1위 강조는 하지 않는다(§10.4).
+function SingleItemRow({ title, item }: { title: string; item?: PersonRankItem }) {
   if (!item) return null;
   return (
     <View className="mb-2 flex-row items-center">
       <Txt variant="caption" color="mutedForeground" className="w-10">
         {title}
       </Txt>
-      <Txt variant="body" className="flex-1" numberOfLines={1}>
+      <PersonAvatar profilePath={item.profilePath ?? null} size={40} />
+      <Txt variant="body" className="ml-3 flex-1" numberOfLines={1}>
         {item.name}
       </Txt>
       <Txt variant="caption" color="mutedForeground">

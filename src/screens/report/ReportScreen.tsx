@@ -5,7 +5,7 @@ import { View } from 'react-native';
 import { AuthRequired, ErrorState, LoadingState } from '../../components/common';
 import { PosterImage } from '../../components/movie/PosterImage';
 import { Screen, Spacer, Txt } from '../../components/primitives';
-import { RankRow, ReportBarChart, SectionCard, StatTile, WatchTypeChart } from '../../components/report';
+import { PersonRankGroup, RankRow, ReportBarChart, SectionCard, StatTile, WatchTypeChart } from '../../components/report';
 import { WEEKDAY_LABELS } from '../../constants/weekday';
 import { useReportStatistics } from '../../hooks/useReport';
 import type { MyPageStackParamList } from '../../navigation/types';
@@ -121,8 +121,9 @@ export function ReportScreen() {
         </Txt>
         <PreferenceGroup title="장르" items={data.topGenres} />
         <PreferenceGroup title="국가" items={data.topCountries} />
-        <PreferenceGroup title="감독" items={data.topDirectors} />
-        <PreferenceGroup title="배우" items={data.topActors} />
+        {/* 감독·배우는 사진 + 1위 강조(§10.3). 장르·국가는 그대로 */}
+        <PersonRankGroup title="감독" items={data.topDirectors} />
+        <PersonRankGroup title="배우" items={data.topActors} />
       </SectionCard>
       <Spacer size="md" />
 
