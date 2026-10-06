@@ -141,9 +141,9 @@ M2-A에 설계만 있고 구현이 없다. **지금은 만들지 않는다** —
 | 액션 | `invalidateQueries` 대상 |
 |---|---|
 | 시청 기록 생성 | `['records']` · `['movies','detail',movieId]` · **`['wishes']`** ← ★★ (2026-10-03) |
-| 시청 기록 삭제 | `['records']` · `['movies','detail',movieId]` |
+| 시청 기록 삭제 | `['records']` · `['movies','detail',movieId]` · **`['reviews']`** ← ★★★ (2026-10-06) |
 | **시청 기록 수정** (B-15) | `['records']` · `['movies','detail',movieId]` · **`['reviews']`** ← ★ |
-| 대표 기록 변경 | `['records','ofUserMovie',userId,movieId]` |
+| 대표 기록 변경 | `['records','ofUserMovie',userId,movieId]` · **`['movies','detail',movieId]` · `['reviews']`** ← ★★★ (2026-10-06) |
 | 리뷰 upsert/삭제 | `['reviews','me',movieId]` · `['movies','reviews',movieId]` |
 
 > ★ **기록 수정에 `['reviews']`가 붙는 이유** — 공개 리뷰의 별점이 대표 기록에서 파생되므로
@@ -153,6 +153,15 @@ M2-A에 설계만 있고 구현이 없다. **지금은 만들지 않는다** —
 > ★★ **기록 생성에 `['wishes']`가 붙는 이유** — 서버가 기록을 만들며 **같은 영화의 찜을 지운다**(백엔드
 > `service-layer-spec.md` 4-3, 2026-10-03). 찜 목록과 영화 상세의 찜 아이콘이 옛 상태로 남지 않게 한다. 수정·삭제·
 > 대표 변경은 찜을 건드리지 않으므로 붙이지 않는다.
+>
+> ★★★ **삭제·대표 변경에 상세·리뷰가 붙는 이유 (2026-10-06, B-4)** — 상세의 우리 평점(`ratings.cinemory`)과
+> 리뷰 별점은 둘 다 **"대표 기록 → 별점 있는 최신 기록"** 으로 사용자당 별점을 고른다. 기록을 지우거나 대표를
+> 바꾸면 고르는 기록이 달라져 두 숫자가 함께 바뀐다.
+> ⚠️ **코드가 이 표와 어긋나 있었다** — `useDeleteRecord`는 `['movies','detail',movieId]`를 표대로 무효화하지
+> 않았다(뮤테이션 변수가 `recordId`뿐이라 `movieId`가 없다). 고칠 때 **`['movies','detail']` 프리픽스**로
+> 무효화한다 — 활성 쿼리만 다시 받으므로 비용이 같고, 훅 시그니처를 바꾸지 않아도 된다.
+> ⚠️ **이 표의 `['reviews']`는 공개 리뷰 목록을 덮지 않는다** — 목록 키가 `['movies','reviews',movieId]`(`useMovieReviews`)다.
+> 그래서 기록 수정·삭제·대표 변경은 `['movies','reviews',…]`도 함께 무효화한다(삭제는 프리픽스). 2026-10-06 코드 반영 완료.
 | 찜 토글 | `['wishes']` — **낙관적 업데이트 후 무효화** |
 | 프로필 수정 | `['users','me']` |
 | **미등록 영화 sync** | `['movies','search']` — 다음 검색에서 `registered`로 올라온다 |
@@ -415,7 +424,7 @@ SectionList
 `GET /api/movies/{id}/cast`(페이징, size 50). ⚠️ **인물명의 약 71%가 영문**이다 —
 TMDB 한글화 커버리지 한계이며 우리 버그가 아니다.
 
-**집계 평점(TMDB 평균 등) 영역은 자리만 잡고 숨긴다** — §6 참고. ⚠️ "내가 매긴 별점"
+**집계 평점(TMDB 평균 등) 영역은 자리만 잡고 숨긴다** — §6 참고. → ✅ **2026-10-06 이 자리에 붙였다**(`MovieRatings`, §6 「B-4 상세」 A안). ⚠️ "내가 매긴 별점"
 (대표 시청 기록 기준)은 다른 데이터라 B-4와 무관하게 이미 표시한다 — 2026-09-10
 변경 이력 참고.
 
@@ -555,7 +564,7 @@ src/hooks/useCollapsibleToolbar.ts   →  { onScroll, toolbarStyle, reset }
 
 | # | 항목 | 화면 영향 | 병렬 가능? |
 |---|---|---|---|
-| **B-4** | 영화 상세 평점 (`voteAverage` 노출 + `AVG` 집계) | 평점 블록만 숨기면 진행 가능 | ✅ |
+| **B-4** | 영화 상세 평점 (`voteAverage` 노출 + `AVG` 집계) — ✅ **백엔드 완료·프론트 연결 (2026-10-06)**, 실기기 검증 전 | 평점 블록만 숨기면 진행 가능 | ✅ |
 | **B-13** | OTT 플랫폼 목록 API | `watchType=OTT` 저장 불가 → **THEATER/ETC만 지원**하고 진행 | ✅ |
 | **B-15** | **시청 기록 수정 API** | 수정 진입점을 숨기고 진행. 설계 확정본은 상위 **§11.2** | ✅ |
 | **B-16** | `review.rating` 제거 + 파생 | ⚠️ **리뷰 *작성*을 붙이면 400.** 읽기만 먼저 | ⚠️ **작성은 차단** |
@@ -564,6 +573,50 @@ src/hooks/useCollapsibleToolbar.ts   →  { onScroll, toolbarStyle, reset }
 화면부터 진행한다.
 
 ### B-4 상세
+
+#### ✅ 확정 계약 (2026-10-06) — 아래 「원안」보다 이것이 우선한다
+
+백엔드 근거는 `cinemory-backend/docs/service-layer-spec.md` **4-2-A**(controller 잔여 #14).
+
+```ts
+// GET /api/movies/{movieId} — MovieDetailResponse 마지막 필드 (gen:api로 생성, 수기 작성 금지)
+ratings: {
+  tmdb:     { average: number | null; count: number };  // 0~10, 소수 1자리
+  cinemory: { average: number | null; count: number };  // 1.0~10.0(별 × 2), 소수 2자리
+}
+```
+
+| 규칙 | 내용 |
+|---|---|
+| `count === 0` | 서버가 **`average = null`** 로 내린다. TMDB의 "0건 0.0"도 여기로 온다 |
+| 우리 평점의 집계 대상 | 사용자당 1값 — **대표 기록 → 별점 있는 최신 기록** (상위 §7.3의 2단계 폴백, 리뷰 별점·`myRating`과 같은 규칙). 공개범위 무관, 조회자 본인 포함 |
+| 표본 하한 | **없다.** 1명이어도 평균이 온다 — `count`를 함께 보여 줘 신뢰도는 사용자가 판단한다 |
+| 스케일 | 둘 다 10점 만점. **TMDB는 0~10 그대로**(`ExternalRating`, §4), **우리 평점은 `apiToStars`로 ÷2 후 한 번만 반올림**(§4.1). 서버가 소수 2자리로 주는 이유가 이것이다 — 서버에서 1자리로 자르면 이중 반올림 |
+| `backdropPath` | **오지 않는다** — B-14 종결(히어로 현행 유지) |
+
+**화면 처리**
+
+- **자리** — `MovieDetailScreen.tsx`의 평점 자리(줄거리 아래, 「내 기록」 카드 위, 9/10에 잡아 둔 자리)에만 붙인다.
+  **히어로와 다른 섹션은 바꾸지 않는다.**
+- **`average === null`이면 그 줄에 숫자를 렌더하지 않는다** — 아래 원안의 *"플레이스홀더 숫자나 '-'를 넣지 않는다"* 를
+  그대로 잇는다. 둘 다 null이면 블록 전체를 숨긴다. 우리 평점만 null일 때 안내 문구를 둘지는 시안에서 정한다.
+- **두 출처를 시각적으로 구분한다** — 대체가 아니라 병기다. 우리 평점은 `RatingStars`(사용자 별점 계열),
+  TMDB는 `ExternalRating`(아직 없는 컴포넌트 — §4 표에만 있다)으로 만든다. 출처 라벨(TMDB / CineMory)과 `count`를 함께 표시한다.
+- **블록 모양 — A안(두 줄 병기)으로 확정 (2026-10-06 사용자 선택).** 시안 B(좌우 2칸 타일)·C(한 줄 압축)는 기각.
+  `CineMory ★★★★☆ 4.1 (12명)` / `TMDB 7.8 / 10 (3,210명)` — 라벨 폭(`RATING_LABEL_CLASS`)을 공유해 숫자 시작점을 맞춘다.
+  **우리 평점만 null이면 그 줄만 빠지고 안내 문구는 넣지 않는다**(사용자 결정). 구현: `src/components/movie/MovieRatings.tsx`.
+- **갱신** — 기록 생성·수정은 이미 `['movies','detail',movieId]`를 무효화한다. **삭제·대표 변경은 빠져 있어 함께 고친다**(§3.2 ★★★).
+
+**실행 순서**
+
+1. 백엔드 4-2-A 구현·배포 확인 → 2. `gen:api` → 3. `useRecords.ts` 무효화 2곳(§3.2) →
+4. `ExternalRating` 컴포넌트 → 5. 평점 블록 시안 선택 후 구현 → 6. 실기기 검증
+
+**검증 — 핵심 1건:** 별점을 준 영화에 **별점 없이 재관람 기록**을 추가한다 → 「내 별점」과 리뷰 별점이 그대로이고
+**우리 평점의 `count`도 줄지 않아야 한다**(백엔드 T3과 같은 시나리오). 이어서 그 재관람 기록을 삭제하고, 대표를 바꿔 보고,
+화면을 나갔다 오지 않아도 숫자가 바로 갱신되는지 확인한다.
+
+#### 원안 (2026-08-30 — 참고용)
 
 **현재 상태** — `MovieDetailResponse`에 평점 필드가 **하나도 없다.** `Movie` 엔티티에
 `voteAverage`/`voteCount`가 있지만 DTO로 노출되지 않고, 우리 평점(`AVG(review.rating)`)
@@ -695,6 +748,9 @@ M2-B가 끝나면 2군으로 간다. 미리 알아둘 것.
 
 | 날짜 | 내용 |
 |---|---|
+| 2026-10-06 (이어서 2) | **B-4 프론트 연결 — §6 실행 순서 2·5 완료, 6(실기기 검증) 남음.** 백엔드 4-2-A 구현 완료(백엔드 워킹 트리, 로컬 `bootRun`) 후 `gen:api` — `MovieDetailResponse.ratings`·`MovieRatingsResponse`·`RatingSummary` 추가(springdoc이라 전부 optional → `?? null`/`?? 0`으로 받는다). 실응답 확인: 142 「오디세이」 `tmdb 8.0/3984 · cinemory 8.0/1`, 500 「블라인드」 `cinemory {average: null, count: 0}` — 계약대로. 블록은 **A안(두 줄 병기), 안내 문구 없음**(사용자 결정). `src/types/index.ts`에 `MovieRatings`·`RatingSummary` 별칭, `MovieRatings.tsx` 신설 — 우리 평점은 `RatingStars` size 16 + `apiToStars(avg).toFixed(1)`(÷2 뒤 한 번만 반올림), TMDB는 `ExternalRating`. 위 여백은 컴포넌트 `className`으로 받아 블록이 숨겨질 때 빈 간격이 남지 않게 했다. `npx tsc --noEmit`·`expo export --platform android` 통과. **실기기 검증 전** — §6 「검증 — 핵심 1건」 시나리오 |
+| 2026-10-06 (이어서) | **B-4 선행분 구현 — §6 실행 순서 3·4.** 백엔드 4-2-A 구현 대기 중이라 `gen:api`(2)를 건너뛰고 백엔드 없이 되는 것만 먼저 했다. ① `useRecords.ts` 무효화 — `useDeleteRecord`에 `['movies','detail']`·`['reviews']`·`['movies','reviews']`(프리픽스, 변수에 `movieId` 없음), `useSetRepresentative`에 상세·`['reviews']`·`['movies','reviews',movieId]`. ★ **추가 발견:** 공개 리뷰 목록 키가 `['movies','reviews',movieId]`라 §3.2 표의 `['reviews']`로는 갱신되지 않는다 — 기록 *수정*(`useUpdateRecord`)도 같은 이유로 공개 리뷰의 파생 별점이 옛 값으로 남고 있었으므로 함께 고치고 §3.2 ★★★ 아래에 주석을 달았다. ② `src/components/movie/ExternalRating.tsx` 신설 — `{label, average, count}`, 0~10 그대로 소수 1자리, `average === null`이면 렌더하지 않음. 생성 타입(`ratings`)이 아직 없어 원시 props로 받는다. **평점 블록(5)은 시안 선택 전이라 화면에 붙이지 않았다.** `npx tsc --noEmit` 통과 |
+| 2026-10-06 | **B-4 계약 확정 — §3.2·§5.4·§6 갱신.** 백엔드 `service-layer-spec.md` 4-2-A로 `MovieDetailResponse.ratings: { tmdb, cinemory }`가 확정됐다(구현 대기). §6 「B-4 상세」에 확정 계약·화면 처리·실행 순서·검증을 두고 기존 내용은 「원안」으로 남겼다. ★ **§3.2 무효화 매트릭스 수정** — 우리 평점이 리뷰 별점과 같은 2단계 폴백이라 **삭제·대표 변경도 상세와 `['reviews']`를 무효화**해야 한다. 이 과정에서 `useDeleteRecord`가 표에 있던 `['movies','detail',movieId]`조차 빠뜨리고 있음을 발견했다(변수에 `movieId`가 없다 → 프리픽스로 무효화). 평점은 9/10에 잡아 둔 자리에만 붙이고 **히어로 등 다른 영역은 바꾸지 않는다.** B-14(백드롭)는 종결 |
 | 2026-10-03 (이어서 6) | **문서 점검 — §5.4 액션 표의 "컬렉션 추가: M2-C로 미룬다" 정정.** 9/9 M2-C에서 `CollectionPickerSheet`로 연결됐는데 표가 그대로였다. 같은 날 상위 `M2-frontend-spec.md` §8 네비게이션 트리에 `WatchLog`를 반영 |
 | 2026-10-03 (이어서 5) | **§5.4 기록이 1개뿐이면 `대표` 표시도 생략.** 사용자 요청 — 하나뿐인 기록은 자동으로 대표라 회차와 같은 이유로 군더더기. 대표 지정 메뉴는 원래 대표가 아닌 기록에만 나오므로 영향 없음 |
 | 2026-10-03 (이어서 4) | **§5.4 기록이 1개뿐이면 회차 생략.** 사용자 요청 — 한 번만 본 영화에 `1회차`는 군더더기. 그 기록에 날짜도 없으면 줄이 ` · 극장`처럼 구분점으로 시작하므로 그 경우에만 `날짜 미기록`을 첫머리에 남긴다 |

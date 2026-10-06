@@ -755,6 +755,11 @@ UI 0.5 ~ 5.0 (0.5 단위)  ⇄  API 1.0 ~ 10.0 (1.0 단위)
 → **백엔드 선행 작업이다** (tmdb-sync 잔여 #24, 처리 시점이 "프론트 상세 화면 구현 시"로
 지정돼 있다). §11 참고. 그때까지 상세 화면의 평점 영역은 **자리만 잡아두고 숨긴다.**
 
+> ✅ **2026-10-06 계약 확정 (백엔드 구현 대기)** — `MovieDetailResponse.ratings: { tmdb, cinemory }`,
+> 각각 `{ average: number | null, count: number }`. 우리 평점은 위 "AVG(review.rating)"이 아니라
+> **사용자당 2단계 폴백**(대표 기록 → 별점 있는 최신 기록 — §7.3과 같은 규칙)의 평균이다.
+> 실행·화면 처리는 `M2B-screens-spec.md` §6 「B-4 상세」, 백엔드 근거는 `service-layer-spec.md` 4-2-A.
+
 ⚠️ **이건 집계 평점(TMDB `voteAverage` 또는 전체 사용자 리뷰 평균) 이야기다 — "내가 매긴
 이 영화의 별점"과는 다른 데이터다.** 후자는 이미 `watchLog`(내 시청 기록)에 있어 B-4와
 무관하게 표시할 수 있다(2026-09-10, 히어로 아래 큰 별점으로 추가 — §9.3).
@@ -1624,7 +1629,7 @@ npm i nativewind && npm i -D tailwindcss
 | ~~B-1~~ | ~~카카오 네이티브 앱 키 `aud`~~ | ✅ **완료 (2026-09-11)** — §11.1 검증표 **6/7 통과**. 4번(이메일 동의 거부)은 **재현 불가** — 콘솔에서 이메일을 필수 동의로 설정해 거부 경로가 *로그인 취소*(3번)와 합쳐진다. **백엔드 `security-spec.md` L-7·L-9도 이 결과로 종결**(2026-09-17 반영) | 없음 | — |
 | ~~B-2~~ | ~~`auth.oauth.nonce-ttl`~~ | ✅ **이미 `PT5M`** (`application.yml:73`, 오버라이드 없음) | 없음 | — |
 | ~~B-3~~ | ~~CORS Expo origin~~ | ✅ **이미 등록됨** (`8081`, `19006`). **RN 네이티브는 CORS와 무관** — Expo 웹에서만 의미 | 없음 | — |
-| **B-4** | **영화 상세 평점** | `MovieDetailResponse`에 필드 없음 | ① `voteAverage`/`voteCount` 노출 ② `ReviewRepository`에 `AVG(rating)` 집계 추가 | 1군 (상세 화면) |
+| **B-4** | **영화 상세 평점** | ✅ **백엔드 완료·프론트 연결 (2026-10-06)** — 🔶 실기기 검증 전 | `ratings: { tmdb, cinemory }` — 상세는 `M2B-screens-spec.md` §6 「B-4 상세」 (원안 ①② 대체) | 1군 (상세 화면) |
 | B-5 | 마이페이지 "N편 관람" | `UserProfileResponse`에 `watchedCount` 없음 | 없어도 우회 가능(`records`의 `totalElements`) | 낮음 |
 | ~~B-6~~ | ~~컬렉션 카드 미리보기 포스터~~ | ✅ **해소(2026-09-27)** — `CollectionResponse.previewPosterPaths`(백엔드 5-4-A ③) | 프론트 연결 완료(`docs/collection-order-spec.md` §2) | 2군 |
 | B-7 | **컬렉션 단건 조회** | Service 메서드 부재 (잔여 #4) | 딥링크 필요 시 `getCollection` 추가 | 2군 |
@@ -1636,7 +1641,7 @@ npm i nativewind && npm i -D tailwindcss
 | **B-19** | **컬렉션 내 영화 순서 지정 불가** | `CollectionMovie`에 순서 컬럼이 없다 — 담긴 순서가 사실상 PK/생성 순서로 고정 | 순서 컬럼(예: `position`) + 저장 엔드포인트 신설. 실기기 검증 중 드래그 정렬 요청을 받았으나 저장할 곳이 없어 보류 | 2군 (차단은 아님 — "순서 바꾸기"만 막는다) |
 | B-12 | 검색 정렬·필터 | `query`/`year`만 지원 (잔여 #22) | 장르 필터·정렬 UI는 불가 | 낮음 |
 | **B-13** | **OTT 플랫폼 목록 조회 API 없음** | ✅ **백엔드 완료(2026-09-21, `GET /api/ott-platforms`)** · ✅ **프론트 연결 코드 완료(2026-10-01, `6d40657`)** — 🔶 실기기 검증(`ott-record-spec.md` §3) 전 | 프론트 연결: **`docs/ott-record-spec.md`** (상세 화면 빠른 별점의 `ottPlatformId` 누락 버그 동시 수정) | **실서버 배포 전 필수** — 운영 데이터가 OTT 없이 쌓이면 소급 불가. 남은 것은 실기기 검증 |
-| B-14 | 상세 히어로 배경 | `MovieDetailResponse`에 `backdropPath` 없음(`posterPath`만) | 필요하면 필드 추가 — 없어도 `posterPath`로 우회 가능 | 낮음 |
+| ~~B-14~~ | ~~상세 히어로 배경~~ | ✅ **종결 — 하지 않음 (2026-10-06).** 히어로는 현행(포스터 4:5 크롭) 유지로 결정. 스틸컷 섹션 대안은 `backdropPath`가 1장뿐이라 성립하지 않아 별개 기능으로 보류(백엔드 `service-layer-spec.md` 4-2-A ⑤) | 없음 | — |
 | **B-17** | **랜덤 영화 조회 API 없음** | `GET /api/movies`는 `findAll(pageable)`이 정렬 미지정이라 **매번 같은 목록**이 나온다(5-0-D가 클라이언트 `sort`를 의도적으로 미지원) | **`GET /api/movies/random?size=`** 신설 — `poster_path IS NOT NULL` 필터 포함. 설계 확정본은 **백엔드 docs**(`controller-layer-spec.md` 5-2 · `service-layer-spec.md` 4-2) | **1군 (홈 배경).** 없으면 게스트 배경이 **항상 같은 영화**가 된다 |
 | ~~B-20~~ | ~~`WatchRecord`의 `note` → `privateReview` 리네임 + `rating` 타입 변경 (v16)~~ | ✅ **완료(2026-09-22)** — `gen:api` 재생성 확인, `MovieDetailScreen.tsx`·`WatchRecordModal.tsx` 반영, `npx tsc --noEmit` 통과 | 없음 | — |
 | ~~B-15~~ | ~~시청 기록 수정 API 없음~~ | ✅ **백엔드 완료(`PATCH /api/records/{recordId}`), 프론트 연동 완료** — `gen:api` 재생성 확인(2026-09-04) | 없음 | — |
@@ -1940,6 +1945,8 @@ export { CineMapWebView as CineMapView } from './CineMapWebView';
 
 | 날짜                 | 내용 |
 |--------------------|---|
+| 2026-10-06 (이어서) | **B-4 프론트 연결 — §11 표 갱신.** 백엔드 구현 완료 후 `gen:api`·평점 블록(A안 두 줄 병기, 우리 평점 null이면 안내 문구 없이 줄만 생략) 연결. 상세는 `M2B-screens-spec.md` 변경 이력 2026-10-06 (이어서)·(이어서 2). 실기기 검증 전 |
+| 2026-10-06 | **B-4 계약 확정 · B-14 종결 — §7.4·§11 갱신.** B-4: `MovieDetailResponse.ratings: { tmdb, cinemory }`(백엔드 4-2-A, 구현 대기). 우리 평점은 리뷰 별점·내 별점과 같은 **2단계 폴백** 기준이라 같은 화면의 숫자가 어긋나지 않는다. 실행 문서는 `M2B-screens-spec.md` §6 — 삭제·대표 변경의 무효화 누락도 함께 고친다. B-14: 상세 히어로는 바꾸지 않기로 해 **`backdropPath`를 받지 않는다** |
 | 2026-10-06 | **연간 리포트 구현 — 진행 표·§8 트리·`ParamList` 예시를 `PeriodReport`로 갱신.** 10-03 점검에서 *"화면 스펙에만 추가하고 상위 트리를 갱신하지 않은 것"* 이 원인이었던 누락을 반복하지 않도록 개명과 함께 고쳤다. 구현 상세는 `M2C2-report-spec.md` 변경 이력(2026-10-06 이어서). 실기기 검증 전 |
 | 2026-10-05 | **§9.8 — 연간 리포트 추가(9월의 *"만들지 않는다"* 정정).** 캘린더에서 진입하는 화면을 `MonthlyReport` → **`PeriodReport`**(월간 \| 연간 세그먼트 탭, 스와이프 없음)로 바꾼다. 연간은 탭을 누를 때만 요청하고, 5점작을 포스터 4열 그리드로 보여준다. 설계 확정본은 `M2C2-report-spec.md` §9, 백엔드 계약은 `M3a-report-spec.md` 10절 · `controller-layer-spec.md` 5-8-F · `service-layer-spec.md` 4-8-H. ⚠️ **백엔드가 기간 리포트의 집계 기준을 바꿔**(대표 플래그 미사용) 재관람이 있는 사용자는 **월간 숫자도 이전과 달라질 수 있다** — 의도된 정정이다 |
 | 2026-10-03 (이어서) | **진행 표 — M2-C를 완료로.** 9/9 구현 이후 실기기 확인을 거듭해 왔고, 사용자가 M2-C 검증 완료를 확인했다(문서 점검 중 상태가 9/9 기준 "실기기 검증 전"으로 남아 있던 것을 발견) |

@@ -74,6 +74,9 @@ export type MovieSuggestion = S['MovieSearchSuggestionResponse'];
 export type MovieSearchResponse = S['MovieSearchResponse'];
 
 export type MovieDetailResponse = S['MovieDetailResponse'];
+// 상세의 집계 평점(B-4) — tmdb는 0~10(소수 1자리), cinemory는 1.0~10.0(소수 2자리). count === 0이면 average = null.
+export type MovieRatings = S['MovieRatingsResponse'];
+export type RatingSummary = S['RatingSummary'];
 
 // 회차별 시청 기록. WatchRecordResponse는 배열 그대로 온다(페이징 없음).
 export type WatchRecordResponse = S['WatchRecordResponse'];

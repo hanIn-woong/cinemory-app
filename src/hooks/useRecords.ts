@@ -100,6 +100,8 @@ export function useUpdateRecord(): UseMutationResult<WatchRecordResponse, ApiErr
       queryClient.invalidateQueries({ queryKey: ['records'] });
       queryClient.invalidateQueries({ queryKey: queryKeys.movies.detail(movieId) });
       queryClient.invalidateQueries({ queryKey: ['reviews'] });
+      // ⚠️ 공개 리뷰 목록의 키는 ['movies','reviews',movieId]라 위 ['reviews'] 프리픽스에 걸리지 않는다.
+      queryClient.invalidateQueries({ queryKey: ['movies', 'reviews', movieId] });
       queryClient.invalidateQueries({ queryKey: ['report'] });
     },
   });
@@ -110,7 +112,13 @@ export function useDeleteRecord(): UseMutationResult<void, ApiError, number> {
   return useMutation({
     mutationFn: (recordId) => recordApi.remove(recordId),
     onSuccess: () => {
+      // 시청 기록 삭제 → ['records'] · 상세 · 리뷰 · ['report'] 무효화 (§3.2 ★★★). 상세의 우리 평점과
+      // 리뷰 별점은 "대표 → 별점 있는 최신 기록"으로 고르므로 기록이 사라지면 함께 바뀐다.
+      // 변수에 movieId가 없어 상세·공개 리뷰는 프리픽스로 무효화한다 — 활성 쿼리만 다시 받으니 비용은 같다.
       queryClient.invalidateQueries({ queryKey: ['records'] });
+      queryClient.invalidateQueries({ queryKey: ['movies', 'detail'] });
+      queryClient.invalidateQueries({ queryKey: ['reviews'] });
+      queryClient.invalidateQueries({ queryKey: ['movies', 'reviews'] });
       // docs/M2C2-report-spec.md §3.3
       queryClient.invalidateQueries({ queryKey: ['report'] });
     },
@@ -128,9 +136,12 @@ export function useSetRepresentative(): UseMutationResult<void, ApiError, SetRep
   return useMutation({
     mutationFn: ({ recordId }) => recordApi.setRepresentative(recordId),
     onSuccess: (_data, { userId, movieId }) => {
-      // 대표 기록 변경 → ['records','ofUserMovie',userId,movieId] · ['report'] 무효화
-      // (§3.2 무효화 매트릭스, docs/M2C2-report-spec.md §3.3)
+      // 대표 기록 변경 → ['records','ofUserMovie',userId,movieId] · 상세 · 리뷰 · ['report'] 무효화
+      // (§3.2 ★★★, docs/M2C2-report-spec.md §3.3). 대표가 바뀌면 우리 평점·리뷰 별점이 고르는 기록이 바뀐다.
       queryClient.invalidateQueries({ queryKey: queryKeys.records.ofUserMovie(userId, movieId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.movies.detail(movieId) });
+      queryClient.invalidateQueries({ queryKey: ['reviews'] });
+      queryClient.invalidateQueries({ queryKey: ['movies', 'reviews', movieId] });
       queryClient.invalidateQueries({ queryKey: ['report'] });
     },
   });
