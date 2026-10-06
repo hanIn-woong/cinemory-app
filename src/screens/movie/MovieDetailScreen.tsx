@@ -95,6 +95,11 @@ export function MovieDetailScreen() {
   // 리뷰를 안 썼어도(myReview 없음) 시청 기록만으로 뜨게 하려고 watchLog에서 직접 뽑는다.
   const representativeRecord = watchLog.data?.find((r) => r.representative);
   const myRating = representativeRecord?.rating ?? watchLog.data?.find((r) => r.rating != null)?.rating ?? null;
+  // 감독은 정보 카드의 텍스트 행이 아니라 출연진 아바타 줄 맨 앞에 둔다(M2B §5.4, 2026-10-06 시안 (a)).
+  const directors = movie.directors ?? [];
+  const actors = movie.actors ?? [];
+  const castRowTitle =
+    directors.length > 0 && actors.length > 0 ? '감독 · 출연' : directors.length > 0 ? '감독' : '출연';
   const heroUri = tmdbImageUrl(movie.posterPath, PosterSize.HERO);
   // 히어로 컨테이너는 4:5 — 원본 포스터(2:3)를 top:0에 두고 컨테이너로 아래쪽만 자른다.
   const heroHeight = windowWidth / HERO_ASPECT_RATIO;
@@ -194,23 +199,43 @@ export function MovieDetailScreen() {
         )}
 
         <Spacer size="lg" />
-        <Card>
+        {/* 행 간격은 gap 하나로만 준다 — 예전엔 InfoRow의 py-1(위아래 4)과 출연 줄 앞 Spacer(8)가 섞여
+            장르↔국가 8 / 국가↔감독·출연 12로 어긋났고, 첫 행이 카드 위 여백에 4를 더 얹었다. 행이 빠져도
+            (장르 없음 등) 간격이 그대로 맞는다. */}
+        <Card className="gap-2">
           <InfoRow label="장르" value={movie.genres?.map((g) => g.name).join(', ')} />
           <InfoRow label="국가" value={movie.countries?.map((c) => c.name).join(', ')} />
-          <InfoRow label="감독" value={movie.directors?.map((d) => d.name).join(', ')} />
-          {movie.actors && movie.actors.length > 0 && (
-            <>
-              <Spacer size="sm" />
+          {(directors.length > 0 || actors.length > 0) && (
+            // ⚠️ Fragment가 아니라 View로 묶는다 — Fragment면 제목·Spacer·ScrollView가 각각 gap을 받아 벌어진다.
+            <View>
               <Txt variant="caption" color="mutedForeground">
-                출연
+                {castRowTitle}
               </Txt>
-              <Spacer size="xs" />
+              {/* 제목과 사진 사이 — xs(4)는 붙어 보였다(2026-10-06 사용자 요청). 행 간격(gap-2)과 같은 8 */}
+              <Spacer size="sm" />
               {/* ⚠️ 첫 아이템이 스크롤뷰 경계에 딱 붙으면 원형 아바타 왼쪽 끝이 살짝
                   잘려 보인다(실기기 확인) — 약간의 왼쪽 여백으로 해결한다.
-                  3px로는 부족해 8px로 늘렸다(2026-09-10 재확인). */}
+                  3px로는 부족해 8px로 늘렸다(2026-09-10 재확인). 첫 항목이 감독이어도 같다. */}
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingLeft: 8 }}>
-                {movie.actors.map((actor) => (
-                  <View key={actor.id} className="mr-4 w-16 items-center">
+                {/* ⚠️ key에 역할 접두어 — 배우 겸 감독이 실제로 있어 같은 person.id가 두 목록에 모두
+                    나온다(백엔드 tmdb-sync 6-7). 같은 사람이 두 번 보이는 것은 의도된 동작이다. */}
+                {directors.map((director) => (
+                  <View key={`d-${director.id}`} className="mr-4 w-16 items-center">
+                    <ActorAvatar profilePath={director.profilePath} />
+                    <Spacer size="xs" />
+                    <Txt variant="caption" numberOfLines={2} className="text-center">
+                      {director.name}
+                    </Txt>
+                    <Txt variant="caption" color="mutedForeground">
+                      감독
+                    </Txt>
+                  </View>
+                ))}
+                {directors.length > 0 && actors.length > 0 && (
+                  <View className="mr-4" style={{ width: 1, height: 64, backgroundColor: colors.border }} />
+                )}
+                {actors.map((actor) => (
+                  <View key={`a-${actor.id}`} className="mr-4 w-16 items-center">
                     <ActorAvatar profilePath={actor.profilePath} />
                     <Spacer size="xs" />
                     <Txt variant="caption" numberOfLines={2} className="text-center">
@@ -219,7 +244,7 @@ export function MovieDetailScreen() {
                   </View>
                 ))}
               </ScrollView>
-            </>
+            </View>
           )}
         </Card>
 
@@ -458,7 +483,7 @@ function IconAction({
 function InfoRow({ label, value }: { label: string; value?: string }) {
   if (!value) return null;
   return (
-    <View className="flex-row py-1">
+    <View className="flex-row">
       <Txt variant="caption" color="mutedForeground" className="w-12">
         {label}
       </Txt>
