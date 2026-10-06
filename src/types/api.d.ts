@@ -1587,6 +1587,16 @@ export interface components {
             countries?: components["schemas"]["CountryResponse"][];
             actors?: components["schemas"]["ActorResponse"][];
             directors?: components["schemas"]["DirectorResponse"][];
+            ratings?: components["schemas"]["MovieRatingsResponse"];
+        };
+        MovieRatingsResponse: {
+            tmdb?: components["schemas"]["RatingSummary"];
+            cinemory?: components["schemas"]["RatingSummary"];
+        };
+        RatingSummary: {
+            average?: number;
+            /** Format: int64 */
+            count?: number;
         };
         PageResponseReviewResponse: {
             content?: components["schemas"]["ReviewResponse"][];

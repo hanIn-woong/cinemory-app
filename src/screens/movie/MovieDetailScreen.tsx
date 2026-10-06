@@ -8,6 +8,7 @@ import { Alert, Image, Modal, Pressable, ScrollView, useWindowDimensions, View }
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { EmptyState, ErrorState, LoadingState } from '../../components/common';
 import { CollectionPickerSheet } from '../../components/collection/CollectionPickerSheet';
+import { MovieRatings } from '../../components/movie/MovieRatings';
 import { RatingStars } from '../../components/movie/RatingStars';
 import { Button, Card, Divider, Screen, Spacer, Txt } from '../../components/primitives';
 import { PosterSize, ProfileSize, tmdbImageUrl } from '../../constants/tmdb';
@@ -233,7 +234,8 @@ export function MovieDetailScreen() {
           </>
         )}
 
-        {/* 평점 영역은 B-4(voteAverage/voteCount 미노출) 전까지 자리만 두고 숨긴다 (§6) */}
+        {/* 집계 평점(B-4) — 9/10에 잡아 둔 자리(줄거리 아래, 내 기록 카드 위)에만 붙인다(§6). */}
+        <MovieRatings ratings={movie.ratings} className="mt-4" />
 
         <Spacer size="lg" />
         <Card>
