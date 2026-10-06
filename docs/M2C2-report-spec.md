@@ -653,12 +653,75 @@ export const useYearlyReport = (userId: number | undefined, year: number, enable
 **마무리** — 3·4단계에서 넣은 검증용 기록을 지운다(지울 때마다 리포트가 다시 줄어드는지도 함께 본다).
 결과는 이 문서 변경 이력에 남기고, 통과하면 상위 `M2-frontend-spec.md` 진행 표의 *"실기기 검증 전"* 을 걷는다.
 
+
+---
+
+## 10. 리포트 인물 사진 (2026-10-07 확정 — 시안 D2)
+
+감독·배우가 나오는 리포트 세 곳에 사진을 넣는다. 비교 시안은 D1(행마다 32px) · **D2(1위 강조 + 나머지 목록)** ·
+D3(가로 사진 줄)이었고 **D2를 골랐다** — 리포트에서 "내 1위"가 가장 잘 드러난다. D3는 칸이 좁아 영문 인물명이
+두 줄로 잘려(인물명 한글화는 출시 후로 보류) 기각했다.
+
+### 10.1 백엔드 선행 — 계약
+
+`cinemory-backend/docs/service-layer-spec.md` **4-8-I**. 인물 필드 4종이 `PersonRankItemResponse`
+`{ id, name, profilePath, score, count }`가 된다(장르·국가는 `PreferenceItemResponse` 그대로). 백엔드 구현 후
+**`gen:api`** — `api.d.ts`를 수기로 고치지 않는다.
+
+### 10.2 공용 부품 — `PersonAvatar`
+
+`MovieDetailScreen.tsx` 안의 `ActorAvatar`를 **`src/components/movie/PersonAvatar.tsx`로 옮기고 `size`를 받게** 한다.
+상세 화면(64)과 리포트(56 · 40 · 32 · 28)가 같은 부품을 쓴다.
+
+| 항목 | 규칙 |
+|---|---|
+| 이미지 | `tmdbImageUrl(profilePath, ProfileSize.LIST)` — 사이즈 하나(`w185`)로 충분하다(최대 표시 64dp) |
+| 사진 없음 | `bg-muted` 원 + `UserIcon`, 아이콘 크기는 ~~`size × 0.4`~~ → **`size × 0.375`**(64 → 24로 현행과 같다. 0.4면 25.6 — 2026-10-07 구현 중 정정) |
+| 모양 | 원형(`borderRadius = size / 2`) |
+
+### 10.3 누적 리포트 — 선호 TOP의 감독·배우 (`ReportScreen`)
+
+장르·국가 그룹은 **바꾸지 않는다**(`PreferenceGroup` 그대로). 감독·배우만 새 `PersonRankGroup`으로 그린다.
+
+| 부분 | 내용 |
+|---|---|
+| 그룹 제목 | 현행과 같다(`caption`, `mutedForeground`) |
+| **1위 박스** | 배경 `brandLight`(#DBF5F0), `radius.md`, 안쪽 여백 세로 10 · 가로 12. 왼쪽에 **`PersonAvatar` 56** + 오른쪽 아래에 **순위 뱃지 "1"**(22px 원, 배경 `primary`, 글자 `foreground` 굵게, 박스 배경색 2px 테두리로 사진과 분리). 오른쪽에 이름(`h4`, 한 줄 말줄임)과 그 아래 "N편"(`caption`) |
+| 2위 이하 | 현행 `RankRow` 모양에 **`PersonAvatar` 28**을 순위 뱃지와 이름 사이에 넣는다. `RankRow`에 `avatarPath?: string \| null` prop을 추가한다(영화 포스터 슬롯 `movieId`/`posterPath`와 **동시에 쓰지 않는다**) |
+| 개수 | **최대 3**(서버 `TOP_ACTOR_DIRECTOR_LIMIT`). 현행 `slice(0, 5)`는 인물 그룹에서 의미가 없다 |
+| 1개뿐일 때 | 1위 박스만 그린다 |
+| 0개 | 그룹 자체를 그리지 않는다(현행과 같다) |
+
+⚠️ **1위 박스의 "N편"도 정렬 기준이 아니다** — 섹션 상단의 *"별점 기준 선호도 순 · 편수는 별점을 준 작품 수예요"*
+문구(§5.1 3번, B안)가 그대로 1위 박스에도 적용된다. 1위가 2위보다 편수가 적을 수 있다.
+
+### 10.4 연간·월간 — 단일 항목
+
+| 화면 | 현재 | 바뀐 모양 |
+|---|---|---|
+| 연간 "올해 많이 본" 감독·배우 (`YearlyReportBody`의 `SingleItemRow`) | 라벨 · 이름 · 편수 | 라벨 · **`PersonAvatar` 40** · 이름 · 편수 |
+| 월간 "이달의 기록" (`PeriodReportScreen`) | *"가장 많이 본 감독 — 이름"* 텍스트 한 줄 | **`PersonAvatar` 32** · "가장 많이 본 감독"(`caption`) · 이름(`body`) 한 행. 아래 요일 문구는 그대로 |
+
+연간의 장르·국가(`RankGroup`)는 바꾸지 않는다. 두 화면 모두 **1위 강조는 하지 않는다** — 원래 한 명만 보여 주는 자리라
+강조할 비교 대상이 없다.
+
+### 10.5 실행 순서와 확인
+
+1. 백엔드 4-8-I 구현·배포 확인 → 2. `gen:api` → 3. `PersonAvatar` 추출(상세 화면이 그대로 보이는지 먼저 확인) →
+4. `RankRow`에 `avatarPath` → 5. `PersonRankGroup`(누적) → 6. 연간·월간 단일 항목 → 7. `tsc` · 실기기
+
+**확인** — ① 감독·배우 각 3명 ② 1명뿐인 그룹(1위 박스만) ③ 사진 없는 인물이 1위일 때와 2위 이하일 때 ④ 영문 긴 이름이
+1위 박스에서 한 줄로 말줄임되는지 ⑤ 월간·연간에서 감독이 없는 기간(행이 사라지는지) ⑥ 상세 화면 아바타(64)가 추출 전과 같은지
+
 ---
 
 ## 변경 이력
 
 | 날짜 | 내용 |
 |---|---|
+| 2026-10-07 (이어서 2) | **§10.5 ①·② 완료 — 실기기 확인(⑦)만 남음.** 백엔드 4-8-I 구현 완료(`feature/report-person-photo` 워킹 트리, 미커밋). 8080에 이미 떠 있던 서버는 **예전 코드**(스키마에 `PersonRankItemResponse` 없음)라 건드리지 않고 새 코드를 **8090에 따로 띄워** `openapi-typescript`를 그 주소로 직접 돌렸다(`npm run gen:api`와 같은 명령, URL만 다름). 차이는 계약 그대로 — `PersonRankItemResponse { id, name, profilePath, score, count }` 추가, 누적 `topDirectors`·`topActors`, 월간 `mostWatchedDirector`, 연간 `mostWatchedDirector`·`mostWatchedActor`가 이것으로 바뀜(장르·국가는 `PreferenceItemResponse` 그대로). `types/index.ts`에 별칭만 추가했고 **화면 코드는 그대로**다 — 선행 구현의 구조 타입(`PersonRankItem`)이 의도대로 받아냈다. `npx tsc --noEmit` 통과. 실값은 비로그인으로 볼 수 없어(리포트 사용자 비공개) 실기기에서 |
+| 2026-10-07 (이어서) | **§10 선행 구현 — §10.5 실행 순서 3~6, 백엔드 4-8-I 구현 대기.** 인물 항목을 생성 타입이 아니라 **구조 타입 `PersonRankItem { id?, name?, count?, profilePath? }`** 으로 받아, 지금의 `PreferenceItemResponse`로도 컴파일되고 `gen:api` 후 `PersonRankItemResponse.profilePath`가 **코드 수정 없이** 흘러든다. 그래서 화면 연결까지 먼저 했고, 백엔드 전에는 사진 자리에 폴백 아이콘이 나온다(⚠️ 백엔드 반영 전에 머지하지 않는다). ③ `ActorAvatar` → `components/movie/PersonAvatar`(`size`, 상세는 64 그대로). ★ **아이콘 비율 정정** — §10.2의 `size × 0.4`는 64에서 25.6이라 *"현행 24와 같다"* 와 모순, **0.375**로 고쳤다(⑥ 상세 화면 불변). ④ `RankRow.avatarPath` — `undefined`면 슬롯 없음, `null`이면 폴백(사진 없는 인물도 자리를 차지해 이름 정렬이 맞는다). ⑤ `components/report/PersonRankGroup` — 1위 박스(`bg-brand-light`·`rounded-md`·`px-3 py-[10px]`, 56 사진 + 오른쪽 아래 22px `primary` 뱃지에 `brandLight` 2px 테두리, 이름 `h4` 한 줄 말줄임 + *"N편"*) + 2~3위 `RankRow`(28), 최대 3. `ReportScreen`의 감독·배우만 교체(장르·국가 `PreferenceGroup` 그대로). ⑥ 연간 `SingleItemRow`에 40, 월간은 응답 필드를 직접 읽으면 아직 없는 `profilePath`에 타입 에러가 나서 `MonthlyDirectorRow`(32)로 뺐다. `npx tsc --noEmit`·`expo export --platform android` 통과. **남은 것** — ① 백엔드 확인 → ② `gen:api`(별칭 `PersonRankItemResponse` 추가 정도) → ⑦ 실기기 §10.5 확인 ①~⑥ |
+| 2026-10-07 | **§10 신설 — 리포트 인물 사진(시안 D2 선택).** 누적 선호 TOP의 감독·배우는 **1위 강조 박스(56px 사진 + 순위 뱃지) + 2~3위 목록(28px 사진)**, 연간 "올해 많이 본"은 40px, 월간 "이달의 기록"은 32px 사진 한 행. 장르·국가는 그대로. 상세 화면의 `ActorAvatar`를 크기를 받는 공용 `PersonAvatar`로 추출한다. 백엔드 선행: 인물 필드가 `PersonRankItemResponse`(+`profilePath`)로 바뀐다(`service-layer-spec.md` 4-8-I) → `gen:api`. ⚠️ 누적 인물 TOP은 서버 기준 **최대 3**이라 현행 `slice(0, 5)`는 인물 그룹에서 의미가 없었다 |
 | 2026-10-06 (이어서 2) | **§9.7.1 실기기 검증 절차 정리.** §9.7 표를 준비(P) → 지연 로딩·캐시 → 화면 표시 → 집계 기준 → 더보기 순으로 묶었다 — 데이터를 건드리지 않는 단계를 앞에 둬 뒤 단계가 앞 단계를 오염시키지 않게. "요청 없음"은 백엔드 `DispatcherServlet` DEBUG 로그로 판정한다(`application.yml`에 요청 로그 설정이 없어 `bootRun --args`로 켠다). ★ 1-3에 **30초(`staleTime`) 대기**를 넣었다 — 그보다 빨리 왕복하면 `enabled` 설계(`이어서` ①)와 무관하게 캐시가 fresh라 재요청이 안 나, 버그가 있어도 통과해 버린다 |
 | 2026-10-06 (이어서) | **§9 구현 완료 — §9.6 ①·③·④·⑥ 마무리, 실기기 검증(§9.7) 전.** 백엔드 4-8-H 완료 후 로컬 기동 → `gen:api`(차이는 연간 추가분 + 스키마 재정렬뿐, `viewerId` 누수 없음). `ReportYearlyResponse`·`FiveStarMovieResponse` 별칭, `reportApi.yearly`, `useYearlyReport(userId, year, enabled)`. 비로그인 `curl`로 응답 형태 확인 — 빈 연도는 `movieCount 0`·`averageRating null`·`monthlyTrend` 12개·`ratingDistribution` 10개로 온다(실데이터 사용자는 전부 비공개라 403, 값 확인은 실기기에서). **설계와 달라진 점 넷** — ① **`enabled`를 탭 상태가 아니라 *"한 번이라도 연간을 열었나"* 로** 건다. §9.3 예시의 `enabled = tab === 'yearly'`면 월간 → 연간 왕복에서 `enabled`가 false → true로 다시 켜지는데, 그때 캐시가 stale(`staleTime` 30초)이면 **재요청이 난다** — §9.7 *"두 번째 연간에서 재요청 없음"* 을 깬다. 같은 이유로 **쿼리는 화면(`PeriodReportScreen`)이 소유**하고 탭 본문(`YearlyReportBody`)에는 결과만 넘긴다(본문은 탭 전환 때 언마운트되므로 본문에서 구독하면 재마운트 시 stale 재요청). ② **섹션 제목의 *"올해"* 는 진행 중 연도에만** — 지난 연도에서 *"올해 5점을 준 작품"* 은 틀린 말이라 *"2025년에 5점을 준 작품"* · *"2025년에 많이 본"* 으로 쓴다. *"준"* 으로 회차 사건임을 드러낸다는 §9.4의 의도는 그대로다. ③ **헤더·세그먼트는 고정, 아래 `ScrollView`만 스크롤** — 탭 전환 시 맨 위로(`scrollTo`). 기록 0건·로딩·에러는 **탭 본문 안에서** 그려 세그먼트가 사라지지 않는다(월간도 `EmptyState`로 통일). ④ 월별 추이 x축 라벨은 **숫자만**(`1`~`12`) — 12칸 비스크롤에서 *"12월"* 은 라벨이 겹친다. 최댓값 달은 `primary`, 나머지는 `brandLight`. 많이 본 감독·배우는 순위 없이 한 줄(단일 항목), 장르·국가는 `RankRow` + *"N편"*. **정리** — `formatMinutes`·`formatStars`를 `utils/reportFormat.ts`로, 관람 방식 파이 + 미지정 과반 문구를 `components/report/WatchTypeChart`로 모아 누적·월간·연간이 함께 쓴다(누적 `ReportScreen`의 동작은 불변). `npx tsc --noEmit` 통과 |
 | 2026-10-06 | **§9 구현 1단계 — 생성 타입이 필요 없는 부분만 먼저(브랜치 `feature/yearly-report`).** 스펙 점검 결과 프론트 §9 ↔ 백엔드 M3a 10절·5-8-F·`ReportYearlyResponse` DTO 사이에 어긋남이 없었다. 다만 백엔드가 **DTO만 있고 Controller·Service가 아직 없어** `gen:api`로 `ReportYearlyResponse`를 만들 수 없다(`api.d.ts` 수기 작성 금지). 그래서 §9.6 순서 중 **②·⑤와 ③의 경로·키만** 했다 — ② `MonthlyReport` → `PeriodReport` 개명(라우트 파라미터에 `initialTab?` 추가, 헤더 제목 *"이달의 리포트"* → *"리포트"*), ③ `EP.report.yearly`·`queryKeys.report.yearly`, ⑤ `MovieGridItem`에 `showTitle`(기본 false)·`posterSize` 추가 + `components/report/FiveStarGrid`(4열 `flexWrap`, `onLayout` 폭, `SHELF`, 12편 + 제자리 *"더보기 (남은 편수)"* — §9.7의 *"13편 → 더보기 (1)"* 기준). 그리드의 항목 타입은 생성 타입을 그대로 받을 수 있게 구조적으로 뒀다. **남은 것** — ① 백엔드 4-8-H 완료 후 `gen:api` → ③ `reportApi.yearly`·`useYearlyReport`·타입 별칭 → ④ 세그먼트 탭·지연 로딩 → ⑥ 나머지 섹션 → ⑦ 검증. ④에서 **월간 탭이 비어도 세그먼트는 남겨야 한다**(현재 월간 화면은 기록 0건이면 화면 전체를 빈 문구로 바꾼다 — 탭 본문 단위로 옮긴다) |
