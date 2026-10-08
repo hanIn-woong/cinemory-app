@@ -6,6 +6,16 @@ narrative로 남긴다.
 
 ---
 
+## 2026-10-08 — 캘린더 날짜 칸 포스터 · `cancelRefetch: false` 나머지 7곳
+
+- 사용자 스펙 2건을 한 브랜치(`feature/calendar-posters`)에서.
+- 캘린더(`M2C2-report-spec.md` §5.2): full 칸을 `FullDayCell`로 분리 — 그날 마지막 기록 포스터(SHELF) + 좌상단 날짜 배지 + 우하단 `+N`,
+  선택은 테두리 2px primary. 칸 안쪽 1dp 여백. compact 경로는 손대지 않았다. 배지 배경용 `colors.scrim` 토큰 추가.
+- 09-26에 미뤄 둔 `cancelRefetch` 잠재 문제를 컬렉션·검색 7곳에 적용(`M2-frontend-spec.md` 변경 이력).
+- `tsc` 통과. **다음**: 실기기 — 캘린더(1편 / +N / 포스터 없음 / 선택 / 스와이프 / 위젯 불변), 검색·컬렉션 목록 빠른 스크롤 중복·누락.
+
+---
+
 ## 2026-10-07 — 리포트 인물 사진(`M2C2-report-spec.md` §10) · 상세 감독 사진(PR #21)
 
 - (10-06 밤, PR #21) 상세 화면 감독 사진 — 사용자가 고른 시안 (a)대로 감독 `InfoRow`를 지우고 출연진 아바타 줄 맨 앞에
