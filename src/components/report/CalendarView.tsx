@@ -177,12 +177,14 @@ function FullDayCell({
               {dayNumber}
             </Txt>
           </View>
+          {/* +N은 브랜드 색 — 날짜 배지(반투명 검정)와 같은 모양이라 헷갈렸다(2026-10-08 실기기).
+              글자는 짙은 foreground: primary(#14D9D9) 위 흰 글씨는 대비 ~1.9:1, foreground는 ~9:1. */}
           {records.length > 1 && (
             <View
               className="absolute bottom-0.5 right-0.5 rounded px-1"
-              style={{ backgroundColor: colors.scrim }}
+              style={{ backgroundColor: colors.primary }}
             >
-              <Txt variant="caption" color="primaryForeground">
+              <Txt variant="caption" color="foreground">
                 +{records.length - 1}
               </Txt>
             </View>
