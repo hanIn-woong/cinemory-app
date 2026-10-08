@@ -1356,6 +1356,8 @@ SectionList
 - `sync`는 **인증 필수**다. 비로그인 상태에서 suggestions를 탭하면 로그인 유도.
 - 실패: `TMDB_MOVIE_NOT_FOUND`(404) / `ADULT_CONTENT_NOT_ALLOWED`(400) → 토스트
 - `suggestions`는 **page 1에서만** 온다. 무한스크롤 2페이지부터는 `registered`만 이어붙인다.
+- ⚠️ **`[더 찾아보기]` 섹션은 `registered`를 끝까지 불러온 뒤(`!hasNextPage`)에만 붙인다** (2026-10-08).
+  그 전에 아래에 두면 다음 페이지가 끝에 닿은 사용자의 **위쪽**에 끼어들어 화면이 순간이동한다.
 - 소스에 개수 제한이 없어 최대 20건이 그대로 오므로 **화면에서 5~10건으로 자른다.**
 - `page`가 **1-based**임에 주의(`useInfiniteQuery`의 `initialPageParam: 1`).
 
@@ -1945,6 +1947,7 @@ export { CineMapWebView as CineMapView } from './CineMapWebView';
 
 | 날짜                 | 내용 |
 |--------------------|---|
+| 2026-10-08 (이어서) | **검색 결과 `[더 찾아보기]`를 `registered` 끝까지 불러온 뒤에만 표시(§9.2).** 실기기에서 검색 결과를 빠르게 끝까지 내리면 스피너 뒤 화면이 자연스럽게 이어지지 않고 순간이동했다(컬렉션 목록 등 다른 리스트는 정상 — 검색만). 원인: 무한스크롤은 1번 섹션 `registered`만 이어붙이는데 리스트 끝은 2번 섹션 `suggestions`(page 1 고정, 최대 8건)라, 새 페이지가 **보고 있던 위치의 위쪽**에 끼어들어 보이는 항목이 그 높이만큼 한 번에 밀렸다. `InfiniteScrollFooter`는 이미 높이가 고정이라 무관. 대안 `maintainVisibleContentPosition`은 새 결과가 화면 위에 숨어 다시 올려야 보이므로 기각. 대가: 등록된 결과가 여러 페이지면 `[더 찾아보기]`는 끝까지 내려야 나온다(사용자 승인). `tsc` 통과, 실기기 재확인 전 |
 | 2026-10-08 | **`fetchNextPage({ cancelRefetch: false })`를 나머지 7곳에 적용** — 09-26(이어서 5)에 ⚠️로 남긴 잠재 문제(당시 "6곳"으로 셌으나 `CollectionAddMoviesModal`이 검색·내 기록 2곳이라 7곳). `CollectionAddMoviesModal`(검색·내 기록), `CollectionPickerSheet`, `CollectionDetailScreen`, `CollectionEditScreen`, `CollectionListScreen`, `SearchResultScreen`. 스크롤 끝에서 `onEndReached`가 한 렌더 안에 두 번 불리면 두 호출 모두 `isFetchingNextPage` 가드를 통과하고, 기본값 `cancelRefetch: true`가 진행 중 요청을 취소한 뒤 같은 페이지를 다시 부른다. 기존 `hasNextPage && !isFetchingNextPage` 가드는 그대로 둔다. 체감 변화는 거의 없는 예방성 수정이다. `tsc` 통과, 실기기(검색 결과·컬렉션 목록 끝까지 빠른 스크롤 시 중복·누락 없음) 확인 전 |
 | 2026-10-06 (이어서) | **B-4 프론트 연결 — §11 표 갱신.** 백엔드 구현 완료 후 `gen:api`·평점 블록(A안 두 줄 병기, 우리 평점 null이면 안내 문구 없이 줄만 생략) 연결. 상세는 `M2B-screens-spec.md` 변경 이력 2026-10-06 (이어서)·(이어서 2). 실기기 검증 전 |
 | 2026-10-06 | **B-4 계약 확정 · B-14 종결 — §7.4·§11 갱신.** B-4: `MovieDetailResponse.ratings: { tmdb, cinemory }`(백엔드 4-2-A, 구현 대기). 우리 평점은 리뷰 별점·내 별점과 같은 **2단계 폴백** 기준이라 같은 화면의 숫자가 어긋나지 않는다. 실행 문서는 `M2B-screens-spec.md` §6 — 삭제·대표 변경의 무효화 누락도 함께 고친다. B-14: 상세 히어로는 바꾸지 않기로 해 **`backdropPath`를 받지 않는다** |

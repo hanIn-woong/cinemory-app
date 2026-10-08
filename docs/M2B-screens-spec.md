@@ -314,6 +314,9 @@ SectionList
 └─ [더 찾아보기]          suggestions  → sync 후 이동
 ```
 
+- `[더 찾아보기]`는 `registered`를 끝까지 불러온 뒤에만 붙는다 — 무한스크롤 중 화면 순간이동 방지
+  (2026-10-08, `M2-frontend-spec.md` §9.2·변경 이력).
+
 **`suggestions` 항목 탭 동작**
 
 ```

@@ -325,10 +325,15 @@ JS 번들만으로 동작해야 정상이다.** 재빌드가 필요해지면 그
 - **날짜 칸 = 포스터 (2026-10-08, full 모드만).** 기록이 있는 날은 칸 전체를 **그날 마지막 기록**
   (`records[records.length - 1]` — 서버가 날짜 → 기록 id 오름차순)의 포스터로 채운다(`PosterImage`
   `size="SHELF"` w185, `radius.sm`). 날짜 숫자는 좌상단 반투명 배지(`colors.scrim` + 흰 글씨), 여러 편이면
-  우하단에 `+N`(기록 수 − 1). 포스터 없는 영화는 `PosterImage`의 그라디언트 폴백 + 같은 배지. 기록 없는 날은
+  우하단에 `+N`(기록 수 − 1) — **`+N`은 `colors.primary` 배경 + `foreground` 글씨**로 날짜 배지와 구분한다. 포스터 없는 영화는 `PosterImage`의 그라디언트 폴백 + 같은 배지. 기록 없는 날은
   숫자만. **선택 표시는 원형 배경이 아니라 칸 테두리 2px `colors.primary`** — 포스터를 가리지 않게.
   칸 안쪽 여백 1dp(이웃과 합쳐 2dp)로 포스터끼리 붙어 보이지 않게 한다. compact(마이페이지 위젯, 칸 32px)는
   숫자 + 점 그대로.
+- **앞뒤 달 미리 받기 (2026-10-08).** 지금 달이 뜨고(`isSuccess`) **들어오는 슬라이드가 끝난 뒤**에 이전·다음 달
+  캘린더를 `fetchQuery`로 캐시에 넣고 그 달 칸 포스터(같은 규칙 · SHELF — URL이 같아야 캐시가 맞는다)를
+  `Image.prefetch(..., { cachePolicy: 'disk' })`로 디스크까지만 받는다(`useCalendarNeighborPrefetch`).
+  ⚠️ 슬라이드 중에 시작하거나 `memory-disk`(받자마자 디코드)로 받으면 스와이프가 나빠진다(실기기 확인).
+  미리 받기는 앞뒤 한 달만이라 **초당 한 달보다 빠르게 넘기면 여전히 로딩이 보인다** — 수용.
 - 상단에 **월말 리포트 진입 버튼**을 둔다 — 현재 보고 있는 `year`/`month`를 그대로 넘긴다.
 
 ### 5.3 `MonthlyReport` — 월말
@@ -726,6 +731,9 @@ D3(가로 사진 줄)이었고 **D2를 골랐다** — 리포트에서 "내 1위
 
 | 날짜 | 내용 |
 |---|---|
+| 2026-10-08 (이어서 3) | **`+N` 배지를 브랜드 색으로(§5.2).** 이어서 2 실기기: 스와이프 UX 회복 확인. 대신 날짜 배지와 `+N` 배지가 같은 모양(반투명 검정 + 흰 글씨)이라 헷갈린다는 피드백 → 하나만 브랜드 색으로. 날짜는 모든 칸에 있는 기본 정보라 중립색 유지, 여러 편일 때만 붙는 `+N`을 `colors.primary` 배경으로 강조. 글자는 흰색 대신 `foreground` — primary(#14D9D9) 위 흰 글씨는 대비 ~1.9:1로 13px에서 읽기 어렵고 foreground는 ~9:1. 선택 테두리도 primary지만 테두리(선) vs 배지(면)라 겹치지 않는다고 판단. `tsc` 통과, 실기기 확인 전 |
+| 2026-10-08 (이어서 2) | **미리 받기 조정 — 슬라이드 종료 후 시작 · 디스크만(§5.2).** 이어서 1의 실기기 결과: 처음 보는 달 로딩은 완화됐으나 **스와이프 UX가 나빠졌다**, 빠르게 넘기면 여전히 로딩. 원인 추정 둘 — ① 받아 둔 달로 넘기면 바로 `isSuccess`라 다음 이웃의 요청·포스터 선요청이 **들어오는 슬라이드와 동시에** 시작됐고, ② `memory-disk` 선요청은 받는 즉시 최대 31장을 비트맵으로 디코드한다. → `CalendarScreen`에 `slideSettled` 상태(달 변경 시 false, 들어오는 `withTiming` 완료 콜백에서 true)를 두고 `enabled = isSuccess && slideSettled`, 선요청은 `cachePolicy: 'disk'`. 빠른 연속 스와이프의 로딩은 미리 받기 범위(±1달)와 TMDB 지연의 한계라 수용. 3달을 나란히 그리는 구조(C안)는 보류 — 스와이프 코드 재작성이라 별도 작업. `tsc` 통과, 실기기 재확인 전 |
+| 2026-10-08 (이어서) | **캘린더 앞뒤 달 미리 받기(§5.2).** 포스터 칸 실기기 확인 결과 스와이프는 끊기지 않으나 **처음 보는 달은 포스터가 늦게 찼다** — 그 달 데이터 왕복 뒤에 포스터 최대 31장을 받기 시작하고, 장당 0.25~0.5s(09-27 실측, 지연 지배)라서. 지금 달이 뜬 뒤 이전 → 다음 달 순으로 데이터를 `fetchQuery`(신선하면 재요청 없음)하고 포스터를 `Image.prefetch`. ⚠️ prefetch는 취소되지 않아 무한스크롤에서 철회했던 방식(M2-frontend 09-26)이지만, 여기는 최대 62장 · 달을 넘길 때만 생겨 쌓이지 않는다. 지금 달 포스터보다 먼저 줄 서지 않게 `enabled = 지금 달 isSuccess`. `tsc` 통과, 실기기 재확인 전 |
 | 2026-10-08 | **캘린더 날짜 칸 포스터 표시(§5.2·§7.2).** full 모드만 바꿨다 — compact는 칸이 32px라 포스터가 읽히지 않아 숫자 + 점 유지. 칸 높이는 09-28에 이미 폭 × 1.5(2:3)로 맞춰 둔 상태라 레이아웃 변경 없이 포스터를 채웠다. 대표 포스터는 **그날 마지막 기록**(응답이 기록 id 오름차순이라 마지막 = 가장 나중에 쓴 기록), 나머지는 `+N` 배지. 크기는 **SHELF(w185)** — 칸 폭 ~51dp × 3배 밀도 ≈ 153px이고 컬렉션 선반과 같은 크기라 이미지 캐시를 공유한다(한 달 최대 31장). 선택 표시를 원형 배경 → **칸 테두리 2px primary**로 바꾼 이유는 원이 포스터를 가리기 때문. 배지 배경은 어떤 포스터 위에서도 흰 글씨가 읽히도록 반투명 검정 `colors.scrim`(rgba 0,0,0,0.55)을 토큰에 추가. `tsc` 통과, 실기기 확인(1편 / 여러 편 +N / 포스터 없음 / 선택 테두리 / 스와이프 / 위젯 불변) 전 |
 | 2026-10-07 (이어서 2) | **§10.5 ①·② 완료 — 실기기 확인(⑦)만 남음.** 백엔드 4-8-I 구현 완료(`feature/report-person-photo` 워킹 트리, 미커밋). 8080에 이미 떠 있던 서버는 **예전 코드**(스키마에 `PersonRankItemResponse` 없음)라 건드리지 않고 새 코드를 **8090에 따로 띄워** `openapi-typescript`를 그 주소로 직접 돌렸다(`npm run gen:api`와 같은 명령, URL만 다름). 차이는 계약 그대로 — `PersonRankItemResponse { id, name, profilePath, score, count }` 추가, 누적 `topDirectors`·`topActors`, 월간 `mostWatchedDirector`, 연간 `mostWatchedDirector`·`mostWatchedActor`가 이것으로 바뀜(장르·국가는 `PreferenceItemResponse` 그대로). `types/index.ts`에 별칭만 추가했고 **화면 코드는 그대로**다 — 선행 구현의 구조 타입(`PersonRankItem`)이 의도대로 받아냈다. `npx tsc --noEmit` 통과. 실값은 비로그인으로 볼 수 없어(리포트 사용자 비공개) 실기기에서 |
 | 2026-10-07 (이어서) | **§10 선행 구현 — §10.5 실행 순서 3~6, 백엔드 4-8-I 구현 대기.** 인물 항목을 생성 타입이 아니라 **구조 타입 `PersonRankItem { id?, name?, count?, profilePath? }`** 으로 받아, 지금의 `PreferenceItemResponse`로도 컴파일되고 `gen:api` 후 `PersonRankItemResponse.profilePath`가 **코드 수정 없이** 흘러든다. 그래서 화면 연결까지 먼저 했고, 백엔드 전에는 사진 자리에 폴백 아이콘이 나온다(⚠️ 백엔드 반영 전에 머지하지 않는다). ③ `ActorAvatar` → `components/movie/PersonAvatar`(`size`, 상세는 64 그대로). ★ **아이콘 비율 정정** — §10.2의 `size × 0.4`는 64에서 25.6이라 *"현행 24와 같다"* 와 모순, **0.375**로 고쳤다(⑥ 상세 화면 불변). ④ `RankRow.avatarPath` — `undefined`면 슬롯 없음, `null`이면 폴백(사진 없는 인물도 자리를 차지해 이름 정렬이 맞는다). ⑤ `components/report/PersonRankGroup` — 1위 박스(`bg-brand-light`·`rounded-md`·`px-3 py-[10px]`, 56 사진 + 오른쪽 아래 22px `primary` 뱃지에 `brandLight` 2px 테두리, 이름 `h4` 한 줄 말줄임 + *"N편"*) + 2~3위 `RankRow`(28), 최대 3. `ReportScreen`의 감독·배우만 교체(장르·국가 `PreferenceGroup` 그대로). ⑥ 연간 `SingleItemRow`에 40, 월간은 응답 필드를 직접 읽으면 아직 없는 `profilePath`에 타입 에러가 나서 `MonthlyDirectorRow`(32)로 뺐다. `npx tsc --noEmit`·`expo export --platform android` 통과. **남은 것** — ① 백엔드 확인 → ② `gen:api`(별칭 `PersonRankItemResponse` 추가 정도) → ⑦ 실기기 §10.5 확인 ①~⑥ |
