@@ -1945,6 +1945,7 @@ export { CineMapWebView as CineMapView } from './CineMapWebView';
 
 | 날짜                 | 내용 |
 |--------------------|---|
+| 2026-10-08 | **`fetchNextPage({ cancelRefetch: false })`를 나머지 7곳에 적용** — 09-26(이어서 5)에 ⚠️로 남긴 잠재 문제(당시 "6곳"으로 셌으나 `CollectionAddMoviesModal`이 검색·내 기록 2곳이라 7곳). `CollectionAddMoviesModal`(검색·내 기록), `CollectionPickerSheet`, `CollectionDetailScreen`, `CollectionEditScreen`, `CollectionListScreen`, `SearchResultScreen`. 스크롤 끝에서 `onEndReached`가 한 렌더 안에 두 번 불리면 두 호출 모두 `isFetchingNextPage` 가드를 통과하고, 기본값 `cancelRefetch: true`가 진행 중 요청을 취소한 뒤 같은 페이지를 다시 부른다. 기존 `hasNextPage && !isFetchingNextPage` 가드는 그대로 둔다. 체감 변화는 거의 없는 예방성 수정이다. `tsc` 통과, 실기기(검색 결과·컬렉션 목록 끝까지 빠른 스크롤 시 중복·누락 없음) 확인 전 |
 | 2026-10-06 (이어서) | **B-4 프론트 연결 — §11 표 갱신.** 백엔드 구현 완료 후 `gen:api`·평점 블록(A안 두 줄 병기, 우리 평점 null이면 안내 문구 없이 줄만 생략) 연결. 상세는 `M2B-screens-spec.md` 변경 이력 2026-10-06 (이어서)·(이어서 2). 실기기 검증 전 |
 | 2026-10-06 | **B-4 계약 확정 · B-14 종결 — §7.4·§11 갱신.** B-4: `MovieDetailResponse.ratings: { tmdb, cinemory }`(백엔드 4-2-A, 구현 대기). 우리 평점은 리뷰 별점·내 별점과 같은 **2단계 폴백** 기준이라 같은 화면의 숫자가 어긋나지 않는다. 실행 문서는 `M2B-screens-spec.md` §6 — 삭제·대표 변경의 무효화 누락도 함께 고친다. B-14: 상세 히어로는 바꾸지 않기로 해 **`backdropPath`를 받지 않는다** |
 | 2026-10-06 | **연간 리포트 구현 — 진행 표·§8 트리·`ParamList` 예시를 `PeriodReport`로 갱신.** 10-03 점검에서 *"화면 스펙에만 추가하고 상위 트리를 갱신하지 않은 것"* 이 원인이었던 누락을 반복하지 않도록 개명과 함께 고쳤다. 구현 상세는 `M2C2-report-spec.md` 변경 이력(2026-10-06 이어서). 실기기 검증 전 |

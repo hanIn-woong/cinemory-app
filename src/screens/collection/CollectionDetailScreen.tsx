@@ -92,7 +92,7 @@ export function CollectionDetailScreen() {
     const index = Math.round(e.nativeEvent.contentOffset.x / pagerSize.width);
     setPageIndex(index);
     const loaded = movies.data?.pages.length ?? 0;
-    if (index >= loaded - 1 && movies.hasNextPage && !movies.isFetchingNextPage) movies.fetchNextPage();
+    if (index >= loaded - 1 && movies.hasNextPage && !movies.isFetchingNextPage) movies.fetchNextPage({ cancelRefetch: false });
   }
 
   if (movies.isLoading) {

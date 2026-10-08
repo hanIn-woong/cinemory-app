@@ -127,7 +127,7 @@ export function SearchResultScreen() {
           />
         )}
         onEndReached={() => {
-          if (search.hasNextPage && !search.isFetchingNextPage) search.fetchNextPage();
+          if (search.hasNextPage && !search.isFetchingNextPage) search.fetchNextPage({ cancelRefetch: false });
         }}
         onEndReachedThreshold={0.5}
         ListFooterComponent={

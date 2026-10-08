@@ -322,6 +322,13 @@ JS 번들만으로 동작해야 정상이다.** 재빌드가 필요해지면 그
 - ⚠️ **하루에 여러 편이 가능하다.** `days[].records`는 **배열**이다 — 와이어프레임의
   `useCalendarData`가 날짜당 한 편으로 하드코딩한 것은 **데이터 모델과 맞지 않는다.**
   셀에는 최대 N개를 점/썸네일로 표시하고 탭하면 그날 목록을 펼친다.
+- **날짜 칸 = 포스터 (2026-10-08, full 모드만).** 기록이 있는 날은 칸 전체를 **그날 마지막 기록**
+  (`records[records.length - 1]` — 서버가 날짜 → 기록 id 오름차순)의 포스터로 채운다(`PosterImage`
+  `size="SHELF"` w185, `radius.sm`). 날짜 숫자는 좌상단 반투명 배지(`colors.scrim` + 흰 글씨), 여러 편이면
+  우하단에 `+N`(기록 수 − 1). 포스터 없는 영화는 `PosterImage`의 그라디언트 폴백 + 같은 배지. 기록 없는 날은
+  숫자만. **선택 표시는 원형 배경이 아니라 칸 테두리 2px `colors.primary`** — 포스터를 가리지 않게.
+  칸 안쪽 여백 1dp(이웃과 합쳐 2dp)로 포스터끼리 붙어 보이지 않게 한다. compact(마이페이지 위젯, 칸 32px)는
+  숫자 + 점 그대로.
 - 상단에 **월말 리포트 진입 버튼**을 둔다 — 현재 보고 있는 `year`/`month`를 그대로 넘긴다.
 
 ### 5.3 `MonthlyReport` — 월말
@@ -432,7 +439,7 @@ reviewRate = movieCount == 0 ? 0.0 : (double) 리뷰수 / movieCount;
 | 별점 0건 | 별점 분포 10버킷이 전부 0. 축이 사라지지 않는다 |
 | 재관람 0건 | "다시 본 영화" 섹션이 숨는다 |
 | `watchType` 미지정 과반 | 파이차트 대신 유도 문구 |
-| 하루에 2편 이상 기록 | 캘린더 셀에 여러 개가 표시된다 |
+| 하루에 2편 이상 기록 | 캘린더 셀에 마지막 기록 포스터 + 우하단 `+N` (§5.2) |
 | `watch_date` 없는 기록 | 월별 추이에서 빠지고 *"날짜 미상 N편 제외"* 가 보인다 |
 | 대중 평점 없는 영화만 봄 | "나와 대중" 섹션이 숨거나 빈 문구 |
 
@@ -719,6 +726,7 @@ D3(가로 사진 줄)이었고 **D2를 골랐다** — 리포트에서 "내 1위
 
 | 날짜 | 내용 |
 |---|---|
+| 2026-10-08 | **캘린더 날짜 칸 포스터 표시(§5.2·§7.2).** full 모드만 바꿨다 — compact는 칸이 32px라 포스터가 읽히지 않아 숫자 + 점 유지. 칸 높이는 09-28에 이미 폭 × 1.5(2:3)로 맞춰 둔 상태라 레이아웃 변경 없이 포스터를 채웠다. 대표 포스터는 **그날 마지막 기록**(응답이 기록 id 오름차순이라 마지막 = 가장 나중에 쓴 기록), 나머지는 `+N` 배지. 크기는 **SHELF(w185)** — 칸 폭 ~51dp × 3배 밀도 ≈ 153px이고 컬렉션 선반과 같은 크기라 이미지 캐시를 공유한다(한 달 최대 31장). 선택 표시를 원형 배경 → **칸 테두리 2px primary**로 바꾼 이유는 원이 포스터를 가리기 때문. 배지 배경은 어떤 포스터 위에서도 흰 글씨가 읽히도록 반투명 검정 `colors.scrim`(rgba 0,0,0,0.55)을 토큰에 추가. `tsc` 통과, 실기기 확인(1편 / 여러 편 +N / 포스터 없음 / 선택 테두리 / 스와이프 / 위젯 불변) 전 |
 | 2026-10-07 (이어서 2) | **§10.5 ①·② 완료 — 실기기 확인(⑦)만 남음.** 백엔드 4-8-I 구현 완료(`feature/report-person-photo` 워킹 트리, 미커밋). 8080에 이미 떠 있던 서버는 **예전 코드**(스키마에 `PersonRankItemResponse` 없음)라 건드리지 않고 새 코드를 **8090에 따로 띄워** `openapi-typescript`를 그 주소로 직접 돌렸다(`npm run gen:api`와 같은 명령, URL만 다름). 차이는 계약 그대로 — `PersonRankItemResponse { id, name, profilePath, score, count }` 추가, 누적 `topDirectors`·`topActors`, 월간 `mostWatchedDirector`, 연간 `mostWatchedDirector`·`mostWatchedActor`가 이것으로 바뀜(장르·국가는 `PreferenceItemResponse` 그대로). `types/index.ts`에 별칭만 추가했고 **화면 코드는 그대로**다 — 선행 구현의 구조 타입(`PersonRankItem`)이 의도대로 받아냈다. `npx tsc --noEmit` 통과. 실값은 비로그인으로 볼 수 없어(리포트 사용자 비공개) 실기기에서 |
 | 2026-10-07 (이어서) | **§10 선행 구현 — §10.5 실행 순서 3~6, 백엔드 4-8-I 구현 대기.** 인물 항목을 생성 타입이 아니라 **구조 타입 `PersonRankItem { id?, name?, count?, profilePath? }`** 으로 받아, 지금의 `PreferenceItemResponse`로도 컴파일되고 `gen:api` 후 `PersonRankItemResponse.profilePath`가 **코드 수정 없이** 흘러든다. 그래서 화면 연결까지 먼저 했고, 백엔드 전에는 사진 자리에 폴백 아이콘이 나온다(⚠️ 백엔드 반영 전에 머지하지 않는다). ③ `ActorAvatar` → `components/movie/PersonAvatar`(`size`, 상세는 64 그대로). ★ **아이콘 비율 정정** — §10.2의 `size × 0.4`는 64에서 25.6이라 *"현행 24와 같다"* 와 모순, **0.375**로 고쳤다(⑥ 상세 화면 불변). ④ `RankRow.avatarPath` — `undefined`면 슬롯 없음, `null`이면 폴백(사진 없는 인물도 자리를 차지해 이름 정렬이 맞는다). ⑤ `components/report/PersonRankGroup` — 1위 박스(`bg-brand-light`·`rounded-md`·`px-3 py-[10px]`, 56 사진 + 오른쪽 아래 22px `primary` 뱃지에 `brandLight` 2px 테두리, 이름 `h4` 한 줄 말줄임 + *"N편"*) + 2~3위 `RankRow`(28), 최대 3. `ReportScreen`의 감독·배우만 교체(장르·국가 `PreferenceGroup` 그대로). ⑥ 연간 `SingleItemRow`에 40, 월간은 응답 필드를 직접 읽으면 아직 없는 `profilePath`에 타입 에러가 나서 `MonthlyDirectorRow`(32)로 뺐다. `npx tsc --noEmit`·`expo export --platform android` 통과. **남은 것** — ① 백엔드 확인 → ② `gen:api`(별칭 `PersonRankItemResponse` 추가 정도) → ⑦ 실기기 §10.5 확인 ①~⑥ |
 | 2026-10-07 | **§10 신설 — 리포트 인물 사진(시안 D2 선택).** 누적 선호 TOP의 감독·배우는 **1위 강조 박스(56px 사진 + 순위 뱃지) + 2~3위 목록(28px 사진)**, 연간 "올해 많이 본"은 40px, 월간 "이달의 기록"은 32px 사진 한 행. 장르·국가는 그대로. 상세 화면의 `ActorAvatar`를 크기를 받는 공용 `PersonAvatar`로 추출한다. 백엔드 선행: 인물 필드가 `PersonRankItemResponse`(+`profilePath`)로 바뀐다(`service-layer-spec.md` 4-8-I) → `gen:api`. ⚠️ 누적 인물 TOP은 서버 기준 **최대 3**이라 현행 `slice(0, 5)`는 인물 그룹에서 의미가 없었다 |

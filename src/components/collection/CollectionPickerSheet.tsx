@@ -74,7 +74,7 @@ export function CollectionPickerSheet({ visible, onClose, movieId }: CollectionP
                 data={items}
                 keyExtractor={(item) => String(item.id)}
                 onEndReached={() => {
-                  if (collections.hasNextPage && !collections.isFetchingNextPage) collections.fetchNextPage();
+                  if (collections.hasNextPage && !collections.isFetchingNextPage) collections.fetchNextPage({ cancelRefetch: false });
                 }}
                 onEndReachedThreshold={0.5}
                 ListEmptyComponent={
