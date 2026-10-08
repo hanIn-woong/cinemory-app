@@ -96,9 +96,12 @@ export function SearchResultScreen() {
     });
   }
 
+  // '더 찾아보기'는 등록된 작품을 끝까지 불러온 뒤에만 붙인다(2026-10-08 실기기) — 무한스크롤은
+  // registered만 이어붙이는데, 그 아래에 suggestions가 있으면 끝에 닿은 사용자의 **위쪽**에 새 페이지가
+  // 끼어들어 보던 화면이 그 높이만큼 한 번에 밀려 내려갔다(순간이동). 항상 리스트 맨 끝에서만 자라게 한다.
   const sections = [
     { title: '등록된 작품', data: registered },
-    { title: '더 찾아보기', data: suggestions },
+    { title: '더 찾아보기', data: search.hasNextPage ? [] : suggestions },
   ].filter((s) => s.data.length > 0);
 
   return (
