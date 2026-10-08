@@ -10,7 +10,7 @@ import { AuthRequired, ErrorState, LoadingState } from '../../components/common'
 import { MovieListItem } from '../../components/movie/MovieListItem';
 import { Screen, Spacer, Txt } from '../../components/primitives';
 import { CalendarView, ReportLinkCard } from '../../components/report';
-import { useCalendar } from '../../hooks/useReport';
+import { useCalendar, useCalendarNeighborPrefetch } from '../../hooks/useReport';
 import type { MyPageStackParamList } from '../../navigation/types';
 import { useAuthStore } from '../../store/authStore';
 import { colors } from '../../theme/tokens';
@@ -35,12 +35,19 @@ export function CalendarScreen() {
   const { width } = useWindowDimensions();
 
   const calendar = useCalendar(userId, year, month);
+  // 들어오는 슬라이드가 끝났는가 — 미리 받기를 그 뒤로 미룬다(아래 이펙트가 끝에 true로 바꾼다).
+  const [slideSettled, setSlideSettled] = useState(true);
+  // 지금 달이 뜨고 슬라이드가 끝난 뒤에 앞뒤 달을 미리 받는다 — 지금 달 포스터보다 먼저 줄 서지 않고,
+  // 받은 달로 넘기는 순간(데이터가 이미 있어 바로 그려진다) 이웃 다운로드가 애니메이션과 겹치지 않게
+  // (2026-10-08 실기기 — 겹치면 스와이프가 나빠졌다).
+  useCalendarNeighborPrefetch(userId, year, month, calendar.isSuccess && slideSettled);
 
   // ⚠️ 다음 달로 넘어가도 400이 아니다 — 서버가 미래 월을 빈 결과 200으로 준다(RA-2).
   // 이동을 막지 않는다. 함수형 업데이트라 제스처 콜백이 옛 렌더의 값을 잡고 있어도 안전하다.
   const enterFrom = useRef<number | null>(null);
   const shiftMonth = useCallback((delta: number) => {
     setSelectedDate(undefined);
+    setSlideSettled(false);
     setYearMonth((prev) => {
       const next = new Date(prev.year, prev.month - 1 + delta, 1);
       return { year: next.getFullYear(), month: next.getMonth() + 1 };
@@ -57,7 +64,10 @@ export function CalendarScreen() {
     if (delta === null) return;
     enterFrom.current = null;
     slideX.value = delta * width;
-    slideX.value = withTiming(0, { duration: SLIDE_MS, easing: Easing.out(Easing.cubic) });
+    slideX.value = withTiming(0, { duration: SLIDE_MS, easing: Easing.out(Easing.cubic) }, (finished) => {
+      // 도중에 다시 넘기면 finished = false — 그 다음 슬라이드가 끝날 때 켜진다.
+      if (finished) scheduleOnRN(setSlideSettled, true);
+    });
   }, [year, month, width, slideX]);
   const slideStyle = useAnimatedStyle(() => ({ transform: [{ translateX: slideX.value }] }));
 
