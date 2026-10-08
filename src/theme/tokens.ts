@@ -15,6 +15,8 @@ export const colors = {
   accent: '#E9EBEF',
   destructive: '#D4183D',
   border: 'rgba(0,0,0,0.1)',
+  // 포스터 위에 얹는 배지 배경(캘린더 날짜 칸) — 어떤 포스터 위에서도 흰 글씨가 읽히게 반투명 검정.
+  scrim: 'rgba(0,0,0,0.55)',
   inputBackground: '#F3F3F5',
   star: '#FACC15',
   // 카카오 브랜드 컬러 — 공식 가이드 고정값(임의 선택 아님). 다른 색과 섞어 쓰지 않는다.
