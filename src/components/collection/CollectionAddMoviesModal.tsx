@@ -160,7 +160,7 @@ export function CollectionAddMoviesModal({ visible, onClose, existingIds, onPick
                         />
                       )}
                       onEndReached={() => {
-                        if (search.hasNextPage && !search.isFetchingNextPage) search.fetchNextPage();
+                        if (search.hasNextPage && !search.isFetchingNextPage) search.fetchNextPage({ cancelRefetch: false });
                       }}
                       onEndReachedThreshold={0.5}
                       ListFooterComponent={
@@ -207,7 +207,7 @@ export function CollectionAddMoviesModal({ visible, onClose, existingIds, onPick
                       />
                     )}
                     onEndReached={() => {
-                      if (records.hasNextPage && !records.isFetchingNextPage) records.fetchNextPage();
+                      if (records.hasNextPage && !records.isFetchingNextPage) records.fetchNextPage({ cancelRefetch: false });
                     }}
                     onEndReachedThreshold={0.5}
                     ListFooterComponent={

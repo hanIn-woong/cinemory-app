@@ -149,7 +149,7 @@ export function CollectionEditScreen() {
     const { layoutMeasurement, contentOffset, contentSize } = e.nativeEvent;
     const nearEnd = layoutMeasurement.height + contentOffset.y >= contentSize.height - layoutMeasurement.height * 0.5;
     // 잘린 동안은 콘텐츠가 짧아 "끝 근처"로 오판한다 — 전량을 그린 뒤에만 다음 페이지를 받는다.
-    if (nearEnd && allShown && !draggingRef.current && movies.hasNextPage && !movies.isFetchingNextPage) movies.fetchNextPage();
+    if (nearEnd && allShown && !draggingRef.current && movies.hasNextPage && !movies.isFetchingNextPage) movies.fetchNextPage({ cancelRefetch: false });
   }
 
   // 서버가 저장 후 스스로 만들 순서 — 새로 담은 것 맨 위(나중에 고른 것이 위) + 남은 기존 순서.
