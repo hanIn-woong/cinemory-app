@@ -6,6 +6,16 @@ narrative로 남긴다.
 
 ---
 
+## 2026-10-10 — 이메일 충돌 에러 코드 개명 대응 (`feature/social-login`)
+
+- 백엔드가 소셜 계정 연결(V24, `cinemory-backend/docs/account-integrity-spec.md` Part D)을 들이면서 `EMAIL_ALREADY_REGISTERED_LOCALLY`를
+  `EMAIL_ALREADY_REGISTERED`로 바꿨다. S-7이 앱 참조 1곳(`LoginScreen.tsx` 66행)을 **같은 머지에서** 고치라고 정해 두어 백엔드와 같은 이름의 브랜치에서 처리.
+- 문구도 바꿨다 — 서버가 가입 방법을 알려주지 않으므로(이메일 열거 방지) *"이메일로 가입된 계정"* 이라고 단정할 수 없다.
+  서버 메시지의 *"설정에서 계정을 연결"* 은 연결 화면이 없어 아직 넣지 않았다.
+- 머지는 백엔드 `feature/social-login`과 함께(백엔드는 Phase 5 E2E 통과 후). 실기기 확인은 그때 카카오 E2E에 포함.
+
+---
+
 ## 2026-10-10 — 브랜치 전략 GitHub Flow 명시 (`chore/github-flow`)
 
 - `CLAUDE.md`에 브랜치 절 추가 — `feature/*`는 `main`에서 분기, PR로 `main`에 머지, `develop`은 보관(main보다 103커밋 뒤처져 있었고 고유 커밋 0).

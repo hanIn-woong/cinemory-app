@@ -1769,7 +1769,7 @@ Expo autolinking Gradle 플러그인이 빌드 시점에 읽어 저장소를 추
 | 파일 | 지금 | 바뀔 것 |
 |---|---|---|
 | `src/hooks/useAuth.ts` `useKakaoLogin`·`kakaoNativeLogin` | **(2026-09-11 이어서 3) 전부 실구현 완료.** `kakaoNativeLogin`이 `@react-native-kakao/user`의 `login({ nonce })`을 직접 호출 | 취소 판정(`err.code === 'Cancelled'`) 실기기 확인만 남음 |
-| `src/screens/auth/LoginScreen.tsx` | **(2026-09-11 이어서 2) 활성화 완료** — 취소·미동의(`OAUTH_EMAIL_NOT_PROVIDED`)·로컬 계정 충돌(`EMAIL_ALREADY_REGISTERED_LOCALLY`) 분기까지 연결됨. OIDC 미활성은 `KAKAO_OIDC_DISABLED`로 매핑 | 없음 |
+| `src/screens/auth/LoginScreen.tsx` | **(2026-09-11 이어서 2) 활성화 완료** — 취소·미동의(`OAUTH_EMAIL_NOT_PROVIDED`)·이메일 충돌(`EMAIL_ALREADY_REGISTERED` — 2026-10-10 백엔드 V24에서 `EMAIL_ALREADY_REGISTERED_LOCALLY`를 개명) 분기까지 연결됨. OIDC 미활성은 `KAKAO_OIDC_DISABLED`로 매핑 | 없음 |
 | `app.json` `plugins` | **(2026-09-11 이어서 3) 완료** — `@react-native-kakao/core`(`nativeAppKey`) + `expo-build-properties`(`extraMavenRepos`) 등록됨 | 없음 |
 | `src/constants/kakao.ts` | **(신설)** `KAKAO_NATIVE_APP_KEY` — `app.json` plugin 등록값과 동일해야 한다 | 없음 |
 
@@ -1947,6 +1947,7 @@ export { CineMapWebView as CineMapView } from './CineMapWebView';
 
 | 날짜                 | 내용 |
 |--------------------|---|
+| 2026-10-10 | **카카오 로그인 이메일 충돌 코드 `EMAIL_ALREADY_REGISTERED_LOCALLY` → `EMAIL_ALREADY_REGISTERED`(`LoginScreen.tsx`).** 백엔드가 소셜 계정 연결(V24, `cinemory-backend/docs/account-integrity-spec.md` S-7)을 들이면서 개명했다 — 연결 허용 후엔 충돌 상대가 "로컬 가입"이라는 보장이 없고, 서버는 이메일 열거를 막으려고 가입 방법을 알려주지 않는다. 그래서 안내 문구도 *"이메일로 가입된 계정"* 에서 *"기존에 가입한 방법으로 로그인"* 으로 바꿨다. 서버 메시지의 *"설정에서 계정을 연결해 주세요"* 는 **연결 화면이 아직 없어 넣지 않았다** — 연결 UI를 만들 때 함께 추가. **S-7 계약상 백엔드 `feature/social-login`과 같은 머지에 들어가야 한다**(옛 앱은 새 코드를 일반 오류로 처리할 뿐이라 백엔드가 먼저 배포돼도 깨지지는 않는다) |
 | 2026-10-08 (이어서) | **검색 결과 `[더 찾아보기]`를 `registered` 끝까지 불러온 뒤에만 표시(§9.2).** 실기기에서 검색 결과를 빠르게 끝까지 내리면 스피너 뒤 화면이 자연스럽게 이어지지 않고 순간이동했다(컬렉션 목록 등 다른 리스트는 정상 — 검색만). 원인: 무한스크롤은 1번 섹션 `registered`만 이어붙이는데 리스트 끝은 2번 섹션 `suggestions`(page 1 고정, 최대 8건)라, 새 페이지가 **보고 있던 위치의 위쪽**에 끼어들어 보이는 항목이 그 높이만큼 한 번에 밀렸다. `InfiniteScrollFooter`는 이미 높이가 고정이라 무관. 대안 `maintainVisibleContentPosition`은 새 결과가 화면 위에 숨어 다시 올려야 보이므로 기각. 대가: 등록된 결과가 여러 페이지면 `[더 찾아보기]`는 끝까지 내려야 나온다(사용자 승인). `tsc` 통과, 실기기 재확인 전 |
 | 2026-10-08 | **`fetchNextPage({ cancelRefetch: false })`를 나머지 7곳에 적용** — 09-26(이어서 5)에 ⚠️로 남긴 잠재 문제(당시 "6곳"으로 셌으나 `CollectionAddMoviesModal`이 검색·내 기록 2곳이라 7곳). `CollectionAddMoviesModal`(검색·내 기록), `CollectionPickerSheet`, `CollectionDetailScreen`, `CollectionEditScreen`, `CollectionListScreen`, `SearchResultScreen`. 스크롤 끝에서 `onEndReached`가 한 렌더 안에 두 번 불리면 두 호출 모두 `isFetchingNextPage` 가드를 통과하고, 기본값 `cancelRefetch: true`가 진행 중 요청을 취소한 뒤 같은 페이지를 다시 부른다. 기존 `hasNextPage && !isFetchingNextPage` 가드는 그대로 둔다. 체감 변화는 거의 없는 예방성 수정이다. `tsc` 통과, 실기기(검색 결과·컬렉션 목록 끝까지 빠른 스크롤 시 중복·누락 없음) 확인 전 |
 | 2026-10-06 (이어서) | **B-4 프론트 연결 — §11 표 갱신.** 백엔드 구현 완료 후 `gen:api`·평점 블록(A안 두 줄 병기, 우리 평점 null이면 안내 문구 없이 줄만 생략) 연결. 상세는 `M2B-screens-spec.md` 변경 이력 2026-10-06 (이어서)·(이어서 2). 실기기 검증 전 |
