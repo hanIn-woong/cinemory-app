@@ -63,8 +63,10 @@ export function LoginScreen() {
       onError: (error) => {
         if (error.code === 'OAUTH_EMAIL_NOT_PROVIDED') {
           setKakaoError('이메일 제공에 동의해야 가입할 수 있습니다');
-        } else if (error.code === 'EMAIL_ALREADY_REGISTERED_LOCALLY') {
-          setKakaoError('이미 이메일로 가입된 계정이에요. 이메일 로그인을 이용해 주세요');
+        } else if (error.code === 'EMAIL_ALREADY_REGISTERED') {
+          // 백엔드 V24 계정 연결(account-integrity S-7)로 개명. 서버가 가입 방법을 알려주지 않으므로
+          // "이메일로 가입"이라고 단정하지 않는다 — 카카오를 연결한 다른 계정일 수도 있다.
+          setKakaoError('이미 가입된 이메일이에요. 기존에 가입한 방법으로 로그인해 주세요');
         } else {
           setKakaoError(error.message);
         }
