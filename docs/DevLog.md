@@ -6,6 +6,58 @@ narrative로 남긴다.
 
 ---
 
+## 2026-10-11 (이어서) — 구글 로그인 ⑤ 연동 (`feature/social-login`)
+
+- 스파이크 채택분(패키지 2종·`app.json` 플러그인·DevLog)만 `spike/google-signin`에서 파일 단위로 가져왔다 — 임시 화면은 가져오지 않음(`c62b234`).
+- **`docs/google-login-spec.md` 신설** — 백엔드 D-5-G를 앱 코드 단위로. 스파이크 사실(취소 = `cancelled` 응답, `signOut`은 `configure` 없이 동작 — 라이브러리 소스 확인)을 전제로 했다.
+- `useGoogleLogin` — nonce → `configure`(매번) → `signIn`/`createAccount` → 서버 → 저장. `INVALID_NONCE`면 ①부터 1회 재시도(구글만). SDK 에러는 `ApiError('GOOGLE_SIGN_IN_FAILED')`로 감싸고 원인 코드는 `console.warn`.
+- `useLogout` — 로컬 정리 뒤 `GoogleOneTapSignIn.signOut()`(실패 무시). 강제 로그아웃 경로는 건드리지 않음.
+- 로그인 화면 — 카카오 옆에 구글 아이콘 버튼(가이드라인 4색 G, 토큰 5개 추가). 라이브러리 버튼은 Legacy Architecture 경고로 안 씀. 에러 자리 하나로 합치고 둘 중 하나 진행 중이면 둘 다 비활성.
+- 탈퇴 시 `revokeAccess`는 앱에 탈퇴 기능이 없어 Part C C-4로 미룸(스펙 §6).
+- `tsc` · `expo export --platform android` 통과. **실기기 확인 전** — 스펙 §7(특히 신규 가입 성공 경로).
+- **실기기 피드백 → 정정**: 한 구글 계정만 로그인되고 계정 선택이 안 됐다. `signIn()`은 승인된 계정만 보여 주므로(`filterByAuthorizedAccounts = true`)
+  한 번 승인되면 `createAccount()`로 넘어갈 일이 없다. 사용자 결정으로 **`presentExplicitSignIn()` 하나로** 교체(구글이 버튼 탭에 권하는 방식, 모든 계정 + 계정 추가).
+  스펙 §1·§2·§7 정정. JS만 바뀌어 재설치 불필요.
+- **§7 실기기 결과**: 1~5 통과(신규 가입 성공 경로 포함 — 스파이크 4번의 남은 확인 종결). 6번(진행 중 다른 버튼 비활성)은 사용자 결정으로 코드 확인 갈음.
+
+---
+
+## 2026-10-11 (이어서) — 구글 스파이크 2~7 실기기 → 채택
+
+- 임시 화면 `src/screens/auth/GoogleSpikeProbe.tsx`(`__DEV__`, 로그인 화면 하단). 스파이크 전용이라 화면 규칙(api 직접 import)을 일부러 지키지 않았고 ⑤에서 지운다.
+- 결과(사용자 실기기): nonce 원문 일치 · `aud` = 웹 클라이언트 ID(`azp`는 Android) · 첫 사용자 `noSavedCredentialFound` → `createAccount` · 취소는 **예외가 아니라 `cancelled` 응답** · 같은 nonce 재사용 401.
+- 서버 검증은 **409 `EMAIL_ALREADY_REGISTERED`** — 테스트 계정 이메일이 개발 DB에 이미 있었다. 검증 관문 통과 후에만 나는 코드라 통과로 판정. 신규 가입 성공 경로는 ⑥ E2E에서.
+- **판정: 채택.** 상세는 백엔드 `account-integrity-spec.md` "스파이크 결과". 다음은 ⑤ 연동(D-5-G).
+
+---
+
+## 2026-10-11 — 구글 로그인 스파이크 1번: 설치·빌드 (`spike/google-signin`)
+
+- 백엔드 `account-integrity-spec.md` D-5-E 체크리스트 1번. 스파이크라 실패 시 버릴 수 있게 `feature/social-login`에서 로컬 브랜치로 분기(미push).
+- ⚠️ **이 리포 CLAUDE.md "네이티브 모듈 추가 전 알리기"에 해당** — D-5-E에 명시된 작업이고 사용자 지시로 진행, 보고함. prebuild는 하지 않았다.
+- `npx expo install react-native-nitro-google-signin@2.3.0 react-native-nitro-modules@0.37.1 -- --save-exact` — G-1대로 `^` 없이 고정.
+- `expo install`이 `app.json`에 플러그인을 **자동 추가**했다 → 되돌림. 플러그인 소스상 Firebase 없이 쓸 때는 iOS(`Info.plist` URL 스킴·Podfile)만 바꾸고
+  Android는 건드리지 않으며, `iosUrlScheme`이 없으면 설정 평가에서 예외를 던진다. `npx expo config` 정상 확인.
+- `android/`에서 `./gradlew assembleDebug` **성공(23분 44초)**, 두 모듈 autolinking 확인. 경고는 라이브러리 버튼의 Legacy Architecture deprecated뿐.
+- **이어서 — 플러그인 등록**: 사용자가 콘솔에서 iOS OAuth 클라이언트(번들 ID `com.cinemory.app`)를 만들어 `app.json`에 플러그인 +
+  `iosUrlScheme`(iOS 클라이언트 ID를 뒤집은 값, 공개 값이라 커밋)을 넣었다. 첫 시도는 플러그인 이름과 옵션 객체를 **안쪽 배열로 묶지 않아**
+  옵션이 별도 플러그인으로 읽히며 오류 → `["react-native-nitro-google-signin", { iosUrlScheme }]`로 수정.
+  `npx expo config --type introspect`로 플러그인이 실제로 돌아 `CFBundleURLSchemes`에 스킴이 들어가는 것 확인. Android에는 영향 없음(플러그인이 Android를 건드리지 않음).
+- `.env.local`에 `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID` 추가(사용자, 형식 검사 1건). `.env`는 비어 있고 실제 값은 전부 `.env.local`.
+- **다음**: 구글 콘솔(debug 키 SHA-1 Android 클라이언트·테스트 사용자) 준비 후 실기기에서 2~7번(nonce 원문 일치, `aud` = 웹 클라이언트 ID 등). 결과는 백엔드 스펙 "스파이크 결과"에.
+
+---
+
+## 2026-10-10 — 이메일 충돌 에러 코드 개명 대응 (`feature/social-login`)
+
+- 백엔드가 소셜 계정 연결(V24, `cinemory-backend/docs/account-integrity-spec.md` Part D)을 들이면서 `EMAIL_ALREADY_REGISTERED_LOCALLY`를
+  `EMAIL_ALREADY_REGISTERED`로 바꿨다. S-7이 앱 참조 1곳(`LoginScreen.tsx` 66행)을 **같은 머지에서** 고치라고 정해 두어 백엔드와 같은 이름의 브랜치에서 처리.
+- 문구도 바꿨다 — 서버가 가입 방법을 알려주지 않으므로(이메일 열거 방지) *"이메일로 가입된 계정"* 이라고 단정할 수 없다.
+  서버 메시지의 *"설정에서 계정을 연결"* 은 연결 화면이 없어 아직 넣지 않았다.
+- 머지는 백엔드 `feature/social-login`과 함께(백엔드는 Phase 5 E2E 통과 후). 실기기 확인은 그때 카카오 E2E에 포함.
+
+---
+
 ## 2026-10-10 — 브랜치 전략 GitHub Flow 명시 (`chore/github-flow`)
 
 - `CLAUDE.md`에 브랜치 절 추가 — `feature/*`는 `main`에서 분기, PR로 `main`에 머지, `develop`은 보관(main보다 103커밋 뒤처져 있었고 고유 커밋 0).

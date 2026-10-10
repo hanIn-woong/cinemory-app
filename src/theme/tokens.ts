@@ -22,6 +22,12 @@ export const colors = {
   // 카카오 브랜드 컬러 — 공식 가이드 고정값(임의 선택 아님). 다른 색과 섞어 쓰지 않는다.
   kakaoYellow: '#FEE500',
   kakaoBubble: '#191919',
+  // 구글 브랜드 컬러 — 로고 4색 + 버튼 테두리, 브랜딩 가이드라인 고정값(docs/google-login-spec.md §5). 다른 색과 섞어 쓰지 않는다.
+  googleBlue: '#4285F4',
+  googleGreen: '#34A853',
+  googleYellow: '#FBBC05',
+  googleRed: '#EA4335',
+  googleButtonBorder: '#747775',
 } as const;
 
 export const radius = { sm: 6, md: 10, lg: 12, xl: 16, full: 9999 } as const;
