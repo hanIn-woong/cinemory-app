@@ -57,6 +57,11 @@ React Native (Expo SDK 56) + TypeScript. 백엔드는 별도 리포 `cinemory-ba
 - **무한스크롤은 `last`로 판정.** `content.length === 0`이 아님.
 - `posterPath`는 `/abc.jpg` 형태의 TMDB 경로. base URL 조립은 프론트 몫.
 
+## 브랜치
+
+- **GitHub Flow** (2026-10-10, 백엔드 `CineMory_기획노트.md` 5절): `feature/*`는 **`main`에서 분기**하고 PR로 `main`에 머지한다.
+  **`develop`은 보관 브랜치라 사용하지 않는다**(main보다 103커밋 뒤처져 있었다).
+
 ## 범위
 
 화면 우선순위는 `docs/M2-frontend-spec.md` §2를 따름 — **1군(mypage·search·records·home)
