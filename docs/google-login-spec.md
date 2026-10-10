@@ -16,10 +16,11 @@
 | 라이브러리 `react-native-nitro-google-signin` **2.3.0**, `react-native-nitro-modules` **0.37.1** — 둘 다 정확 고정 | 버전을 올리면 D-5-E 체크리스트 1~3·5·7을 다시 통과해야 한다 |
 | **nonce가 `configure()`에 묶여 있다** (함정 1) | 로그인할 때마다 `configure({ webClientId, nonce })`를 **다시** 부른다 |
 | nonce를 빼면 라이브러리가 몰래 만든다 (함정 2) | nonce가 없으면 **SDK를 호출하지 않는다** |
-| `signIn()`은 이미 승인한 계정만 본다 (함정 4) | `noSavedCredentialFound`면 `createAccount()`로 넘어간다 |
+| `signIn()`은 이미 승인한 계정만 본다 (함정 4) | **`signIn()`을 쓰지 않는다** — 한 계정이 승인된 뒤에는 다른 계정을 고를 수 없다(아래 2026-10-11 정정). 버튼 탭은 `presentExplicitSignIn()` |
 | **취소는 예외가 아니라 `{ type: 'cancelled' }` 응답**이다 | 카카오(예외 `Cancelled`)와 판정 방식이 다르다 — 응답 타입으로 본다 |
 | 토큰의 `aud` = 웹 클라이언트 ID, `azp` = Android 클라이언트 ID | `webClientId`에는 **웹** 클라이언트 ID를 넣는다(Android ID를 넣으면 `DEVELOPER_ERROR`) |
 | `signOut()`은 `configure()` 없이 동작한다(Credential Manager 상태만 지움, 소스 확인) | 로그아웃에서 바로 부를 수 있다 |
+| `presentExplicitSignIn()` = `GetSignInWithGoogleOption`(구글이 **버튼 탭**에 권하는 방식) — 기기의 모든 계정 + 계정 추가, 자동 선택 없음. nonce는 같은 `setNonce()`, 취소·오류 처리는 `signIn`/`createAccount`와 같은 경로(소스 확인) | 매번 계정을 고른다 |
 
 ## 2. 흐름
 
@@ -27,7 +28,7 @@
 버튼 탭
  ① POST /api/auth/nonce                       → { nonce }
  ② configure({ webClientId, nonce })          (매번)
- ③ signIn() → noSavedCredentialFound면 createAccount()
+ ③ presentExplicitSignIn()                    (계정 선택 대화상자 — 모든 계정 + 계정 추가)
     cancelled면 조용히 종료(null)
  ④ POST /api/auth/oauth/google { idToken, nonce } → TokenResponse
     INVALID_NONCE면 ①부터 한 번만 자동 재시도
@@ -37,7 +38,7 @@
 
 - **nonce는 버튼 탭 시점에 발급**한다(카카오 §11.1과 같은 이유 — 5분 1회용).
 - **자동 재시도는 ①부터 1회.** nonce를 들고 ④만 다시 보내면 반드시 `INVALID_NONCE`다(서버가 검증 전에 소비한다).
-  재시도에서는 계정이 이미 승인돼 있어 ③이 바로 성공하는 것이 보통이다. 두 번째도 실패하면 에러로 올린다.
+  재시도에서도 ③의 계정 선택이 다시 뜬다(자동 선택이 없는 방식이다). 두 번째도 실패하면 에러로 올린다.
   카카오는 자동 재시도를 하지 않는다 — 이번 범위에서 카카오 동작은 바꾸지 않는다.
 
 ## 3. 파일
@@ -90,7 +91,7 @@
 | # | 확인 | 기대 |
 |---|---|---|
 | 1 | 새 사용자(개발 DB에 없는 이메일) 구글 로그인 | 가입 + 로그인, 모달 닫힘, 마이페이지에 사용자. **스파이크 4번에서 못 본 신규 가입 성공 경로** |
-| 2 | 같은 계정으로 로그아웃 → 다시 로그인 | 로그아웃 뒤 계정 선택이 다시 나온다(`signOut` 동작) · 같은 사용자로 로그인 |
+| 2 | 로그인한 계정 말고 **다른 계정**으로 로그인 | 계정 선택에 기기의 모든 계정이 나오고 고른 계정으로 로그인된다(2026-10-11 정정의 회귀 확인) |
 | 3 | 로컬 가입 계정과 같은 이메일의 구글 계정 | `EMAIL_ALREADY_REGISTERED` 문구, 화면 유지 |
 | 4 | 계정 선택에서 취소 | 아무 문구 없이 화면 유지 |
 | 5 | 카카오 로그인 | 기존과 같다(회귀 없음) |
@@ -100,4 +101,5 @@
 
 | 날짜 | 내용 |
 |---|---|
+| 2026-10-11 | **정정 — `signIn()` → `presentExplicitSignIn()`.** 실기기에서 **한 구글 계정만 로그인되고 계정 선택이 안 됐다.** `signIn()`은 `filterByAuthorizedAccounts = true`라 이 앱을 승인한 계정만 보이고, 하나라도 승인되면 `noSavedCredentialFound`가 오지 않아 `createAccount()`로 넘어갈 기회가 없다. `signOut()`(clearCredentialState)은 자동 선택만 끄고 이 필터는 그대로다. 스파이크 5번은 `signOut` 직후 첫 사용자만 봐서 놓쳤다. 대안 셋(버튼용 explicit / `createAccount` 단독 / 승인 계정 우선 + "다른 계정" 링크) 중 **사용자 결정으로 explicit** — 구글이 버튼 탭에 권하는 방식이고 계정 추가까지 된다. §7의 2번을 다른 계정 로그인으로 바꿨다 |
 | 2026-10-11 | **신설.** 백엔드 D-5-G 요약을 앱 코드 단위로 풀었다. 스파이크(D-5-E) 사실 — 취소가 응답 타입으로 온다, `signOut`이 `configure` 없이 동작한다 — 을 전제로 삼았다. 결정: SDK import는 `useAuth.ts` 한 곳(카카오와 같은 규칙), SDK 에러는 `ApiError`로 감싼다, `INVALID_NONCE` 자동 재시도는 구글만 1회(카카오 동작은 이번에 바꾸지 않는다), 라이브러리 버튼 대신 가이드라인 아이콘 버튼을 직접 그린다(Legacy Architecture 경고), 강제 로그아웃에서는 `signOut`을 부르지 않는다, 탈퇴는 앱에 기능이 없어 Part C C-4로 미룬다 |

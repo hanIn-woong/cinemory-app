@@ -107,8 +107,11 @@ export function useKakaoLogin(): UseMutationResult<TokenResponse | null, ApiErro
 }
 
 // ② 구글 SDK 호출 — react-native-nitro-google-signin 을 import하는 유일한 파일이 여기다(카카오 SDK와 같은 규칙).
-// 판정은 스파이크로 확인한 사실을 따른다(docs/google-login-spec.md §1): 취소는 예외가 아니라 'cancelled' 응답,
-// 첫 사용자는 'noSavedCredentialFound' → createAccount().
+// 취소는 예외가 아니라 'cancelled' 응답으로 온다(스파이크 6번, docs/google-login-spec.md §1).
+//
+// ⚠️ signIn()을 쓰지 않는다 — 이 앱을 이미 승인한 계정만 보여 줘서, 한 계정으로 로그인한 뒤에는 다른 계정을
+// 고를 수 없었다(2026-10-11 실기기). 버튼 탭에는 구글이 권하는 presentExplicitSignIn()(GetSignInWithGoogleOption —
+// 기기의 모든 계정 + 계정 추가)을 쓴다. nonce는 같은 setNonce()로 들어간다(소스 확인).
 async function googleNativeLogin(nonce: string): Promise<{ idToken: string } | null> {
   if (!GOOGLE_WEB_CLIENT_ID) {
     throw new ApiError(0, 'GOOGLE_CONFIG_MISSING', '구글 로그인 설정에 문제가 있어요');
@@ -117,10 +120,7 @@ async function googleNativeLogin(nonce: string): Promise<{ idToken: string } | n
     // nonce가 configure()에 묶여 있다 — 로그인마다 다시 부르지 않으면 이전 nonce가 재사용돼 INVALID_NONCE가 된다
     GoogleOneTapSignIn.configure({ webClientId: GOOGLE_WEB_CLIENT_ID, nonce });
 
-    let response: OneTapResponse = await GoogleOneTapSignIn.signIn();
-    if (response.type === 'noSavedCredentialFound') {
-      response = await GoogleOneTapSignIn.createAccount();
-    }
+    const response: OneTapResponse = await GoogleOneTapSignIn.presentExplicitSignIn();
     if (response.type === 'cancelled') return null;
     if (response.type !== 'success' || !response.data) {
       throw new ApiError(0, 'GOOGLE_SIGN_IN_FAILED', '구글 로그인에 실패했어요. 잠시 후 다시 시도해 주세요');

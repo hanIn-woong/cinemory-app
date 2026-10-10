@@ -15,6 +15,9 @@ narrative로 남긴다.
 - 로그인 화면 — 카카오 옆에 구글 아이콘 버튼(가이드라인 4색 G, 토큰 5개 추가). 라이브러리 버튼은 Legacy Architecture 경고로 안 씀. 에러 자리 하나로 합치고 둘 중 하나 진행 중이면 둘 다 비활성.
 - 탈퇴 시 `revokeAccess`는 앱에 탈퇴 기능이 없어 Part C C-4로 미룸(스펙 §6).
 - `tsc` · `expo export --platform android` 통과. **실기기 확인 전** — 스펙 §7(특히 신규 가입 성공 경로).
+- **실기기 피드백 → 정정**: 한 구글 계정만 로그인되고 계정 선택이 안 됐다. `signIn()`은 승인된 계정만 보여 주므로(`filterByAuthorizedAccounts = true`)
+  한 번 승인되면 `createAccount()`로 넘어갈 일이 없다. 사용자 결정으로 **`presentExplicitSignIn()` 하나로** 교체(구글이 버튼 탭에 권하는 방식, 모든 계정 + 계정 추가).
+  스펙 §1·§2·§7 정정. JS만 바뀌어 재설치 불필요.
 
 ---
 
