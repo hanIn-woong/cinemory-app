@@ -15,6 +15,7 @@ React Native (Expo SDK 56) + TypeScript. 백엔드는 별도 리포 `cinemory-ba
 
 - `docs/M2-frontend-spec.md` — 화면·API 표면·네비게이션·백엔드 선행 항목
 - `docs/M2A-foundation-spec.md` — 기반 계층 구현 상세
+- `docs/google-login-spec.md` — 구글 로그인 앱 연동(2026-10-11). 상위 계약은 백엔드 `account-integrity-spec.md` D-5
 
 1. 문서를 수정할 때는 **`docs/`의 실제 파일을 직접 편집.** 별도의 "적용 지시서"나
    임시 사본을 만들어 전달하지 말 것.

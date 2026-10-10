@@ -6,6 +6,18 @@ narrative로 남긴다.
 
 ---
 
+## 2026-10-11 (이어서) — 구글 로그인 ⑤ 연동 (`feature/social-login`)
+
+- 스파이크 채택분(패키지 2종·`app.json` 플러그인·DevLog)만 `spike/google-signin`에서 파일 단위로 가져왔다 — 임시 화면은 가져오지 않음(`c62b234`).
+- **`docs/google-login-spec.md` 신설** — 백엔드 D-5-G를 앱 코드 단위로. 스파이크 사실(취소 = `cancelled` 응답, `signOut`은 `configure` 없이 동작 — 라이브러리 소스 확인)을 전제로 했다.
+- `useGoogleLogin` — nonce → `configure`(매번) → `signIn`/`createAccount` → 서버 → 저장. `INVALID_NONCE`면 ①부터 1회 재시도(구글만). SDK 에러는 `ApiError('GOOGLE_SIGN_IN_FAILED')`로 감싸고 원인 코드는 `console.warn`.
+- `useLogout` — 로컬 정리 뒤 `GoogleOneTapSignIn.signOut()`(실패 무시). 강제 로그아웃 경로는 건드리지 않음.
+- 로그인 화면 — 카카오 옆에 구글 아이콘 버튼(가이드라인 4색 G, 토큰 5개 추가). 라이브러리 버튼은 Legacy Architecture 경고로 안 씀. 에러 자리 하나로 합치고 둘 중 하나 진행 중이면 둘 다 비활성.
+- 탈퇴 시 `revokeAccess`는 앱에 탈퇴 기능이 없어 Part C C-4로 미룸(스펙 §6).
+- `tsc` · `expo export --platform android` 통과. **실기기 확인 전** — 스펙 §7(특히 신규 가입 성공 경로).
+
+---
+
 ## 2026-10-11 (이어서) — 구글 스파이크 2~7 실기기 → 채택
 
 - 임시 화면 `src/screens/auth/GoogleSpikeProbe.tsx`(`__DEV__`, 로그인 화면 하단). 스파이크 전용이라 화면 규칙(api 직접 import)을 일부러 지키지 않았고 ⑤에서 지운다.

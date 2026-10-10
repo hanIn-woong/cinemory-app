@@ -7,9 +7,11 @@ import {
   type UseMutationResult,
   type UseQueryResult,
 } from '@tanstack/react-query';
+import { GoogleOneTapSignIn, isErrorWithCode, type OneTapResponse } from 'react-native-nitro-google-signin';
 import { authApi } from '../api/auth';
 import { ApiError } from '../api/client';
 import { userApi } from '../api/user';
+import { GOOGLE_WEB_CLIENT_ID } from '../constants/google';
 import { KAKAO_NATIVE_APP_KEY } from '../constants/kakao';
 import { useAuthStore } from '../store/authStore';
 import type {
@@ -104,6 +106,64 @@ export function useKakaoLogin(): UseMutationResult<TokenResponse | null, ApiErro
   });
 }
 
+// ② 구글 SDK 호출 — react-native-nitro-google-signin 을 import하는 유일한 파일이 여기다(카카오 SDK와 같은 규칙).
+// 판정은 스파이크로 확인한 사실을 따른다(docs/google-login-spec.md §1): 취소는 예외가 아니라 'cancelled' 응답,
+// 첫 사용자는 'noSavedCredentialFound' → createAccount().
+async function googleNativeLogin(nonce: string): Promise<{ idToken: string } | null> {
+  if (!GOOGLE_WEB_CLIENT_ID) {
+    throw new ApiError(0, 'GOOGLE_CONFIG_MISSING', '구글 로그인 설정에 문제가 있어요');
+  }
+  try {
+    // nonce가 configure()에 묶여 있다 — 로그인마다 다시 부르지 않으면 이전 nonce가 재사용돼 INVALID_NONCE가 된다
+    GoogleOneTapSignIn.configure({ webClientId: GOOGLE_WEB_CLIENT_ID, nonce });
+
+    let response: OneTapResponse = await GoogleOneTapSignIn.signIn();
+    if (response.type === 'noSavedCredentialFound') {
+      response = await GoogleOneTapSignIn.createAccount();
+    }
+    if (response.type === 'cancelled') return null;
+    if (response.type !== 'success' || !response.data) {
+      throw new ApiError(0, 'GOOGLE_SIGN_IN_FAILED', '구글 로그인에 실패했어요. 잠시 후 다시 시도해 주세요');
+    }
+    return { idToken: response.data.idToken };
+  } catch (error) {
+    if (error instanceof ApiError) throw error;
+    // SDK 에러(DEVELOPER_ERROR 등)는 사용자에게 설명할 수 없는 설정 문제라 원인 코드는 로그에만 남긴다(§4)
+    console.warn('[google] SDK 오류', isErrorWithCode(error) ? error.code : error);
+    throw new ApiError(0, 'GOOGLE_SIGN_IN_FAILED', '구글 로그인에 실패했어요. 잠시 후 다시 시도해 주세요');
+  }
+}
+
+export function useGoogleLogin(): UseMutationResult<TokenResponse | null, ApiError, void> {
+  return useMutation({
+    mutationFn: async () => {
+      // INVALID_NONCE면 ①부터 한 번만 다시 탄다(docs/google-login-spec.md §2) — nonce를 들고 ④만 다시 보내면
+      // 서버가 이미 소비했으므로 반드시 다시 실패한다.
+      for (let attempt = 1; ; attempt++) {
+        // ① nonce는 버튼 탭 시점에 발급한다(카카오와 같다). 없으면 SDK를 부르지 않는다 —
+        // 라이브러리가 몰래 만든 nonce는 서버가 검증할 수 없다.
+        const { nonce } = await authApi.nonce();
+        if (!nonce) throw new ApiError(0, 'INVALID_NONCE', 'nonce 발급에 실패했습니다');
+
+        const result = await googleNativeLogin(nonce);
+        if (!result) return null; // 취소 — 에러가 아니다
+
+        try {
+          // ④ 서버 검증(서명·iss·aud·nonce·email_verified) → ⑤ 토큰 저장 + 사용자 조회
+          const tokens = await authApi.oauthLogin('google', { idToken: result.idToken, nonce });
+          await useAuthStore.getState().setTokens(tokens);
+          const me = await userApi.me();
+          useAuthStore.getState().setUser(me);
+          return tokens;
+        } catch (error) {
+          if (attempt === 1 && error instanceof ApiError && error.code === 'INVALID_NONCE') continue;
+          throw error;
+        }
+      }
+    },
+  });
+}
+
 export function useLogout(): UseMutationResult<void, ApiError, void> {
   return useMutation({
     mutationFn: async () => {
@@ -114,6 +174,10 @@ export function useLogout(): UseMutationResult<void, ApiError, void> {
         if (refreshToken) await authApi.logout(refreshToken);
       } finally {
         await useAuthStore.getState().logout();
+        // 구글 Credential Manager 상태도 비운다 — 다음 로그인에서 계정 선택이 다시 나온다(docs/google-login-spec.md §6).
+        // configure() 없이 동작하고, 구글로 로그인하지 않은 사용자에게는 지울 것이 없을 뿐이라 로그인 방법을 따지지 않는다.
+        // 실패해도 로그아웃 자체는 이미 끝났으므로 삼킨다.
+        await GoogleOneTapSignIn.signOut().catch((error: unknown) => console.warn('[google] signOut 실패', error));
       }
     },
   });
