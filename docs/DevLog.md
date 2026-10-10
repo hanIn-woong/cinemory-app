@@ -6,6 +6,14 @@ narrative로 남긴다.
 
 ---
 
+## 2026-10-10 — 브랜치 전략 GitHub Flow 명시 (`chore/github-flow`)
+
+- `CLAUDE.md`에 브랜치 절 추가 — `feature/*`는 `main`에서 분기, PR로 `main`에 머지, `develop`은 보관(main보다 103커밋 뒤처져 있었고 고유 커밋 0).
+  백엔드 deploy-spec 11절·D-3 조건 7과 같은 날 같은 결정(백엔드 PR #19).
+- 소셜 로그인 브랜치(`feature/social-login`)와 무관한 일반 규칙이라 별도 PR로 분리했다.
+
+---
+
 ## 2026-10-08 — 캘린더 날짜 칸 포스터 · `cancelRefetch: false` 나머지 7곳
 
 - 사용자 스펙 2건을 한 브랜치(`feature/calendar-posters`)에서.
