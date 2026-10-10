@@ -6,6 +6,32 @@ narrative로 남긴다.
 
 ---
 
+## 2026-10-11 (이어서) — 구글 스파이크 2~7 실기기 → 채택
+
+- 임시 화면 `src/screens/auth/GoogleSpikeProbe.tsx`(`__DEV__`, 로그인 화면 하단). 스파이크 전용이라 화면 규칙(api 직접 import)을 일부러 지키지 않았고 ⑤에서 지운다.
+- 결과(사용자 실기기): nonce 원문 일치 · `aud` = 웹 클라이언트 ID(`azp`는 Android) · 첫 사용자 `noSavedCredentialFound` → `createAccount` · 취소는 **예외가 아니라 `cancelled` 응답** · 같은 nonce 재사용 401.
+- 서버 검증은 **409 `EMAIL_ALREADY_REGISTERED`** — 테스트 계정 이메일이 개발 DB에 이미 있었다. 검증 관문 통과 후에만 나는 코드라 통과로 판정. 신규 가입 성공 경로는 ⑥ E2E에서.
+- **판정: 채택.** 상세는 백엔드 `account-integrity-spec.md` "스파이크 결과". 다음은 ⑤ 연동(D-5-G).
+
+---
+
+## 2026-10-11 — 구글 로그인 스파이크 1번: 설치·빌드 (`spike/google-signin`)
+
+- 백엔드 `account-integrity-spec.md` D-5-E 체크리스트 1번. 스파이크라 실패 시 버릴 수 있게 `feature/social-login`에서 로컬 브랜치로 분기(미push).
+- ⚠️ **이 리포 CLAUDE.md "네이티브 모듈 추가 전 알리기"에 해당** — D-5-E에 명시된 작업이고 사용자 지시로 진행, 보고함. prebuild는 하지 않았다.
+- `npx expo install react-native-nitro-google-signin@2.3.0 react-native-nitro-modules@0.37.1 -- --save-exact` — G-1대로 `^` 없이 고정.
+- `expo install`이 `app.json`에 플러그인을 **자동 추가**했다 → 되돌림. 플러그인 소스상 Firebase 없이 쓸 때는 iOS(`Info.plist` URL 스킴·Podfile)만 바꾸고
+  Android는 건드리지 않으며, `iosUrlScheme`이 없으면 설정 평가에서 예외를 던진다. `npx expo config` 정상 확인.
+- `android/`에서 `./gradlew assembleDebug` **성공(23분 44초)**, 두 모듈 autolinking 확인. 경고는 라이브러리 버튼의 Legacy Architecture deprecated뿐.
+- **이어서 — 플러그인 등록**: 사용자가 콘솔에서 iOS OAuth 클라이언트(번들 ID `com.cinemory.app`)를 만들어 `app.json`에 플러그인 +
+  `iosUrlScheme`(iOS 클라이언트 ID를 뒤집은 값, 공개 값이라 커밋)을 넣었다. 첫 시도는 플러그인 이름과 옵션 객체를 **안쪽 배열로 묶지 않아**
+  옵션이 별도 플러그인으로 읽히며 오류 → `["react-native-nitro-google-signin", { iosUrlScheme }]`로 수정.
+  `npx expo config --type introspect`로 플러그인이 실제로 돌아 `CFBundleURLSchemes`에 스킴이 들어가는 것 확인. Android에는 영향 없음(플러그인이 Android를 건드리지 않음).
+- `.env.local`에 `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID` 추가(사용자, 형식 검사 1건). `.env`는 비어 있고 실제 값은 전부 `.env.local`.
+- **다음**: 구글 콘솔(debug 키 SHA-1 Android 클라이언트·테스트 사용자) 준비 후 실기기에서 2~7번(nonce 원문 일치, `aud` = 웹 클라이언트 ID 등). 결과는 백엔드 스펙 "스파이크 결과"에.
+
+---
+
 ## 2026-10-10 — 이메일 충돌 에러 코드 개명 대응 (`feature/social-login`)
 
 - 백엔드가 소셜 계정 연결(V24, `cinemory-backend/docs/account-integrity-spec.md` Part D)을 들이면서 `EMAIL_ALREADY_REGISTERED_LOCALLY`를

@@ -44,7 +44,13 @@
           }
         }
       ],
-      "expo-image"
+      "expo-image",
+      [
+        "react-native-nitro-google-signin",
+        {
+          "iosUrlScheme": "com.googleusercontent.apps.66399146738-6sd686otid9r03vfu6boup8vobkr82sd"
+        }
+      ]
     ]
   }
 }
